@@ -1281,7 +1281,7 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
     struct net_device *dev = pAdapter->dev;
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
-    VOS_STATUS vosStatus;
+    VOS_STATUS vosStatus = VOS_STATUS_E_FAILURE;
     v_U8_t reqRsnIe[DOT11F_IE_RSN_MAX_LEN];
     tANI_U32 reqRsnLength = DOT11F_IE_RSN_MAX_LEN;
 #if  defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR) || defined (WLAN_FEATURE_VOWIFI_11R)
@@ -2922,34 +2922,13 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
         case eCSR_ROAM_ASSOCIATION_COMPLETION:
             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                     "****eCSR_ROAM_ASSOCIATION_COMPLETION****");
-            if ( (roamResult != eCSR_ROAM_RESULT_ASSOCIATED) &&
-                 ( (pWextState->roamProfile.EncryptionType.encryptionType[0] ==
-                       eCSR_ENCRYPT_TYPE_WEP40) ||
-                   (pWextState->roamProfile.EncryptionType.encryptionType[0] ==
-                       eCSR_ENCRYPT_TYPE_WEP104)
-                 ) &&
-                 (eCSR_AUTH_TYPE_SHARED_KEY != pWextState->roamProfile.AuthType.authType[0])
-               )
+            // To Do - address probable memory leak with WEP encryption upon successful association
+            if (eCSR_ROAM_RESULT_ASSOCIATED != roamResult)
             {
-                v_U32_t roamId = 0;
-                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-                        "****WEP open authentication failed, trying with shared authentication****");
-                (WLAN_HDD_GET_STATION_CTX_PTR(pAdapter))->conn_info.authType = eCSR_AUTH_TYPE_SHARED_KEY;
-                pWextState->roamProfile.AuthType.authType[0] = (WLAN_HDD_GET_STATION_CTX_PTR(pAdapter))->conn_info.authType;
-                pWextState->roamProfile.csrPersona = pAdapter->device_mode;
-                halStatus = sme_RoamConnect( WLAN_HDD_GET_HAL_CTX(pAdapter), pAdapter->sessionId, &(pWextState->roamProfile), &roamId);
+               //Clear saved connection information in HDD
+               hdd_connRemoveConnectInfo( WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) );
             }
-            else
-            {
-                // To Do - address probable memory leak with WEP encryption upon successful association
-                if (eCSR_ROAM_RESULT_ASSOCIATED != roamResult)
-                {
-                  //Clear saved connection information in HDD
-                  hdd_connRemoveConnectInfo( WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) );
-                }
-                halStatus = hdd_AssociationCompletionHandler( pAdapter, pRoamInfo, roamId, roamStatus, roamResult );
-            }
-
+            halStatus = hdd_AssociationCompletionHandler( pAdapter, pRoamInfo, roamId, roamStatus, roamResult );
             break;
         case eCSR_ROAM_ASSOCIATION_FAILURE:
             halStatus = hdd_AssociationCompletionHandler( pAdapter,
