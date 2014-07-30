@@ -33,6 +33,8 @@
 #include <linux/msm-bus-board.h>
 #include <linux/spinlock.h>
 #include <mach/gpiomux.h>
+#include <linux/suspend.h>
+#include <linux/rwsem.h>
 #include <mach/msm_pcie.h>
 #include <net/cnss.h>
 #define subsys_to_drv(d) container_of(d, struct cnss_data, subsys_desc)
@@ -652,6 +654,28 @@ out:
 	return ret;
 }
 
+static DECLARE_RWSEM(cnss_pm_sem);
+
+static int cnss_pm_notify(struct notifier_block *b,
+			unsigned long event, void *p)
+{
+	switch (event) {
+	case PM_SUSPEND_PREPARE:
+		down_write(&cnss_pm_sem);
+		break;
+
+	case PM_POST_SUSPEND:
+		up_write(&cnss_pm_sem);
+		break;
+	}
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block cnss_pm_notifier = {
+	.notifier_call = cnss_pm_notify,
+};
+
 static DEFINE_PCI_DEVICE_TABLE(cnss_wlan_pci_id_table) = {
 	{ QCA6174_VENDOR_ID, QCA6174_DEVICE_ID, PCI_ANY_ID, PCI_ANY_ID },
 	{ 0 }
@@ -1048,6 +1072,18 @@ void cnss_pm_wake_lock_destroy(struct wakeup_source *ws)
 	wakeup_source_trash(ws);
 }
 EXPORT_SYMBOL(cnss_pm_wake_lock_destroy);
+
+void cnss_lock_pm_sem(void)
+{
+	down_read(&cnss_pm_sem);
+}
+EXPORT_SYMBOL(cnss_lock_pm_sem);
+
+void cnss_release_pm_sem(void)
+{
+	up_read(&cnss_pm_sem);
+}
+EXPORT_SYMBOL(cnss_release_pm_sem);
 
 #ifdef CONFIG_PCI_MSM
 int cnss_wlan_pm_control(bool vote)
@@ -1498,6 +1534,8 @@ static int cnss_probe(struct platform_device *pdev)
 
 	cnss_pm_wake_lock_init(&penv->ws, "cnss_wlock");
 
+	register_pm_notifier(&cnss_pm_notifier);
+
 #ifdef CONFIG_CNSS_MAC_BUG
 	/* 0-4K memory is reserved for QCA6174 to address a MAC HW bug.
 	 * MAC would do an invalid pointer fetch based on the data
@@ -1545,6 +1583,8 @@ static int cnss_remove(struct platform_device *pdev)
 {
 	struct cnss_wlan_vreg_info *vreg_info = &penv->vreg_info;
 	struct cnss_wlan_gpio_info *gpio_info = &penv->gpio_info;
+
+	unregister_pm_notifier(&cnss_pm_notifier);
 
 	cnss_pm_wake_lock_destroy(&penv->ws);
 
