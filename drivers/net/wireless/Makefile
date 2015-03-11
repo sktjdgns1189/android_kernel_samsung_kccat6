@@ -62,7 +62,5 @@ obj-$(CONFIG_LIBRA_SDIOIF)	+= libra/
 obj-$(CONFIG_WCNSS_CORE)	+= wcnss/
 obj-$(CONFIG_CNSS)		+= cnss/
 
-obj-$(CONFIG_BCM4358)		+= bcmdhd4358/
-
 obj-$(CONFIG_LGUIWLAN)	+= mwlan_aarp/
 obj-$(CONFIG_LGUIWLAN)	+= ipsecdrvtl/
