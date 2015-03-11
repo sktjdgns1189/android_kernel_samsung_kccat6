@@ -35,7 +35,7 @@
 #include <asm/io.h>
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
-
+#include "u_bam_data.h"
 
 #undef	VERBOSE_DEBUG
 
@@ -62,12 +62,12 @@ MODULE_PARM_DESC (rndis_debug, "enable debugging");
 int rndis_ul_max_pkt_per_xfer_rcvd;
 module_param(rndis_ul_max_pkt_per_xfer_rcvd, int, S_IRUGO);
 MODULE_PARM_DESC(rndis_ul_max_pkt_per_xfer_rcvd,
-		"Max num of REMOTE_NDIS_PACKET_MSGs received in a single transfer");
+	"Max num of REMOTE_NDIS_PACKET_MSGs received in a single transfer");
 
 int rndis_ul_max_xfer_size_rcvd;
 module_param(rndis_ul_max_xfer_size_rcvd, int, S_IRUGO);
 MODULE_PARM_DESC(rndis_ul_max_xfer_size_rcvd,
-		"Max size of bus transfer received");
+	"Max size of bus transfer received");
 
 
 static rndis_params rndis_per_dev_params[RNDIS_MAX_CONFIGS];
@@ -544,14 +544,24 @@ static int gen_ndis_set_resp(u8 configNr, u32 OID, u8 *buf, u32 buf_len,
 		 */
 		retval = 0;
 		if (*params->filter) {
+			if (!is_rndis_ipa_supported()) {
+				netif_carrier_on(params->dev);
+				if (netif_running(params->dev))
+					netif_wake_queue(params->dev);
+			} else {
+				if (params->state != RNDIS_DATA_INITIALIZED)
+					u_bam_data_start_rndis_ipa();
+			}
 			params->state = RNDIS_DATA_INITIALIZED;
-			netif_carrier_on(params->dev);
-			if (netif_running(params->dev))
-				netif_wake_queue(params->dev);
 		} else {
+			if (!is_rndis_ipa_supported()) {
+				netif_carrier_off(params->dev);
+				netif_stop_queue(params->dev);
+			} else {
+				if (params->state == RNDIS_DATA_INITIALIZED)
+					u_bam_data_stop_rndis_ipa();
+			}
 			params->state = RNDIS_INITIALIZED;
-			netif_carrier_off(params->dev);
-			netif_stop_queue(params->dev);
 		}
 		break;
 
@@ -601,7 +611,7 @@ static int rndis_init_response(int configNr, rndis_init_msg_type *buf)
 		+ sizeof(struct ethhdr)
 		+ sizeof(struct rndis_packet_msg_type)
 		+ 22));
-	resp->PacketAlignmentFactor = cpu_to_le32(0);
+	resp->PacketAlignmentFactor = cpu_to_le32(params->pkt_alignment_factor);
 	resp->AFListOffset = cpu_to_le32(0);
 	resp->AFListSize = cpu_to_le32(0);
 
@@ -899,6 +909,8 @@ int rndis_register(void (*resp_avail)(void *v), void *v)
 			rndis_per_dev_params[i].used = 1;
 			rndis_per_dev_params[i].resp_avail = resp_avail;
 			rndis_per_dev_params[i].v = v;
+			rndis_per_dev_params[i].max_pkt_per_xfer = 1;
+			rndis_per_dev_params[i].pkt_alignment_factor = 0;
 			pr_debug("%s: configNr = %d\n", __func__, i);
 			return i;
 		}
@@ -926,8 +938,10 @@ int rndis_set_param_dev(u8 configNr, struct net_device *dev, u16 *cdc_filter)
 	rndis_per_dev_params[configNr].dev = dev;
 	rndis_per_dev_params[configNr].filter = cdc_filter;
 
+	/* reset aggregation stats for every set_alt */
 	rndis_ul_max_xfer_size_rcvd = 0;
 	rndis_ul_max_pkt_per_xfer_rcvd = 0;
+
 	return 0;
 }
 
@@ -961,6 +975,14 @@ void rndis_set_max_pkt_xfer(u8 configNr, u8 max_pkt_per_xfer)
 	rndis_per_dev_params[configNr].max_pkt_per_xfer = max_pkt_per_xfer;
 }
 
+void rndis_set_pkt_alignment_factor(u8 configNr, u8 pkt_alignment_factor)
+{
+	pr_debug("%s:\n", __func__);
+
+	rndis_per_dev_params[configNr].pkt_alignment_factor =
+					pkt_alignment_factor;
+}
+
 void rndis_add_hdr(struct sk_buff *skb)
 {
 	struct rndis_packet_msg_type *header;
@@ -983,6 +1005,9 @@ void rndis_free_response(int configNr, u8 *buf)
 	list_for_each_safe(act, tmp,
 			&(rndis_per_dev_params[configNr].resp_queue))
 	{
+		if (!act)
+			continue;
+
 		r = list_entry(act, rndis_resp_t, list);
 		if (r && r->buf == buf) {
 			list_del(&r->list);
@@ -1033,21 +1058,15 @@ int rndis_rm_hdr(struct gether *port,
 			struct sk_buff *skb,
 			struct sk_buff_head *list)
 {
-	int num_pkts = 1;
+	int num_pkts = 0;
 
 	if (skb->len > rndis_ul_max_xfer_size_rcvd)
 		rndis_ul_max_xfer_size_rcvd = skb->len;
 
 	while (skb->len) {
 		struct rndis_packet_msg_type *hdr;
-		struct sk_buff          *skb2;
-		u32             msg_len, data_offset, data_len;
-
-		/* some rndis hosts send extra byte to avoid zlp, ignore it */
-		if (skb->len == 1) {
-			dev_kfree_skb_any(skb);
-			return 0;
-		}
+		struct sk_buff		*skb2;
+		u32		msg_len, data_offset, data_len;
 
 		if (skb->len < sizeof *hdr) {
 			pr_err("invalid rndis pkt: skblen:%u hdr_len:%u",
@@ -1062,24 +1081,28 @@ int rndis_rm_hdr(struct gether *port,
 		data_len = le32_to_cpu(hdr->DataLength);
 
 		if (skb->len < msg_len ||
-				((data_offset + data_len + 8) > msg_len)) {
+			((data_offset + data_len + 8) > msg_len)) {
 			pr_err("invalid rndis message: %d/%d/%d/%d, len:%d\n",
-					le32_to_cpu(hdr->MessageType),
-					msg_len, data_offset, data_len, skb->len);
+				le32_to_cpu(hdr->MessageType),
+				msg_len, data_offset, data_len, skb->len);
 			dev_kfree_skb_any(skb);
 			return -EOVERFLOW;
 		}
+
 		if (le32_to_cpu(hdr->MessageType) != RNDIS_MSG_PACKET) {
 			pr_err("invalid rndis message: %d/%d/%d/%d, len:%d\n",
-					le32_to_cpu(hdr->MessageType),
-					msg_len, data_offset, data_len, skb->len);
+				le32_to_cpu(hdr->MessageType),
+				msg_len, data_offset, data_len, skb->len);
 			dev_kfree_skb_any(skb);
 			return -EINVAL;
 		}
 
+		num_pkts++;
+
 		skb_pull(skb, data_offset + 8);
 
-		if (msg_len == skb->len) {
+		if (data_len == skb->len ||
+				data_len == (skb->len - 1)) {
 			skb_trim(skb, data_len);
 			break;
 		}
@@ -1094,14 +1117,13 @@ int rndis_rm_hdr(struct gether *port,
 		skb_pull(skb, msg_len - sizeof *hdr);
 		skb_trim(skb2, data_len);
 		skb_queue_tail(list, skb2);
-
-		num_pkts++;
 	}
 
 	if (num_pkts > rndis_ul_max_pkt_per_xfer_rcvd)
 		rndis_ul_max_pkt_per_xfer_rcvd = num_pkts;
 
 	skb_queue_tail(list, skb);
+
 	return 0;
 }
 
@@ -1119,7 +1141,10 @@ static int rndis_proc_show(struct seq_file *m, void *v)
 			 "speed     : %d\n"
 			 "cable     : %s\n"
 			 "vendor ID : 0x%08X\n"
-			 "vendor    : %s\n",
+			 "vendor    : %s\n"
+			 "ul-max-xfer-size:%d max-xfer-size-rcvd: %d\n"
+			 "ul-max-pkts-per-xfer:%d max-pkts-per-xfer-rcvd:%d\n"
+			"pkt_alignment_factor:%d\n",
 			 param->confignr, (param->used) ? "y" : "n",
 			 ({ char *s = "?";
 			 switch (param->state) {
@@ -1133,7 +1158,14 @@ static int rndis_proc_show(struct seq_file *m, void *v)
 			 param->medium,
 			 (param->media_state) ? 0 : param->speed*100,
 			 (param->media_state) ? "disconnected" : "connected",
-			 param->vendorID, param->vendorDescr);
+			 param->vendorID, param->vendorDescr,
+			 param->max_pkt_per_xfer *
+				 (param->dev->mtu + sizeof(struct ethhdr) +
+				  sizeof(struct rndis_packet_msg_type) + 22),
+			 rndis_ul_max_xfer_size_rcvd,
+			 param->max_pkt_per_xfer,
+			 rndis_ul_max_pkt_per_xfer_rcvd,
+			param->pkt_alignment_factor);
 	return 0;
 }
 
@@ -1232,6 +1264,7 @@ int rndis_init(void)
 		rndis_per_dev_params[i].confignr = i;
 		rndis_per_dev_params[i].used = 0;
 		rndis_per_dev_params[i].state = RNDIS_UNINITIALIZED;
+		rndis_per_dev_params[i].pkt_alignment_factor = 0;
 		rndis_per_dev_params[i].media_state
 				= RNDIS_MEDIA_STATE_DISCONNECTED;
 		INIT_LIST_HEAD(&(rndis_per_dev_params[i].resp_queue));

@@ -135,6 +135,23 @@ static void w1_post_write(struct w1_master *dev)
 	}
 }
 
+#undef DS28EL15_WORKAROUND_TEST
+#ifdef DS28EL15_WORKAROUND_TEST	// for maxim
+/**
+ * Write bit value of w1 bus line.
+ *
+ * @param dev     the master device
+ * @param bit     the bit to write
+ */
+void w1_write_bit_val(struct w1_master *dev, u8 bit)
+{
+	if (dev->bus_master->write_bit) {
+		dev->bus_master->write_bit(dev->bus_master->data, bit);
+	}
+}
+EXPORT_SYMBOL_GPL(w1_write_bit_val);
+#endif
+
 /**
  * Writes 8 bits.
  *

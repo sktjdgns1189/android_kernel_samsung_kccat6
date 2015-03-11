@@ -25,8 +25,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/anon_inodes.h>
-
-#include "sync.h"
+#include <linux/sync.h>
 
 #define CREATE_TRACE_POINTS
 #include "trace/sync.h"
@@ -34,7 +33,7 @@
 static void sync_fence_signal_pt(struct sync_pt *pt);
 static int _sync_pt_has_signaled(struct sync_pt *pt);
 static void sync_fence_free(struct kref *kref);
-static void sync_dump(void);
+static void sync_dump(struct sync_fence *fence);
 
 static LIST_HEAD(sync_timeline_list_head);
 static DEFINE_SPINLOCK(sync_timeline_list_lock);
@@ -79,12 +78,12 @@ static void sync_timeline_free(struct kref *kref)
 		container_of(kref, struct sync_timeline, kref);
 	unsigned long flags;
 
+	if (obj->ops->release_obj)
+		obj->ops->release_obj(obj);
+
 	spin_lock_irqsave(&sync_timeline_list_lock, flags);
 	list_del(&obj->sync_timeline_list);
 	spin_unlock_irqrestore(&sync_timeline_list_lock, flags);
-
-	if (obj->ops->release_obj)
-		obj->ops->release_obj(obj);
 
 	kfree(obj);
 }
@@ -92,14 +91,14 @@ static void sync_timeline_free(struct kref *kref)
 void sync_timeline_destroy(struct sync_timeline *obj)
 {
 	obj->destroyed = true;
-	smp_wmb();
 
 	/*
-	 * signal any children that their parent is going away.
+	 * If this is not the last reference, signal any children
+	 * that their parent is going away.
 	 */
-	sync_timeline_signal(obj);
 
-	kref_put(&obj->kref, sync_timeline_free);
+	if (!kref_put(&obj->kref, sync_timeline_free))
+		sync_timeline_signal(obj);
 }
 EXPORT_SYMBOL(sync_timeline_destroy);
 
@@ -384,7 +383,6 @@ static void sync_fence_detach_pts(struct sync_fence *fence)
 
 	list_for_each_safe(pos, n, &fence->pt_list_head) {
 		struct sync_pt *pt = container_of(pos, struct sync_pt, pt_list);
-
 		sync_timeline_remove_pt(pt);
 	}
 }
@@ -395,7 +393,6 @@ static void sync_fence_free_pts(struct sync_fence *fence)
 
 	list_for_each_safe(pos, n, &fence->pt_list_head) {
 		struct sync_pt *pt = container_of(pos, struct sync_pt, pt_list);
-
 		sync_pt_free(pt);
 	}
 }
@@ -615,7 +612,7 @@ int sync_fence_wait(struct sync_fence *fence, long timeout)
 
 	if (fence->status < 0) {
 		pr_info("fence error %d on [%p]\n", fence->status, fence);
-		sync_dump();
+		sync_dump(fence);
 		return fence->status;
 	}
 
@@ -623,7 +620,7 @@ int sync_fence_wait(struct sync_fence *fence, long timeout)
 		if (timeout > 0) {
 			pr_info("fence timeout on [%p] after %dms\n", fence,
 				jiffies_to_msecs(timeout));
-			sync_dump();
+			sync_dump(fence);
 		}
 		return -ETIME;
 	}
@@ -829,7 +826,6 @@ static long sync_fence_ioctl(struct file *file, unsigned int cmd,
 			     unsigned long arg)
 {
 	struct sync_fence *fence = file->private_data;
-
 	switch (cmd) {
 	case SYNC_IOC_WAIT:
 		return sync_fence_ioctl_wait(fence, arg);
@@ -859,21 +855,18 @@ static const char *sync_status_str(int status)
 static void sync_print_pt(struct seq_file *s, struct sync_pt *pt, bool fence)
 {
 	int status = pt->status;
-
 	seq_printf(s, "  %s%spt %s",
 		   fence ? pt->parent->name : "",
 		   fence ? "_" : "",
 		   sync_status_str(status));
 	if (pt->status) {
 		struct timeval tv = ktime_to_timeval(pt->timestamp);
-
 		seq_printf(s, "@%ld.%06ld", tv.tv_sec, tv.tv_usec);
 	}
 
 	if (pt->parent->ops->timeline_value_str &&
 	    pt->parent->ops->pt_value_str) {
 		char value[64];
-
 		pt->parent->ops->pt_value_str(pt, value, sizeof(value));
 		seq_printf(s, ": %s", value);
 		if (fence) {
@@ -898,7 +891,6 @@ static void sync_print_obj(struct seq_file *s, struct sync_timeline *obj)
 
 	if (obj->ops->timeline_value_str) {
 		char value[64];
-
 		obj->ops->timeline_value_str(obj, value, sizeof(value));
 		seq_printf(s, ": %s", value);
 	} else if (obj->ops->print_obj) {
@@ -995,7 +987,7 @@ late_initcall(sync_debugfs_init);
 
 #define DUMP_CHUNK 256
 static char sync_dump_buf[64 * 1024];
-void sync_dump(void)
+static void sync_dump(struct sync_fence *fence)
 {
 	struct seq_file s = {
 		.buf = sync_dump_buf,
@@ -1003,12 +995,13 @@ void sync_dump(void)
 	};
 	int i;
 
-	sync_debugfs_show(&s, NULL);
+	seq_puts(&s, "fence:\n--------------\n");
+	sync_print_fence(&s, fence);
+	seq_puts(&s, "\n");
 
 	for (i = 0; i < s.count; i += DUMP_CHUNK) {
 		if ((s.count - i) > DUMP_CHUNK) {
 			char c = s.buf[i + DUMP_CHUNK];
-
 			s.buf[i + DUMP_CHUNK] = 0;
 			pr_cont("%s", s.buf + i);
 			s.buf[i + DUMP_CHUNK] = c;
@@ -1019,7 +1012,7 @@ void sync_dump(void)
 	}
 }
 #else
-static void sync_dump(void)
+static void sync_dump(struct sync_fence *fence)
 {
 }
 #endif

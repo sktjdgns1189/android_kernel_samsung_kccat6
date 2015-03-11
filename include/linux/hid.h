@@ -393,12 +393,10 @@ struct hid_report {
 	struct hid_device *device;			/* associated device */
 };
 
-#define HID_MAX_IDS 256
-
 struct hid_report_enum {
 	unsigned numbered;
 	struct list_head report_list;
-	struct hid_report *report_id_hash[HID_MAX_IDS];
+	struct hid_report *report_id_hash[256];
 };
 
 #define HID_REPORT_TYPES 3
@@ -485,6 +483,9 @@ struct hid_device {							/* device report descriptor */
 
 	struct list_head inputs;					/* The list of inputs */
 	void *hiddev;							/* The hiddev structure */
+#ifdef CONFIG_HID_OVR
+	void *hidovr;
+#endif
 	void *hidraw;
 	int minor;							/* Hiddev minor number */
 
@@ -749,10 +750,6 @@ void hid_output_report(struct hid_report *report, __u8 *data);
 struct hid_device *hid_allocate_device(void);
 struct hid_report *hid_register_report(struct hid_device *device, unsigned type, unsigned id);
 int hid_parse_report(struct hid_device *hid, __u8 *start, unsigned size);
-struct hid_report *hid_validate_values(struct hid_device *hid,
-				       unsigned int type, unsigned int id,
-				       unsigned int field_index,
-				       unsigned int report_counts);
 int hid_open_report(struct hid_device *device);
 int hid_check_keys_pressed(struct hid_device *hid);
 int hid_connect(struct hid_device *hid, unsigned int connect_mask);

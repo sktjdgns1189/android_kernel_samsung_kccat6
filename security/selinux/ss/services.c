@@ -735,6 +735,9 @@ out:
 	kfree(n);
 	kfree(t);
 
+#ifdef CONFIG_ALWAYS_ENFORCE
+	selinux_enforcing = 1;
+#endif
 	if (!selinux_enforcing)
 		return 0;
 	return -EPERM;
@@ -1231,7 +1234,7 @@ static int security_context_to_sid_core(const char *scontext, u32 scontext_len,
 	struct context context;
 	int rc = 0;
 
-	/* An empty security context is never valid. */
+	/* An empty security context is never valid */
 	if (!scontext_len)
 		return -EINVAL;
 
@@ -1357,6 +1360,9 @@ out:
 	kfree(s);
 	kfree(t);
 	kfree(n);
+#ifdef CONFIG_ALWAYS_ENFORCE
+        selinux_enforcing = 1;
+#endif
 	if (!selinux_enforcing)
 		return 0;
 	return -EACCES;
@@ -1647,7 +1653,9 @@ static inline int convert_context_handle_invalid_context(struct context *context
 {
 	char *s;
 	u32 len;
-
+#ifdef CONFIG_ALWAYS_ENFORCE
+        selinux_enforcing = 1;
+#endif
 	if (selinux_enforcing)
 		return -EINVAL;
 

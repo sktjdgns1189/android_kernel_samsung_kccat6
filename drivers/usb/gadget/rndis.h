@@ -190,6 +190,7 @@ typedef struct rndis_params
 
 	u32			vendorID;
 	u8			max_pkt_per_xfer;
+	u8			pkt_alignment_factor;
 	const char		*vendorDescr;
 	void			(*resp_avail)(void *v);
 	void			*v;
@@ -217,7 +218,7 @@ int  rndis_signal_connect (int configNr);
 int  rndis_signal_disconnect (int configNr);
 int  rndis_state (int configNr);
 extern void rndis_set_host_mac (int configNr, const u8 *addr);
-
+extern bool is_rndis_ipa_supported(void);
 int rndis_init(void);
 void rndis_exit (void);
 
