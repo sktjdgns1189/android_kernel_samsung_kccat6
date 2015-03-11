@@ -74,5 +74,6 @@ obj-y				+= qcom/
 obj-$(CONFIG_TIMA_LOG)		+= tima_debug_log.o
 obj-$(CONFIG_DM_VERITY)		+= dmverity_query.o
 obj-$(CONFIG_SEC_MODEM) += modem_if/
+obj-$(CONFIG_UID_CPUTIME) += uid_cputime.o
 
 obj-y += dualwave/
