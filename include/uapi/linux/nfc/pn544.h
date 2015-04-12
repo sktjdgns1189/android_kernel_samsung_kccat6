@@ -26,7 +26,7 @@
  * PN544_SET_PWR(1): power on
  * PN544_SET_PWR(>1): power on with firmware download enabled
  */
-#define PN547_SET_PWR	_IOW(PN547_MAGIC, 0x01, unsigned int)
+#define PN544_SET_PWR	_IOW(PN547_MAGIC, 0x01, unsigned int)
 
 #ifdef __KERNEL__
 struct pn547_i2c_platform_data {
