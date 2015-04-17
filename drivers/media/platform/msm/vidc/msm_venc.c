@@ -53,17 +53,17 @@
  * 3x3 transformation matrix coefficients in s4.9 fixed point format
  */
 static u32 vpe_csc_601_to_709_matrix_coeff[HAL_MAX_MATRIX_COEFFS] = {
-	470, 8170, 8148, 0, 490, 50, 0, 34, 483
+    0x1B8, 0x1FCC, 0x1FA2, 0, 0x1CC, 0x34, 0, 0x22, 0x1CF
 };
 
 /* offset coefficients in s9 fixed point format */
 static u32 vpe_csc_601_to_709_bias_coeff[HAL_MAX_BIAS_COEFFS] = {
-	34, 0, 4
+    0x34, 0, 0x4
 };
 
 /* clamping value for Y/U/V([min,max] for Y/U/V) */
 static u32 vpe_csc_601_to_709_limit_coeff[HAL_MAX_LIMIT_COEFFS] = {
-	16, 235, 16, 240, 16, 240
+    0x10, 0xEB, 0, 0xFF, 0, 0xFF
 };
 
 static const char *const mpeg_video_rate_control[] = {
@@ -2687,9 +2687,9 @@ int msm_venc_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	}
 	hdev = inst->core->device;
 
-	if (msm_vidc_vpe_csc_601_to_709) {
+	//if (msm_vidc_vpe_csc_601_to_709) {
 		msm_venc_set_csc(inst);
-	}
+	//}
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		fmt = msm_comm_get_pixel_fmt_fourcc(venc_formats,
@@ -2925,6 +2925,14 @@ int msm_venc_prepare_buf(struct msm_vidc_inst *inst,
 
 	hdev = inst->core->device;
 
+	if (inst->state == MSM_VIDC_CORE_INVALID ||
+			inst->core->state == VIDC_CORE_INVALID) {
+		dprintk(VIDC_ERR,
+			"Core %p in bad state, ignoring prepare buf\n",
+				inst->core);
+		goto exit;
+	}
+	
 	switch (b->type) {
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		break;
@@ -2970,6 +2978,7 @@ int msm_venc_prepare_buf(struct msm_vidc_inst *inst,
 			"Buffer type not recognized: %d\n", b->type);
 		break;
 	}
+exit:	
 	return rc;
 }
 
@@ -3119,8 +3128,20 @@ static struct v4l2_ctrl **get_super_cluster(struct msm_vidc_inst *inst,
 	struct v4l2_ctrl **cluster = kmalloc(sizeof(struct v4l2_ctrl *) *
 			NUM_CTRLS, GFP_KERNEL);
 
+/* MMRND_AVRC. Start */
+// Avoid PREVENT
+#if 1
+	if (!size || !cluster || !inst)
+	{
+		if(cluster)
+			kfree(cluster); // PREVENT Resource leak fix
+		return NULL;
+	}
+#else
 	if (!size || !cluster || !inst)
 		return NULL;
+#endif
+/* MMRND_AVRC. End */
 
 	for (c = 0; c < NUM_CTRLS; c++)
 		cluster[sz++] =  inst->ctrls[c];
