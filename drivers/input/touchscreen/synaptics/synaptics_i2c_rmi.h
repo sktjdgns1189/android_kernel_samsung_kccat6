@@ -437,7 +437,7 @@
 #endif
 
 
-extern int system_rev;
+extern int unsigned system_rev;
 
 struct synaptics_rmi4_f01_device_status {
 	union {
