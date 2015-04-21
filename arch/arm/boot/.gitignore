@@ -6,3 +6,4 @@ uImage
 *.dtb
 zImage-dtb
 dts/*.reverse.*
+dt.img
