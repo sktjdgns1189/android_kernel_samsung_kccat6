@@ -1081,6 +1081,9 @@ ifeq ($(CONFIG_HIF_PCI), 1)
 CDEFINES += -DHIF_PCI
 endif
 
+#Enable FW logs through ini
+CDEFINES += -DCONFIG_FW_LOGS_BASED_ON_INI
+
 #Enable pci read/write config functions
 ifeq ($(CONFIG_ATH_PCI), 1)
 CDEFINES += -DATH_PCI
