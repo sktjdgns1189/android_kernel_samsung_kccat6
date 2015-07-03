@@ -144,4 +144,6 @@ source "drivers/staging/vnswap/Kconfig"
 
 source "drivers/staging/qcacld-2.0/Kconfig"
 
+source "drivers/staging/mhi/Kconfig"
+
 endif # STAGING

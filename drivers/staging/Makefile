@@ -63,3 +63,4 @@ obj-$(CONFIG_GOLDFISH)		+= goldfish/
 obj-$(CONFIG_USB_DWC2)		+= dwc2/
 obj-$(CONFIG_VNSWAP)		+= vnswap/
 obj-$(CONFIG_QCA_CLD_WLAN)	+= qcacld-2.0/
+obj-$(CONFIG_QCOM_SEC_MHI)	+= mhi/

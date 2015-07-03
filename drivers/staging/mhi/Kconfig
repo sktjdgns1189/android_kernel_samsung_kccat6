@@ -1,0 +1,9 @@
+comment "Qualcomm MHI module Samsung Version"
+
+config QCOM_SEC_MHI
+
+	tristate "Qualcomm MHI module Samsung Version"
+	default n
+	help
+	Add support for the Qualcomm MHI module Samsung Version
+
