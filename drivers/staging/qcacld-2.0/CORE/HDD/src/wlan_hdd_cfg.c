@@ -4095,6 +4095,8 @@ VOS_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx)
 
    buffer = (char *)fw->data;
 
+   //TODO: read /efs/wifi/.mac.info and set correct mac address
+
    /* data format:
     * Intf0MacAddress=00AA00BB00CC
     * Intf1MacAddress=00AA00BB00CD
