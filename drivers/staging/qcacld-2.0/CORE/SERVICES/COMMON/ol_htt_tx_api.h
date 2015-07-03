@@ -45,8 +45,6 @@
 #include <htt.h>        /* needed by inline functions */
 #include <adf_net_types.h>
 #include <ol_htt_api.h> /* htt_pdev_handle */
-#include <htt_types.h>
-#include <vos_trace.h>
 
 /*================ meta-info about tx MSDUs =================================*/
 
@@ -155,8 +153,6 @@ struct htt_msdu_info_t {
         u_int8_t use_6mbps; /* mgmt frames: option to force 6 Mbps rate */
         u_int8_t do_encrypt;
         u_int8_t do_tx_complete;
-        u_int8_t tx_comp_req;
-
         /*
          * cksum_offload - Specify whether checksum offload is enabled or not
          * Target FW uses this flag to turn on HW checksumming
@@ -172,36 +168,19 @@ struct htt_msdu_info_t {
 static inline void
 htt_msdu_info_dump(struct htt_msdu_info_t *msdu_info)
 {
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "HTT MSDU info object (%p)\n", msdu_info);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  ethertype: %#x\n", msdu_info->info.ethertype);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  peer_id: %d\n", msdu_info->info.peer_id);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  vdev_id: %d\n", msdu_info->info.vdev_id);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  ext_tid: %d\n", msdu_info->info.ext_tid);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  l2_hdr_type: %d\n", msdu_info->info.l2_hdr_type);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  frame_type: %d\n", msdu_info->info.frame_type);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  frame_subtype: %d\n", msdu_info->info.frame_subtype);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  is_unicast: %u\n", msdu_info->info.is_unicast);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  l3_hdr_offset: %u\n", msdu_info->info.l3_hdr_offset);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  use 6 Mbps: %d\n", msdu_info->action.use_6mbps);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  do_encrypt: %d\n",  msdu_info->action.do_encrypt);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  do_tx_complete: %d\n", msdu_info->action.do_tx_complete);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  is_unicast: %u\n", msdu_info->info.is_unicast);
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "  is_unicast: %u\n", msdu_info->info.is_unicast);
+    adf_os_print("HTT MSDU info object (%p)\n", msdu_info);
+    adf_os_print("  ethertype: %#x\n", msdu_info->info.ethertype);
+    adf_os_print("  peer_id: %d\n", msdu_info->info.peer_id);
+    adf_os_print("  vdev_id: %d\n", msdu_info->info.vdev_id);
+    adf_os_print("  ext_tid: %d\n", msdu_info->info.ext_tid);
+    adf_os_print("  l2_hdr_type: %d\n", msdu_info->info.l2_hdr_type);
+    adf_os_print("  frame_type: %d\n", msdu_info->info.frame_type);
+    adf_os_print("  frame_subtype: %d\n", msdu_info->info.frame_subtype);
+    adf_os_print("  is_unicast: %u\n", msdu_info->info.is_unicast);
+    adf_os_print("  l3_hdr_offset: %u\n", msdu_info->info.l3_hdr_offset);
+    adf_os_print("  use 6 Mbps: %d\n", msdu_info->action.use_6mbps);
+    adf_os_print("  do_encrypt: %d\n",  msdu_info->action.do_encrypt);
+    adf_os_print("  do_tx_complete: %d\n", msdu_info->action.do_tx_complete);
 }
 
 
@@ -372,6 +351,16 @@ htt_tx_send_nonstd(
  * @param msdu - the MSDU that is being prepared for transmission
  * @param msdu_info - tx MSDU meta-data
  */
+#ifdef QCA_WIFI_ISOC
+void
+htt_tx_desc_init(
+    htt_pdev_handle pdev,
+    void *htt_tx_desc,
+    u_int32_t htt_tx_desc_paddr_lo,
+    u_int16_t msdu_id,
+    adf_nbuf_t msdu,
+    struct htt_msdu_info_t *msdu_info);
+#else
 
 /*
  * Provide a constant to specify the offset of the HTT portion of the
@@ -419,8 +408,6 @@ htt_tx_desc_init(
     HTT_TX_DESC_VDEV_ID_SET(local_word0, msdu_info->info.vdev_id);
     HTT_TX_DESC_EXT_TID_SET(local_word0, msdu_info->info.ext_tid);
     HTT_TX_DESC_CKSUM_OFFLOAD_SET(local_word0, msdu_info->action.cksum_offload);
-    if (pdev->cfg.is_high_latency)
-        HTT_TX_DESC_TX_COMP_SET(local_word0, msdu_info->action.tx_comp_req);
     HTT_TX_DESC_NO_ENCRYPT_SET(local_word0, msdu_info->action.do_encrypt ? 0 : 1);
     *word0 = local_word0;
 
@@ -462,6 +449,7 @@ htt_tx_desc_init(
      */
     adf_nbuf_set_frag_is_wordstream(msdu, 0, 1);
 }
+#endif /* QCA_WIFI_ISOC */
 
 /**
  * @brief Set a flag to indicate that the MSDU in question was postponed.
@@ -557,11 +545,15 @@ htt_tx_desc_frag(
     *word = frag_len;
 }
 
+#ifdef QCA_WIFI_ISOC
+#define htt_tx_desc_frags_table_set(pdev, desc, paddr, reset) /* no-op */
+#else
 void htt_tx_desc_frags_table_set(
     htt_pdev_handle pdev,
     void *desc,
     u_int32_t paddr,
     int reset);
+#endif
 
 /**
  * @brief Specify the type and subtype of a tx frame.
@@ -633,7 +625,12 @@ htt_tx_mgmt_desc_pool_free(struct htt_pdev_t *pdev);
  * @param htt_tx_desc - which frame the 802.11 header is being added to
  * @param new_l2_hdr_size - how large the buffer needs to be
  */
+#ifdef QCA_WIFI_ISOC
+volatile char *
+htt_tx_desc_mpdu_header(void *htt_tx_desc, u_int8_t new_l2_hdr_size);
+#else
 #define htt_tx_desc_mpdu_header(htt_tx_desc, new_l2_hdr_size) /*NULL*/
+#endif /* QCA_WIFI_ISOC */
 
 /**
  * @brief How many tx credits would be consumed by the specified tx frame.
@@ -641,7 +638,11 @@ htt_tx_mgmt_desc_pool_free(struct htt_pdev_t *pdev);
  * @param msdu - the tx frame in question
  * @return number of credits used for this tx frame
  */
+#ifdef QCA_WIFI_ISOC
+u_int32_t htt_tx_msdu_credit(adf_nbuf_t msdu);
+#else
 #define htt_tx_msdu_credit(msdu) 1 /* 1 credit per buffer */
+#endif /* QCA_WIFI_ISOC */
 
 
 
@@ -652,25 +653,39 @@ htt_tx_desc_display(void *tx_desc);
 #define htt_tx_desc_display(tx_desc)
 #endif
 
+#ifdef QCA_WIFI_ISOC
+void
+htt_tx_desc_set_peer_id(
+              u_int32_t *htt_tx_desc,
+              u_int16_t peer_id);
+#else
 static inline
-void htt_tx_desc_set_peer_id(void *htt_tx_desc, u_int16_t peer_id)
+void htt_tx_desc_set_peer_id(u_int32_t *htt_tx_desc, u_int16_t peer_id)
 {
     u_int16_t *peer_id_field_ptr;
 
     peer_id_field_ptr = (u_int16_t *)
-        (htt_tx_desc + HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_BYTES);
+        (htt_tx_desc + HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_DWORD);
 
     *peer_id_field_ptr = peer_id;
 }
+#endif /* QCA_WIFI_ISOC */
+#ifdef QCA_WIFI_ISOC
+void
+htt_tx_desc_set_chanfreq(
+              u_int32_t *htt_tx_desc,
+              u_int16_t chanfreq);
+#else
 static inline
-void htt_tx_desc_set_chanfreq(void *htt_tx_desc, u_int16_t chanfreq)
+void htt_tx_desc_set_chanfreq(u_int32_t *htt_tx_desc, u_int16_t chanfreq)
 {
     u_int16_t *chanfreq_field_ptr;
 
     chanfreq_field_ptr = (u_int16_t *)
-        (htt_tx_desc + HTT_TX_DESC_CHANFREQ_DESC_PADDR_OFFSET_BYTES);
+        (htt_tx_desc + HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_DWORD + sizeof(u_int16_t));
 
     *chanfreq_field_ptr = chanfreq;
 }
+#endif /* QCA_WIFI_ISOC */
 
 #endif /* _OL_HTT_TX_API__H_ */

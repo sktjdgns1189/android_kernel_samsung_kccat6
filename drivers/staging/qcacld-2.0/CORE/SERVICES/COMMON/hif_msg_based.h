@@ -1,5 +1,5 @@
 /*
- *Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -48,7 +48,7 @@ typedef struct {
 	A_STATUS (*rxCompletionHandler)(void *Context, adf_nbuf_t wbuf,
 					u_int8_t pipeID);
 	void     (*txResourceAvailHandler)(void *context, u_int8_t pipe);
-	void     (*fwEventHandler)(void *context, A_STATUS status);
+	void     (*fwEventHandler)(void *context);
 } MSG_BASED_HIF_CALLBACKS;
 
 int HIF_deregister(void);
@@ -116,7 +116,6 @@ int HIFSend_head(HIF_DEVICE *hifDevice, u_int8_t PipeID,
  * @param[in]: force - whether this is a poll suggestion or poll command
  */
 void HIFSendCompleteCheck(HIF_DEVICE *hifDevice, u_int8_t PipeID, int force);
-void HIFCancelDeferredTargetSleep(HIF_DEVICE *hif_device);
 
 /**
  * @brief: Shutdown the HIF layer.

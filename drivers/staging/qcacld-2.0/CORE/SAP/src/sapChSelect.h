@@ -113,39 +113,10 @@ typedef enum
     CHANNEL_14
 } tSapChannel;
 
-#define MAX_80MHZ_BANDS 6
-#define SAP_80MHZ_MASK     0x0F
-#define SAP_40MHZ_MASK_L   0x03
-#define SAP_40MHZ_MASK_H   0x0C
-
-/*
- * structs for holding channel bonding bitmap
- * used for finding new channel when SAP is on
- * DFS channel and radar is detected.
- */
-typedef struct sChannelBondingInfo {
-  v_U8_t channelMap:4;
-  v_U8_t rsvd:4;
-  v_U8_t startChannel;
-} tChannelBondingInfo;
-
-typedef struct __chan_bonding_bitmap {
-  tChannelBondingInfo chanBondingSet[MAX_80MHZ_BANDS];
-} chan_bonding_bitmap;
-
 /**
 * Structure holding information of each channel in the spectrum,
 * it contains the channel number, the computed weight
 */
-typedef struct sChannelInfo {
-    v_U8_t   channel;
-    v_BOOL_t valid; // if the channel is valid to be picked as new channel
-} tChannelInfo;
-
-typedef struct sAll5GChannelList{
-    v_U8_t       numChannel;
-    tChannelInfo *channelList;
-} tAll5GChannelList;
 
 typedef struct sSapChannelListInfo{
     v_U8_t numChannel;
@@ -158,6 +129,7 @@ typedef struct {
     v_U16_t bssCount;   // bss found in scanresult for this channel
     v_S31_t rssiAgr;    // Max value of rssi among all BSS(es) from scanresult for this channel
     v_U32_t weight;     // Weightage of this channel
+    v_U32_t weight_copy; //copy of the orignal weight
     v_BOOL_t valid;     // Is this a valid center frequency for regulatory domain
 } tSapSpectChInfo;//tDfsSpectChInfo;
 
@@ -178,23 +150,5 @@ typedef struct sSapChSelParams {
     void *pSpectInfoParams;//*pDfsParams;   // Filled with tSapChSelSpectInfo
     v_U16_t numChannels;
 } tSapChSelParams;
-
-#define SAP_TX_LEAKAGE_THRES 310
-#define SAP_TX_LEAKAGE_MAX  1000
-#define SAP_TX_LEAKAGE_MIN  200
-
-typedef struct sSapTxLeakInfo {
-    v_U8_t  leak_chan;      /* leak channel */
-    v_U32_t leak_lvl;       /* tx leakage lvl */
-} tSapTxLeakInfo;
-
-typedef struct sSapChanMatrixInfo {
-    v_U8_t channel;         /* channel to switch from */
-#ifdef FEATURE_WLAN_CH144
-    tSapTxLeakInfo chan_matrix[RF_CHAN_144 - RF_CHAN_36 + 1];
-#else
-    tSapTxLeakInfo chan_matrix[RF_CHAN_140 - RF_CHAN_36 + 1];
-#endif
-} tSapChanMatrixInfo;
 
 #endif // if !defined __SAP_CH_SELECT_H

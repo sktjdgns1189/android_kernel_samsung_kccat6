@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -52,7 +52,6 @@ void          ConvertQOSCaps        (tpAniSirGlobal, tSirMacQosCapabilityIE*,   
 void          ConvertQOSCapsStation (tpAniSirGlobal, tSirMacQosCapabilityStaIE*, tDot11fIEQOSCapsStation*);
 tSirRetStatus ConvertWPA            (tpAniSirGlobal, tSirMacWpaInfo*,            tDot11fIEWPA*);
 tSirRetStatus ConvertWPAOpaque      (tpAniSirGlobal, tSirMacWpaInfo*,            tDot11fIEWPAOpaque*);
-tSirRetStatus ConvertWAPIOpaque     (tpAniSirGlobal, tSirMacWapiInfo*,           tDot11fIEWAPIOpaque*);
 tSirRetStatus ConvertRSN            (tpAniSirGlobal, tSirMacRsnInfo*,            tDot11fIERSN*);
 tSirRetStatus ConvertRSNOpaque      (tpAniSirGlobal, tSirMacRsnInfo*,            tDot11fIERSNOpaque*);
 void          ConvertPowerCaps      (tpAniSirGlobal, tSirMacPowerCapabilityIE*,  tDot11fIEPowerCaps*);
@@ -75,7 +74,6 @@ tSirRetStatus ConvertP2POpaque      (tpAniSirGlobal, tSirAddie*,                
 #ifdef WLAN_FEATURE_WFD
 tSirRetStatus ConvertWFDOpaque      (tpAniSirGlobal, tSirAddie*,                 tDot11fIEWFDIEOpaque*);
 #endif
-void          ConvertQosMapsetFrame(tpAniSirGlobal, tSirQosMapSet*,     tDot11fIEQosMapSet*);
 
 
 #endif

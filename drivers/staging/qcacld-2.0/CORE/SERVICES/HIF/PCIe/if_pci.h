@@ -31,7 +31,11 @@
 #define __ATH_PCI_H__
 
 #include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+#include <asm/semaphore.h>
+#else
 #include <linux/semaphore.h>
+#endif
 #include <linux/interrupt.h>
 
 #define CONFIG_COPY_ENGINE_SUPPORT /* TBDXXX: here for now */
@@ -94,7 +98,7 @@ struct hif_pci_softc {
 #define TARGID(sc) ((A_target_id_t)(&(sc)->mem))
 #define TARGID_TO_HIF(targid) (((struct hif_pci_softc *)((char *)(targid) - (char *)&(((struct hif_pci_softc *)0)->mem)))->hif_device)
 
-int athdiag_procfs_init(void *scn);
+int athdiag_procfs_init(struct hif_pci_softc *scn);
 void athdiag_procfs_remove(void);
 
 bool hif_pci_targ_is_awake(struct hif_pci_softc *sc, void *__iomem *mem);
@@ -111,8 +115,18 @@ irqreturn_t HIF_fw_interrupt_handler(int irq, void *arg);
  */
 adf_os_size_t initBufferCount(adf_os_size_t maxSize);
 
+/* Function to set the TXRX handle in the ol_sc context */
+void hif_init_pdev_txrx_handle(void *ol_sc, void *txrx_handle);
+void hif_disable_isr(void *ol_sc);
+
+/* Function to reset SoC */
+void hif_reset_soc(void *ol_sc);
+
 /* Function to disable ASPM */
 void hif_disable_aspm(void);
+
+void hif_init_adf_ctx(adf_os_device_t adf_dev, void *ol_sc);
+void hif_deinit_adf_ctx(void *ol_sc);
 
 void hif_pci_save_htc_htt_config_endpoint(int htc_endpoint);
 
@@ -125,25 +139,7 @@ int hif_pci_check_fw_reg(struct hif_pci_softc *sc);
 int hif_pci_check_soc_status(struct hif_pci_softc *sc);
 void dump_CE_debug_register(struct hif_pci_softc *sc);
 
-/*These functions are exposed to HDD*/
-int hif_register_driver(void);
-void hif_unregister_driver(void);
-void hif_init_adf_ctx(adf_os_device_t adf_dev, void *ol_sc);
-void hif_init_pdev_txrx_handle(void *ol_sc, void *txrx_handle);
-void hif_disable_isr(void *ol_sc);
-void hif_reset_soc(void *ol_sc);
-void hif_deinit_adf_ctx(void *ol_sc);
 void hif_get_hw_info(void *ol_sc, u32 *version, u32 *revision);
-void hif_set_fw_info(void *ol_sc, u32 target_fw_version);
-
-#ifdef IPA_UC_OFFLOAD
-/*
- * Micro controller needs PCI BAR address to access CE register
- * If Micro controller data path enabled, control path will
- * try to get PCI BAR address and will send to IPA driver
- */
-void hif_read_bar(struct hif_pci_softc *sc, u32 *bar_value);
-#endif /* IPA_UC_OFFLOAD */
 
 /*
  * A firmware interrupt to the Host is indicated by the
@@ -176,7 +172,5 @@ void hif_read_bar(struct hif_pci_softc *sc, u32 *bar_value);
 #define OL_ATH_TX_DRAIN_WAIT_CNT       10
 
 #define HIF_CE_DRAIN_WAIT_CNT          20
-#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
-void wlan_hif_pci_suspend(void);
-#endif
+
 #endif /* __ATH_PCI_H__ */

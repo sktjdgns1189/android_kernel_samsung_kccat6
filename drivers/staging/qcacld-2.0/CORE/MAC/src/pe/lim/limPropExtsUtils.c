@@ -51,9 +51,6 @@
 #include "limPropExtsUtils.h"
 #include "limSerDesUtils.h"
 #include "limTrace.h"
-#ifdef WLAN_FEATURE_VOWIFI_11R
-#include "limFTDefs.h"
-#endif
 #include "limSession.h"
 #define LIM_GET_NOISE_MAX_TRY 5
 /**
@@ -109,7 +106,8 @@ limExtractApCapability(tpAniSirGlobal pMac, tANI_U8 *pIE, tANI_U16 ieLen,
             LIM_BSS_CAPS_SET(WME, *qosCap);
         if (LIM_BSS_CAPS_GET(WME, *qosCap) && pBeaconStruct->wsmCapablePresent)
             LIM_BSS_CAPS_SET(WSM, *qosCap);
-        if (pBeaconStruct->propIEinfo.capabilityPresent)
+        if (pBeaconStruct->propIEinfo.aniIndicator &&
+            pBeaconStruct->propIEinfo.capabilityPresent)
             *propCap = pBeaconStruct->propIEinfo.capability;
         if (pBeaconStruct->HTCaps.present)
             pMac->lim.htCapabilityPresentInBeacon = 1;
@@ -180,6 +178,14 @@ limExtractApCapability(tpAniSirGlobal pMac, tANI_U8 *pIE, tANI_U16 ieLen,
         }
 #endif
         if (pBeaconStruct->powerConstraintPresent)
+#if 0
+        //Remove this check. This function is expected to return localPowerConsraints
+        //and it should just do that. Check for 11h enabled or not can be done at the caller
+#if defined WLAN_FEATURE_VOWIFI
+          && ( pMac->lim.gLim11hEnable
+           || pMac->rrm.rrmPEContext.rrmEnable
+#endif
+#endif
         {
 #if defined WLAN_FEATURE_VOWIFI
            *localConstraint -= pBeaconStruct->localPowerConstraint.localPowerConstraints;
@@ -243,7 +249,10 @@ ePhyChanBondState  limGetHTCBState(ePhyChanBondState aniCBMode)
  * limGetStaPeerType
  *
  *FUNCTION:
- * This API returns STA peer type
+ * Based on a combination of the following -
+ * 1) tDphHashNode.aniPeer
+ * 2) tDphHashNode.propCapability
+ * this API determines if a given STA is an ANI peer or not
  *
  *LOGIC:
  *
@@ -260,9 +269,19 @@ tStaRateMode limGetStaPeerType( tpAniSirGlobal pMac,
     tpDphHashNode pStaDs,
     tpPESession   psessionEntry)
 {
-  tStaRateMode staPeerType = eSTA_11b;
+tStaRateMode staPeerType = eSTA_11b;
+  // Determine the peer-STA type
+  if( pStaDs->aniPeer )
+  {
+    if(PROP_CAPABILITY_GET( TAURUS, pStaDs->propCapability ))
+        staPeerType = eSTA_TAURUS;
+    else if( PROP_CAPABILITY_GET( TITAN, pStaDs->propCapability ))
+        staPeerType = eSTA_TITAN;
+    else
+        staPeerType = eSTA_POLARIS;
+  }
 #ifdef WLAN_FEATURE_11AC
-  if(pStaDs->mlmStaContext.vhtCapability)
+  else if(pStaDs->mlmStaContext.vhtCapability)
       staPeerType = eSTA_11ac;
 #endif
   else if(pStaDs->mlmStaContext.htCapability)

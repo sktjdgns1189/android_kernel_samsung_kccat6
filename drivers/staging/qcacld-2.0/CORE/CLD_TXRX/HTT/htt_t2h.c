@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -48,9 +48,7 @@
 #include <pktlog_ac_fmt.h>
 #include <wdi_event.h>
 #include <ol_htt_tx_api.h>
-#include <ol_txrx_stats.h>
-#include <wdi_event_api.h>
-#include <ol_txrx_ctrl_api.h>
+#include <ol_txrx_types.h>
 /*--- target->host HTT message dispatch function ----------------------------*/
 
 #ifndef DEBUG_CREDIT
@@ -85,55 +83,6 @@ htt_t2h_mac_addr_deswizzle(u_int8_t *tgt_mac_addr, u_int8_t *buffer)
     return tgt_mac_addr;
 #endif
 }
-
-#if defined(CONFIG_HL_SUPPORT)
-#define HTT_RX_FRAG_SET_LAST_MSDU(pdev, msg) /* no-op */
-#else
-static void HTT_RX_FRAG_SET_LAST_MSDU(
-    struct htt_pdev_t *pdev, adf_nbuf_t msg)
-{
-    u_int32_t *msg_word;
-    unsigned num_msdu_bytes;
-    adf_nbuf_t msdu;
-    struct htt_host_rx_desc_base *rx_desc;
-    int start_idx;
-    u_int8_t *p_fw_msdu_rx_desc = 0;
-
-    msg_word = (u_int32_t *) adf_nbuf_data(msg);
-    num_msdu_bytes = HTT_RX_FRAG_IND_FW_RX_DESC_BYTES_GET(*(msg_word +
-               HTT_RX_FRAG_IND_HDR_PREFIX_SIZE32));
-    /*
-     * 1 word for the message header,
-     * 1 word to specify the number of MSDU bytes,
-     * 1 word for every 4 MSDU bytes (round up),
-     * 1 word for the MPDU range header
-     */
-    pdev->rx_mpdu_range_offset_words = 3 + ((num_msdu_bytes + 3) >> 2);
-    pdev->rx_ind_msdu_byte_idx = 0;
-
-    p_fw_msdu_rx_desc = ((u_int8_t *)(msg_word) +
-               HTT_ENDIAN_BYTE_IDX_SWAP(HTT_RX_FRAG_IND_FW_DESC_BYTE_OFFSET));
-
-    /*
-     * Fix for EV126710, in which BSOD occurs due to last_msdu bit
-     * not set while the next pointer is deliberately set to NULL
-     * before calling ol_rx_pn_check_base()
-     *
-     * For fragment frames, the HW may not have set the last_msdu bit
-     * in the rx descriptor, but the SW expects this flag to be set,
-     * since each fragment is in a separate MPDU. Thus, set the flag here,
-     * just in case the HW didn't.
-     */
-    start_idx = pdev->rx_ring.sw_rd_idx.msdu_payld;
-    msdu = pdev->rx_ring.buf.netbufs_ring[start_idx];
-    adf_nbuf_set_pktlen(msdu, HTT_RX_BUF_SIZE);
-    adf_nbuf_unmap(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
-    rx_desc = htt_rx_desc(msdu);
-    *((u_int8_t *) &rx_desc->fw_desc.u.val) = *p_fw_msdu_rx_desc;
-    rx_desc->msdu_end.last_msdu = 1;
-    adf_nbuf_map(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
-}
-#endif /* CONFIG_HL_SUPPORT */
 
 /* Target to host Msg/event  handler  for low priority messages*/
 void
@@ -199,12 +148,43 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
         }
     case  HTT_T2H_MSG_TYPE_RX_FRAG_IND:
         {
+            unsigned num_msdu_bytes;
             u_int16_t peer_id;
             u_int8_t tid;
+            adf_nbuf_t msdu;
+            struct htt_host_rx_desc_base *rx_desc;
+            int start_idx;
 
             peer_id = HTT_RX_FRAG_IND_PEER_ID_GET(*msg_word);
             tid = HTT_RX_FRAG_IND_EXT_TID_GET(*msg_word);
-            HTT_RX_FRAG_SET_LAST_MSDU(pdev, htt_t2h_msg);
+
+            num_msdu_bytes = HTT_RX_IND_FW_RX_DESC_BYTES_GET(*(msg_word + 2));
+            /*
+             * 1 word for the message header,
+             * 1 word to specify the number of MSDU bytes,
+             * 1 word for every 4 MSDU bytes (round up),
+             * 1 word for the MPDU range header
+             */
+            pdev->rx_mpdu_range_offset_words = 3 + ((num_msdu_bytes + 3) >> 2);
+            pdev->rx_ind_msdu_byte_idx = 0;
+
+            /*
+             * Fix for EV126710, in which BSOD occurs due to last_msdu bit
+             * not set while the next pointer is deliberately set to NULL
+             * before calling ol_rx_pn_check_base()
+             *
+             * For fragment frames, the HW may not have set the last_msdu bit
+             * in the rx descriptor, but the SW expects this flag to be set,
+             * since each fragment is in a separate MPDU. Thus, set the flag here,
+             * just in case the HW didn't.
+             */
+            start_idx = pdev->rx_ring.sw_rd_idx.msdu_payld;
+            msdu = pdev->rx_ring.buf.netbufs_ring[start_idx];
+            adf_nbuf_set_pktlen(msdu, HTT_RX_BUF_SIZE);
+            adf_nbuf_unmap(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
+            rx_desc = htt_rx_desc(msdu);
+            rx_desc->msdu_end.last_msdu = 1;
+            adf_nbuf_map(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
 
             ol_rx_frag_indication_handler(
                 pdev->txrx_pdev,
@@ -285,19 +265,10 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
     case HTT_T2H_MSG_TYPE_MGMT_TX_COMPL_IND:
         {
             struct htt_mgmt_tx_compl_ind *compl_msg;
-            int32_t credit_delta = 1;
 
             compl_msg = (struct htt_mgmt_tx_compl_ind *)(msg_word + 1);
-
             if (pdev->cfg.is_high_latency) {
-                if (!pdev->cfg.default_tx_comp_req) {
-                    adf_os_atomic_add(credit_delta,
-                                      &pdev->htt_tx_credit.target_delta);
-                    credit_delta = htt_tx_credit_update(pdev);
-                }
-                if (credit_delta) {
-                    ol_tx_target_credit_update(pdev->txrx_pdev, credit_delta);
-                }
+                ol_tx_target_credit_update(pdev->txrx_pdev, 1);
             }
             ol_tx_single_completion_handler(
                 pdev->txrx_pdev, compl_msg->status, compl_msg->desc_id);
@@ -345,52 +316,30 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
 #endif
     case HTT_T2H_MSG_TYPE_TX_CREDIT_UPDATE_IND:
     {
-        u_int32_t htt_credit_delta_abs;
-        int32_t htt_credit_delta;
-        int sign;
-
-        htt_credit_delta_abs = HTT_TX_CREDIT_DELTA_ABS_GET(*msg_word);
-        sign = HTT_TX_CREDIT_SIGN_BIT_GET(*msg_word) ? -1 : 1;
-        htt_credit_delta = sign * htt_credit_delta_abs;
-
-        if (pdev->cfg.is_high_latency &&
-            !pdev->cfg.default_tx_comp_req) {
-            adf_os_atomic_add(htt_credit_delta,
-                              &pdev->htt_tx_credit.target_delta);
-            htt_credit_delta = htt_tx_credit_update(pdev);
+        A_INT16  htt_credit_delta_abs = HTT_TX_CREDIT_DELTA_ABS_GET(*msg_word);
+        struct ol_txrx_pdev_t* ptxrx_pdev = pdev->txrx_pdev;
+        if ( HTT_TX_CREDIT_SIGN_BIT_GET(*msg_word) ) {
+            /* negative delta */
+#if DEBUG_CREDIT
+            adf_os_print(" <HTT> Decrease Credit %d - %d = %d(Msg).\n",
+                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit),
+                    htt_credit_delta_abs,
+                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit) - htt_credit_delta_abs);
+#endif
+            adf_os_atomic_add((A_INT32)(-htt_credit_delta_abs), &ptxrx_pdev->target_tx_credit);
+        } else {
+            /* positive delta */
+#if DEBUG_CREDIT
+            adf_os_print(" <HTT> Increase Credit %d + %d = %d(Msg).\n",
+                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit),
+                    htt_credit_delta_abs,
+                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit) + htt_credit_delta_abs);
+#endif
+            adf_os_atomic_add((A_INT32)htt_credit_delta_abs, &ptxrx_pdev->target_tx_credit);
         }
-        if (htt_credit_delta) {
-            ol_tx_credit_completion_handler(pdev->txrx_pdev, htt_credit_delta);
-        }
+
         break;
     }
-
-#ifdef IPA_UC_OFFLOAD
-    case HTT_T2H_MSG_TYPE_WDI_IPA_OP_RESPONSE:
-        {
-            u_int8_t op_code;
-            u_int16_t len;
-            u_int8_t *op_msg_buffer;
-            u_int8_t *msg_start_ptr;
-
-            msg_start_ptr = (u_int8_t *)msg_word;
-            op_code = HTT_WDI_IPA_OP_RESPONSE_OP_CODE_GET(*msg_word);
-            msg_word++;
-            len = HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_GET(*msg_word);
-
-            op_msg_buffer = adf_os_mem_alloc(NULL,
-                sizeof(struct htt_wdi_ipa_op_response_t) + len);
-            if (!op_msg_buffer) {
-                adf_os_print("OPCODE messsage buffer alloc fail");
-                break;
-            }
-            adf_os_mem_copy(op_msg_buffer,
-                    msg_start_ptr,
-                    sizeof(struct htt_wdi_ipa_op_response_t) + len);
-            ol_txrx_ipa_uc_op_response(pdev->txrx_pdev, op_msg_buffer);
-            break;
-        }
-#endif /* IPA_UC_OFFLOAD */
 
     default:
         break;
@@ -421,14 +370,6 @@ htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
         return;
     }
 
-#ifdef HTT_RX_RESTORE
-if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
-        adf_os_print("rx restore ..\n");
-        adf_nbuf_free(htt_t2h_msg);
-        return;
-    }
-#endif
-
     /* confirm alignment */
     HTT_ASSERT3((((unsigned long) adf_nbuf_data(htt_t2h_msg)) & 0x3) == 0);
 
@@ -442,11 +383,6 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
             u_int16_t peer_id;
             u_int8_t tid;
 
-            if (adf_os_unlikely(pdev->cfg.is_full_reorder_offload)) {
-                adf_os_print("HTT_T2H_MSG_TYPE_RX_IND not supported with full "
-                             "reorder offload\n");
-                break;
-            }
             peer_id = HTT_RX_IND_PEER_ID_GET(*msg_word);
             tid = HTT_RX_IND_EXT_TID_GET(*msg_word);
 
@@ -504,20 +440,9 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
                         compl->payload[num_msdus];
                 }
             }
-
             if (pdev->cfg.is_high_latency) {
-                if (!pdev->cfg.default_tx_comp_req) {
-                    int credit_delta;
-                    adf_os_atomic_add(num_msdus,
-                        &pdev->htt_tx_credit.target_delta);
-                    credit_delta = htt_tx_credit_update(pdev);
-                    if (credit_delta) {
-                        ol_tx_target_credit_update(pdev->txrx_pdev,
-                                                   credit_delta);
-                    }
-                } else {
-                    ol_tx_target_credit_update(pdev->txrx_pdev, num_msdus);
-                }
+                ol_tx_target_credit_update(
+                    pdev->txrx_pdev, num_msdus /* 1 credit per MSDU */);
             }
             ol_tx_completion_handler(
                 pdev->txrx_pdev, num_msdus, status, msg_word + 1);
@@ -576,40 +501,6 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
             HTT_TX_SCHED(pdev);
             break;
         }
-    case HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND:
-        {
-            u_int16_t peer_id;
-            u_int8_t tid;
-            u_int8_t offload_ind, frag_ind;
-
-            if (adf_os_unlikely(!pdev->cfg.is_full_reorder_offload)) {
-                adf_os_print("HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND not supported"
-                             " when full reorder offload is disabled\n");
-                break;
-            }
-
-            if (adf_os_unlikely(pdev->cfg.is_high_latency)) {
-                adf_os_print("HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND not supported"
-                             " on high latency\n");
-                break;
-            }
-
-            peer_id = HTT_RX_IN_ORD_PADDR_IND_PEER_ID_GET(*msg_word);
-            tid = HTT_RX_IN_ORD_PADDR_IND_EXT_TID_GET(*msg_word);
-            offload_ind = HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_GET(*msg_word);
-            frag_ind = HTT_RX_IN_ORD_PADDR_IND_FRAG_GET(*msg_word);
-
-            if (adf_os_unlikely(frag_ind)) {
-                ol_rx_frag_indication_handler(pdev->txrx_pdev, htt_t2h_msg,
-                                               peer_id, tid);
-                break;
-            }
-
-            ol_rx_in_order_indication_handler(pdev->txrx_pdev, htt_t2h_msg,
-                                               peer_id, tid, offload_ind);
-            break;
-     }
-
     default:
         htt_t2h_lp_msg_handler(context, htt_t2h_msg);
         return ;

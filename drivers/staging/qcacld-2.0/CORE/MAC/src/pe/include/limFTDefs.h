@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -43,6 +43,7 @@
   Preprocessor definitions and constants
   ------------------------------------------------------------------------*/
 #define SIR_MDIE_SIZE               3 // MD ID(2 bytes), Capability(1 byte)
+#define MAX_TIDS                    8
 #define MAX_FTIE_SIZE             256 // Max size limited to 256, on acct. of IW custom events
 
 
@@ -89,7 +90,6 @@ typedef struct sSirFTUpdateKeyInfo
 {
    tANI_U16             messageType;
    tANI_U16             length;
-   tANI_U32             smeSessionId;
    tSirMacAddr          bssId;
    tSirKeyMaterial      keyMaterial;
 } tSirFTUpdateKeyInfo, *tpSirFTUpdateKeyInfo;
@@ -108,25 +108,19 @@ typedef struct sSirFTPreAuthKeyInfo
   ------------------------------------------------------------------------*/
 typedef struct sFTPEContext
 {
-    tpSirFTPreAuthReq pFTPreAuthReq;              /* Saved FT Pre Auth Req */
+    tpSirFTPreAuthReq pFTPreAuthReq;                      // Saved FT Pre Auth Req
+    void              *psavedsessionEntry;
     tSirRetStatus     ftPreAuthStatus;
     tANI_U16          saved_auth_rsp_length;
     tANI_U8           saved_auth_rsp[MAX_FTIE_SIZE];
     tSirFTPreAuthKeyInfo    PreAuthKeyInfo;
-    /* Items created for the new FT, session */
-    void              *pAddBssReq;               /* Save add bss req */
-    void              *pAddStaReq;               /*Save add sta req  */
-    tANI_U32          peSessionId;
-    tANI_U32          smeSessionId;
+    // Items created for the new FT, session
+    void              *pftSessionEntry;                   // Saved session created for pre-auth
+    void              *pAddBssReq;                        // Save add bss req.
+    void              *pAddStaReq;                        // Save add sta req.
 
-    /* This flag is required to indicate on which session the preauth
-     * has taken place, since the auth reponse for preauth will come
-     * for a new BSSID for which there is no session yet. This flag
-     * will be used to extract the session from the session preauth
-     * has been initiated
-     */
-    tANI_BOOLEAN      ftPreAuthSession;
 } tftPEContext, *tpftPEContext;
+
 
 #endif /* __LIMFTDEFS_H__ */
 

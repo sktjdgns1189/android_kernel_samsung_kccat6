@@ -67,12 +67,15 @@
   ------------------------------------------------------------------------*/
 #include <vos_event.h>
 #include "i_vos_types.h"
+#include "i_vos_packet.h"
 #include <linux/wait.h>
-#if defined(WLAN_OPEN_SOURCE) && defined(CONFIG_HAS_WAKELOCK)
+#ifdef WLAN_OPEN_SOURCE
 #include <linux/wakelock.h>
 #endif
-#include <vos_mq.h>
+#include <vos_power.h>
+#ifdef QCA_WIFI_2_0
 #include <adf_os_types.h>
+#endif
 
 #define TX_POST_EVENT_MASK               0x001
 #define TX_SUSPEND_EVENT_MASK            0x002
@@ -98,10 +101,8 @@
 ** worst-case scenario.  Must be able to handle all
 ** incoming frames, as well as overhead for internal
 ** messaging
-**
-** Increased to 2000 to handle more RX frames
 */
-#define VOS_CORE_MAX_MESSAGES 2000
+#define VOS_CORE_MAX_MESSAGES           (VPKT_NUM_RX_RAW_PACKETS + 32)
 
 #ifdef QCA_CONFIG_SMP
 /*
@@ -178,6 +179,15 @@ typedef struct _VosSchedContext
    /* SYS Message queue on the Main thread */
    VosMqType           sysMcMq;
 
+  /* WDI Message queue on the Main thread*/
+   VosMqType           wdiMcMq;
+
+   /* WDI Message queue on the Tx Thread*/
+   VosMqType           wdiTxMq;
+
+   /* WDI Message queue on the Rx Thread*/
+   VosMqType           wdiRxMq;
+
    /* TL Message queue on the Tx thread */
    VosMqType           tlTxMq;
 
@@ -185,6 +195,10 @@ typedef struct _VosSchedContext
    VosMqType           sysTxMq;
 
    VosMqType           sysRxMq;
+#if defined (QCA_WIFI_2_0) && \
+    defined (QCA_WIFI_ISOC)
+   VosMqType           htcMcMq;
+#endif
 
    /* Handle of Event for MC thread to signal startup */
    struct completion   McStartEvent;
@@ -316,6 +330,8 @@ typedef struct _VosWatchdogContext
 
    v_BOOL_t resetInProgress;
 
+   vos_chip_reset_reason_type reason;
+
    /* Lock for preventing multiple reset being triggered simultaneously */
    spinlock_t wdLock;
 
@@ -366,10 +382,11 @@ typedef struct _VosContextType
    /* MAC Module Context  */
    v_VOID_t           *pMACContext;
 
-#ifndef WLAN_FEATURE_MBSSID
+   /* BAP Context */
+   v_VOID_t           *pBAPContext;
+
    /* SAP Context */
    v_VOID_t           *pSAPContext;
-#endif
 
    vos_event_t         ProbeEvent;
 
@@ -380,7 +397,10 @@ typedef struct _VosContextType
    /* WDA Context */
    v_VOID_t            *pWDAContext;
 
+#ifdef QCA_WIFI_2_0
+#ifndef QCA_WIFI_ISOC
    v_VOID_t        *pHIFContext;
+#endif
 
    v_VOID_t        *htc_ctx;
 
@@ -395,6 +415,10 @@ typedef struct _VosContextType
 
    /* Configuration handle used to get system configuration */
    v_VOID_t    *cfg_ctx;
+#else
+   /* VOS Packet Context */
+   vos_pkt_context_t    vosPacket;
+#endif	/* QCA_WIFI_2_0 */
 
    volatile v_U8_t    isLoadUnloadInProgress;
 
@@ -620,6 +644,7 @@ void vos_sched_deinit_mqs (pVosSchedContext pSchedContext);
 void vos_sched_flush_mc_mqs  (pVosSchedContext pSchedContext);
 void vos_sched_flush_tx_mqs  (pVosSchedContext pSchedContext);
 void vos_sched_flush_rx_mqs  (pVosSchedContext pSchedContext);
+VOS_STATUS vos_watchdog_chip_reset ( vos_chip_reset_reason_type reason );
 void clearWlanResetReason(void);
 
 void vos_timer_module_init( void );

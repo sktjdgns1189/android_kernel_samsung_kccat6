@@ -180,40 +180,6 @@ ol_txrx_peer_find_hash_add(
 }
 
 struct ol_txrx_peer_t *
-ol_txrx_peer_vdev_find_hash(struct ol_txrx_pdev_t *pdev,
-                            struct ol_txrx_vdev_t *vdev,
-                            u_int8_t *peer_mac_addr,
-                            int mac_addr_is_aligned,
-                            u_int8_t check_valid)
-{
-    union ol_txrx_align_mac_addr_t local_mac_addr_aligned, *mac_addr;
-    unsigned index;
-    struct ol_txrx_peer_t *peer;
-
-    if (mac_addr_is_aligned) {
-        mac_addr = (union ol_txrx_align_mac_addr_t *) peer_mac_addr;
-    } else {
-        adf_os_mem_copy(
-            &local_mac_addr_aligned.raw[0],
-            peer_mac_addr, OL_TXRX_MAC_ADDR_LEN);
-        mac_addr = &local_mac_addr_aligned;
-    }
-    index = ol_txrx_peer_find_hash_index(pdev, mac_addr);
-    adf_os_spin_lock_bh(&pdev->peer_ref_mutex);
-    TAILQ_FOREACH(peer, &pdev->peer_hash.bins[index], hash_list_elem) {
-        if (ol_txrx_peer_find_mac_addr_cmp(mac_addr, &peer->mac_addr) == 0
-            && (check_valid == 0 || peer->valid) && peer->vdev == vdev )  {
-            /* found it - increment the ref count before releasing the lock */
-            adf_os_atomic_inc(&peer->ref_cnt);
-            adf_os_spin_unlock_bh(&pdev->peer_ref_mutex);
-            return peer;
-        }
-    }
-    adf_os_spin_unlock_bh(&pdev->peer_ref_mutex);
-    return NULL; /* failure */
-}
-
-struct ol_txrx_peer_t *
 ol_txrx_peer_find_hash_find(
     struct ol_txrx_pdev_t *pdev,
     u_int8_t *peer_mac_addr,
@@ -523,23 +489,20 @@ ol_txrx_peer_find_display(ol_txrx_pdev_handle pdev, int indent)
 {
     int i, max_peers;
 
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "%*speer map:\n", indent, " ");
+    adf_os_print("%*speer map:\n", indent, " ");
     max_peers = ol_cfg_max_peer_id(pdev->ctrl_pdev) + 1;
     for (i = 0; i < max_peers; i++) {
         if (pdev->peer_id_to_obj_map[i]) {
-            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-                "%*sid %d -> %p\n",
+            adf_os_print("%*sid %d -> %p\n",
                 indent+4, " ", i, pdev->peer_id_to_obj_map[i]);
         }
     }
-    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
-        "%*speer hash table:\n", indent, " ");
+    adf_os_print("%*speer hash table:\n", indent, " ");
     for (i = 0; i <= pdev->peer_hash.mask; i++) {
         if (!TAILQ_EMPTY(&pdev->peer_hash.bins[i])) {
             struct ol_txrx_peer_t *peer;
             TAILQ_FOREACH(peer, &pdev->peer_hash.bins[i], hash_list_elem) {
-                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO_LOW,
+                adf_os_print(
                     "%*shash idx %d -> %p (%02x:%02x:%02x:%02x:%02x:%02x)\n",
                     indent+4, " ", i, peer,
                     peer->mac_addr.raw[0], peer->mac_addr.raw[1],

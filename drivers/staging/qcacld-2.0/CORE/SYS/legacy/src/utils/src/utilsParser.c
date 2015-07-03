@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -130,20 +130,6 @@ tSirRetStatus ConvertWPAOpaque( tpAniSirGlobal      pMac,
 
     return eSIR_SUCCESS;
 }
-
-#ifdef FEATURE_WLAN_WAPI
-tSirRetStatus ConvertWAPIOpaque( tpAniSirGlobal      pMac,
-                                tSirMacWapiInfo     *pOld,
-                                tDot11fIEWAPIOpaque *pNew )
-{
-    // This is awful, I know, but the old code just rammed the IE into
-    // an opaque array.  Note that we need to explicitly add the OUI!
-    pOld->length    = pNew->num_data;
-    vos_mem_copy( pOld->info , pNew->data, pNew->num_data );
-
-    return eSIR_SUCCESS;
-}
-#endif
 
 tSirRetStatus ConvertWscOpaque( tpAniSirGlobal      pMac,
                                 tSirAddie           *pOld,
@@ -455,10 +441,10 @@ tSirRetStatus ConvertTCLAS(tpAniSirGlobal  pMac,
         if ( 4 == pNew->info.IpParams.version )
         {
             pOld->tclasParams.ipv4.version = 4;
-            vos_mem_copy( pOld->tclasParams.ipv4.srcIpAddr,
-                          pNew->info.IpParams.params.IpV4Params.source, 4 );
-            vos_mem_copy( pOld->tclasParams.ipv4.dstIpAddr,
-                          pNew->info.IpParams.params.IpV4Params.dest, 4 );
+            vos_mem_copy( ( tANI_U8* )&pOld->tclasParams.ipv4.srcIpAddr,
+                          ( tANI_U8* )pNew->info.IpParams.params.IpV4Params.source, 4 );
+            vos_mem_copy( ( tANI_U8* )&pOld->tclasParams.ipv4.dstIpAddr,
+                          ( tANI_U8* )pNew->info.IpParams.params.IpV4Params.dest, 4 );
             pOld->tclasParams.ipv4.srcPort  = pNew->info.IpParams.params.IpV4Params.src_port;
             pOld->tclasParams.ipv4.dstPort  = pNew->info.IpParams.params.IpV4Params.dest_port;
             pOld->tclasParams.ipv4.dscp     = pNew->info.IpParams.params.IpV4Params.DSCP;
@@ -550,10 +536,10 @@ tSirRetStatus ConvertWMMTCLAS(tpAniSirGlobal    pMac,
         if ( 4 == pNew->info.IpParams.version )
         {
             pOld->tclasParams.ipv4.version = 4;
-            vos_mem_copy( pOld->tclasParams.ipv4.srcIpAddr,
-                          pNew->info.IpParams.params.IpV4Params.source, 4 );
-            vos_mem_copy( pOld->tclasParams.ipv4.dstIpAddr,
-                          pNew->info.IpParams.params.IpV4Params.dest, 4 );
+            vos_mem_copy( ( tANI_U8* )&pOld->tclasParams.ipv4.srcIpAddr,
+                          ( tANI_U8* )pNew->info.IpParams.params.IpV4Params.source, 4 );
+            vos_mem_copy( ( tANI_U8* )&pOld->tclasParams.ipv4.dstIpAddr,
+                          ( tANI_U8* )pNew->info.IpParams.params.IpV4Params.dest, 4 );
             pOld->tclasParams.ipv4.srcPort  = pNew->info.IpParams.params.IpV4Params.src_port;
             pOld->tclasParams.ipv4.dstPort  = pNew->info.IpParams.params.IpV4Params.dest_port;
             pOld->tclasParams.ipv4.dscp     = pNew->info.IpParams.params.IpV4Params.DSCP;
@@ -701,25 +687,11 @@ void CreateScanCtsFrame(tpAniSirGlobal pMac, tSirMacMgmtHdr *macMgmtHdr, tSirMac
     return;
 }
 
-void ConvertQosMapsetFrame(tpAniSirGlobal pMac, tSirQosMapSet* Qos, tDot11fIEQosMapSet* dot11fIE)
-{
-    tANI_U8 i,j=0;
-    Qos->num_dscp_exceptions = (dot11fIE->num_dscp_exceptions - 16)/2;
-    for (i = 0; i < Qos->num_dscp_exceptions; i++)
-    {
-        Qos->dscp_exceptions[i][0] = dot11fIE->dscp_exceptions[j];
-        j++;
-        Qos->dscp_exceptions[i][1] = dot11fIE->dscp_exceptions[j];
-        j++;
-    }
-    for (i = 0; i < 8; i++)
-    {
-        Qos->dscp_range[i][0] = dot11fIE->dscp_exceptions[j];
-        j++;
-        Qos->dscp_range[i][1] = dot11fIE->dscp_exceptions[j];
-        j++;
-    }
-}
+
+
+
+
+
 
 /**
     @brief    :    This functions creates a DATA_NULL/CTS2SELF frame in Big endian format

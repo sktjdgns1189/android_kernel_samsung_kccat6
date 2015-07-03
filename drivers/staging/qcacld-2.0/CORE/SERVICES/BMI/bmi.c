@@ -1,5 +1,5 @@
 /*
- * copyright (c) 2012,2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -97,28 +97,20 @@ BMIInit(struct ol_softc *scn)
      */
 
     if (!scn->pBMICmdBuf) {
-#ifndef HIF_PCI
-        scn->pBMICmdBuf =
-                (A_UCHAR *)A_MALLOC(MAX_BMI_CMDBUF_SZ);
-#else
         scn->pBMICmdBuf =
                 (A_UCHAR *)pci_alloc_consistent(scn->sc_osdev->bdev,
                                     MAX_BMI_CMDBUF_SZ,
                                     &scn->BMICmd_pa);
-#endif
+
         ASSERT(scn->pBMICmdBuf);
     }
 
     if (!scn->pBMIRspBuf) {
-#ifndef HIF_PCI
-        scn->pBMIRspBuf =
-                (A_UCHAR *)A_MALLOC(MAX_BMI_CMDBUF_SZ);
-#else
         scn->pBMIRspBuf =
                 (A_UCHAR *)pci_alloc_consistent(scn->sc_osdev->bdev,
                                 MAX_BMI_CMDBUF_SZ,
                                 &scn->BMIRsp_pa);
-#endif
+
         ASSERT(scn->pBMIRspBuf);
     }
 
@@ -129,23 +121,15 @@ void
 BMICleanup(struct ol_softc *scn)
 {
     if (scn->pBMICmdBuf) {
-#ifndef HIF_PCI
-        A_FREE(scn->pBMICmdBuf );
-#else
         pci_free_consistent(scn->sc_osdev->bdev, MAX_BMI_CMDBUF_SZ,
                         scn->pBMICmdBuf, scn->BMICmd_pa);
-#endif
         scn->pBMICmdBuf = NULL;
         scn->BMICmd_pa = 0;
     }
 
     if (scn->pBMIRspBuf) {
-#ifndef HIF_PCI
-        A_FREE(scn->pBMIRspBuf);
-#else
         pci_free_consistent(scn->sc_osdev->bdev, MAX_BMI_CMDBUF_SZ,
                         scn->pBMIRspBuf, scn->BMIRsp_pa);
-#endif
         scn->pBMIRspBuf = NULL;
         scn->BMIRsp_pa = 0;
     }
@@ -197,23 +181,15 @@ BMIDone(HIF_DEVICE *device, struct ol_softc *scn)
     }
 
     if (scn->pBMICmdBuf) {
-#ifndef HIF_PCI
-        A_FREE(scn->pBMICmdBuf);
-#else
         pci_free_consistent(scn->sc_osdev->bdev, MAX_BMI_CMDBUF_SZ,
                         scn->pBMICmdBuf, scn->BMICmd_pa);
-#endif
         scn->pBMICmdBuf = NULL;
         scn->BMICmd_pa = 0;
     }
 
     if (scn->pBMIRspBuf) {
-#ifndef HIF_PCI
-        A_FREE(scn->pBMIRspBuf);
-#else
         pci_free_consistent(scn->sc_osdev->bdev, MAX_BMI_CMDBUF_SZ,
                         scn->pBMIRspBuf, scn->BMIRsp_pa);
-#endif
         scn->pBMIRspBuf = NULL;
         scn->BMIRsp_pa = 0;
     }
@@ -231,11 +207,6 @@ A_STATUS bmi_done(struct ol_softc *scn)
 	    return -1;
 
     return 0;
-}
-
-void bmi_target_ready(struct ol_softc *scn, void *cfg_ctx)
-{
-    ol_target_ready(scn, cfg_ctx);
 }
 
 #ifndef HIF_MESSAGE_BASED
@@ -295,19 +266,8 @@ A_STATUS bmi_download_firmware(struct ol_softc *scn)
 	struct bmi_target_info targ_info;
 	OS_MEMZERO(&targ_info, sizeof(targ_info));
 
-	if (!scn){
-		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("Invalid scn context\n"));
-		ASSERT(0);
-		return A_EINVAL;
-	}
-
 	/* Initialize BMI */
 	BMIInit(scn);
-
-	if (scn->pBMICmdBuf == NULL || scn->pBMIRspBuf == NULL) {
-		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("BMIInit failed!\n"));
-		return -1;
-	}
 
 	/* Get target information */
 	if (BMIGetTargetInfo(scn->hif_hdl, &targ_info, scn) != A_OK)

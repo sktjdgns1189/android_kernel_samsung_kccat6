@@ -175,9 +175,6 @@ typedef enum {
     WMI_GRP_OBSS_OFL,
     WMI_GRP_LPI,
     WMI_GRP_EXTSCAN,
-    WMI_GRP_DHCP_OFL,
-    WMI_GRP_IPA,
-    WMI_GRP_MDNS_OFL,
 } WMI_GRP_ID;
 
 #define WMI_CMD_GRP_START_ID(grp_id) (((grp_id) << 12) | 0x1)
@@ -204,9 +201,6 @@ typedef enum {
      * of an on ongoing scan request.
      */
     WMI_SCAN_UPDATE_REQUEST_CMDID,
-
-    /** set OUI to be used in probe request if enabled */
-    WMI_SCAN_PROB_REQ_OUI_CMDID,
 
     /* PDEV(physical device) specific commands */
     /** set regulatorty ctl id used by FW to determine the exact ctl power limits */
@@ -236,7 +230,7 @@ typedef enum {
     WMI_PDEV_GET_TPC_CONFIG_CMDID,
 
     /** set the base MAC address for the physical device before a VDEV is created.
-     *  For firmware that doesn't support this feature and this command, the pdev
+     *  For firmware that doesn’t support this feature and this command, the pdev
      *  MAC address will not be changed. */
     WMI_PDEV_SET_BASE_MACADDR_CMDID,
 
@@ -244,10 +238,6 @@ typedef enum {
     WMI_PDEV_DUMP_CMDID,
      /* set LED configuration  */
     WMI_PDEV_SET_LED_CONFIG_CMDID,
-    /* Get Current temprature of chip in Celcius degree*/
-    WMI_PDEV_GET_TEMPERATURE_CMDID,
-    /* Set LED flashing behavior  */
-    WMI_PDEV_SET_LED_FLASHING_CMDID,
 
     /* VDEV(virtual device) specific commands */
     /** vdev create */
@@ -374,12 +364,6 @@ typedef enum {
     WMI_ROAM_CHAN_LIST,
     /** Stop scan command */
     WMI_ROAM_SCAN_CMD,
-    /** roaming sme offload sync complete */
-    WMI_ROAM_SYNCH_COMPLETE,
-    /** set ric request element for 11r roaming */
-    WMI_ROAM_SET_RIC_REQUEST_CMDID,
-    /** Invoke roaming forcefully */
-    WMI_ROAM_INVOKE_CMDID,
 
     /** offload scan specific commands */
     /** set offload scan AP profile   */
@@ -450,22 +434,14 @@ typedef enum {
     WMI_WOW_ENABLE_CMDID,
     /** host woke up from sleep event to FW. Generated in response to WOW Hardware event */
     WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID,
-    /* IOAC add keep alive cmd. */
-    WMI_WOW_IOAC_ADD_KEEPALIVE_CMDID,
-    /* IOAC del keep alive cmd. */
-    WMI_WOW_IOAC_DEL_KEEPALIVE_CMDID,
-    /* IOAC add pattern for awake */
-    WMI_WOW_IOAC_ADD_WAKE_PATTERN_CMDID,
-    /* IOAC deleta a wake pattern */
-    WMI_WOW_IOAC_DEL_WAKE_PATTERN_CMDID,
-    /* D0-WOW enable or disable cmd */
-    WMI_D0_WOW_ENABLE_DISABLE_CMDID,
-    /* enable extend WoW */
-    WMI_EXTWOW_ENABLE_CMDID,
-    /* Extend WoW command to configure app type1 parameter */
-    WMI_EXTWOW_SET_APP_TYPE1_PARAMS_CMDID,
-    /* Extend WoW command to configure app type2 parameter */
-    WMI_EXTWOW_SET_APP_TYPE2_PARAMS_CMDID,
+    /* Acer IOAC add keep alive cmd. */
+    WMI_WOW_ACER_IOAC_ADD_KEEPALIVE_CMDID,
+    /* Acer IOAC del keep alive cmd. */
+    WMI_WOW_ACER_IOAC_DEL_KEEPALIVE_CMDID,
+    /* Acer IOAC add pattern for awake */
+    WMI_WOW_ACER_IOAC_ADD_WAKE_PATTERN_CMDID,
+    /* Acer IOAC deleta a wake pattern */
+    WMI_WOW_ACER_IOAC_DEL_WAKE_PATTERN_CMDID,
 
     /* RTT measurement related cmd */
     /** reques to make an RTT measurement */
@@ -572,8 +548,6 @@ typedef enum {
     WMI_THERMAL_MGMT_CMDID,
     /** set host auto shutdown params **/
     WMI_HOST_AUTO_SHUTDOWN_CFG_CMDID,
-    /** set tpc chainmask config command */
-    WMI_TPC_CHAINMASK_CONFIG_CMDID,
 
     /* GPIO Configuration */
     WMI_GPIO_CONFIG_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_GPIO),
@@ -586,16 +560,12 @@ typedef enum {
     WMI_FWTEST_VDEV_MCC_SET_TBTT_MODE_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_FWTEST),
 	/** set NoA descs **/
 	WMI_FWTEST_P2P_SET_NOA_PARAM_CMDID,
-    /* UNIT Tests  */
-    WMI_UNIT_TEST_CMDID,
 
     /** TDLS Configuration */
     /** enable/disable TDLS */
     WMI_TDLS_SET_STATE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_TDLS),
     /** set tdls peer state */
     WMI_TDLS_PEER_UPDATE_CMDID,
-    /** TDLS Offchannel control */
-    WMI_TDLS_SET_OFFCHAN_MODE_CMDID,
 
     /** Resmgr Configuration */
     /** Adaptive OCS is enabled by default in the FW. This command is used to
@@ -686,18 +656,6 @@ typedef enum {
     WMI_EXTSCAN_GET_WLAN_CHANGE_RESULTS_CMDID,
     WMI_EXTSCAN_SET_CAPABILITIES_CMDID,
     WMI_EXTSCAN_GET_CAPABILITIES_CMDID,
-
-    /** DHCP server offload commands */
-    WMI_SET_DHCP_SERVER_OFFLOAD_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_DHCP_OFL),
-
-    /** IPA Offload features related commands */
-    WMI_IPA_OFFLOAD_ENABLE_DISABLE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_IPA),
-
-    /** mDNS responder offload commands */
-    WMI_MDNS_OFFLOAD_ENABLE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_MDNS_OFL),
-    WMI_MDNS_SET_FQDN_CMDID,
-    WMI_MDNS_SET_RESPONSE_CMDID,
-    WMI_MDNS_GET_STATS_CMDID,
 } WMI_CMD_ID;
 
 typedef enum {
@@ -729,9 +687,6 @@ typedef enum {
 
     /** track L1SS entry and residency event */
     WMI_PDEV_L1SS_TRACK_EVENTID,
-
-    /** Report current temprature of the chip in Celcius degree */
-    WMI_PDEV_TEMPERATURE_EVENTID,
 
     /* VDEV specific events */
     /** VDEV started event in response to VDEV_START request */
@@ -803,8 +758,6 @@ typedef enum {
 
     /** matching AP found from list of profiles */
     WMI_PROFILE_MATCH,
-    /** roam synch event */
-    WMI_ROAM_SYNCH_EVENTID,
 
     /** P2P disc found */
     WMI_P2P_DISC_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_P2P),
@@ -815,7 +768,6 @@ typedef enum {
     /** WOW wake up host event.generated in response to WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID.
         will cary wake reason */
     WMI_WOW_WAKEUP_HOST_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_WOW),
-    WMI_D0_WOW_DISABLE_ACK_EVENTID,
 
     /*RTT related event ID*/
     /** RTT measurement report */
@@ -898,11 +850,6 @@ typedef enum {
     /*update mib counters together with WMI_UPDATE_STATS_EVENTID*/
     WMI_UPDATE_WHAL_MIB_STATS_EVENTID,
 
-    /*update ht/vht info based on vdev (rx and tx NSS and preamble)*/
-    WMI_UPDATE_VDEV_RATE_STATS_EVENTID,
-
-    WMI_DIAG_EVENTID,
-
     /* GPIO Event */
     WMI_GPIO_INPUT_EVENTID=WMI_EVT_GRP_START_ID(WMI_GRP_GPIO),
     /** upload H_CV info WMI event
@@ -935,8 +882,6 @@ typedef enum {
 
     /* LPI Event */
     WMI_LPI_RESULT_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_LPI),
-    WMI_LPI_STATUS_EVENTID,
-    WMI_LPI_HANDOFF_EVENTID,
 
      /* ExtScan events */
     WMI_EXTSCAN_START_STOP_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_EXTSCAN),
@@ -946,10 +891,6 @@ typedef enum {
     WMI_EXTSCAN_WLAN_CHANGE_RESULTS_EVENTID,
     WMI_EXTSCAN_HOTLIST_MATCH_EVENTID,
     WMI_EXTSCAN_CAPABILITIES_EVENTID,
-
-    /* mDNS offload events */
-    WMI_MDNS_STATS_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_MDNS_OFL),
-
 } WMI_EVT_ID;
 
 /* defines for OEM message sub-types */
@@ -1095,20 +1036,18 @@ WMI_CHANNEL_CHANGE_CAUSE_CSA,
 #define WMI_VHT_CAP_TX_STBC                      0x00000080
 #define WMI_VHT_CAP_RX_STBC_MASK                 0x00000300
 #define WMI_VHT_CAP_RX_STBC_MASK_SHIFT           8
-#define WMI_VHT_CAP_SU_BFORMER                   0x00000800
-#define WMI_VHT_CAP_SU_BFORMEE                   0x00001000
-#define WMI_VHT_CAP_MAX_CS_ANT_MASK              0x0000E000
-#define WMI_VHT_CAP_MAX_CS_ANT_MASK_SHIFT        13
-#define WMI_VHT_CAP_MAX_SND_DIM_MASK             0x00070000
-#define WMI_VHT_CAP_MAX_SND_DIM_MASK_SHIFT       16
-#define WMI_VHT_CAP_MU_BFORMER                   0x00080000
-#define WMI_VHT_CAP_MU_BFORMEE                   0x00100000
 #define WMI_VHT_CAP_MAX_AMPDU_LEN_EXP            0x03800000
 #define WMI_VHT_CAP_MAX_AMPDU_LEN_EXP_SHIT       23
 #define WMI_VHT_CAP_RX_FIXED_ANT                 0x10000000
 #define WMI_VHT_CAP_TX_FIXED_ANT                 0x20000000
 
 #define WMI_VHT_CAP_MAX_MPDU_LEN_11454           0x00000002
+
+/* These macros should be used to advertise VHT CAP support */
+#define WMI_VHT_CAP_SU_BFORMER            0x00000800
+#define WMI_VHT_CAP_SU_BFORMEE            0x00001000
+#define WMI_VHT_CAP_MU_BFORMER            0x00080000
+#define WMI_VHT_CAP_MU_BFORMEE            0x00100000
 
 /* These macros should be used when we wish to advertise STBC support for
  * only 1SS or 2SS or 3SS. */
@@ -1529,11 +1468,6 @@ typedef struct {
      *      mentions how many such buffer STAs can be supported concurrently.
      */
     A_UINT32 max_tdls_concurrent_buffer_sta;
-
-    /**
-     * @brief wmi_send_separate - host configures fw to send the wmi separately
-     */
-    A_UINT32 wmi_send_separate;
 } wmi_resource_config;
 
 
@@ -1691,30 +1625,22 @@ typedef struct {
 /** add wild card ssid probe request even though ssid_list is specified. */
 #define WMI_SCAN_ADD_BCAST_PROBE_REQ 0x2
 /** add cck rates to rates/xrate ie for the generated probe request */
-#define WMI_SCAN_ADD_CCK_RATES       0x4
+#define WMI_SCAN_ADD_CCK_RATES 0x4
 /** add ofdm rates to rates/xrate ie for the generated probe request */
-#define WMI_SCAN_ADD_OFDM_RATES      0x8
+#define WMI_SCAN_ADD_OFDM_RATES 0x8
 /** To enable indication of Chan load and Noise floor to host */
-#define WMI_SCAN_CHAN_STAT_EVENT     0x10
+#define WMI_SCAN_CHAN_STAT_EVENT 0x10
 /** Filter Probe request frames  */
-#define WMI_SCAN_FILTER_PROBE_REQ    0x20
+#define WMI_SCAN_FILTER_PROBE_REQ 0x20
 /**When set, not to scan DFS channels*/
-#define WMI_SCAN_BYPASS_DFS_CHN      0x40
+#define WMI_SCAN_BYPASS_DFS_CHN 0x40
 /**When set, certain errors are ignored and scan continues.
 * Different FW scan engine may use its own logic to decide what errors to ignore*/
-#define WMI_SCAN_CONTINUE_ON_ERROR   0x80
-/** Enable promiscous mode for ese */
-#define WMI_SCAN_FILTER_PROMISCOUS   0x100
+#define WMI_SCAN_CONTINUE_ON_ERROR 0x80
+/* Enable promiscous mode for CCXv4 */
+#define WMI_SCAN_FILTER_PROMISCOUS 0x100
 /** allow to send probe req on DFS channel */
 #define WMI_SCAN_FLAG_FORCE_ACTIVE_ON_DFS 0x200
-/** add TPC content in probe req frame */
-#define WMI_SCAN_ADD_TPC_IE_IN_PROBE_REQ  0x400
-/** add DS content in probe req frame */
-#define WMI_SCAN_ADD_DS_IE_IN_PROBE_REQ   0x800
-/** use random mac address for TA for probe request frame and add
- * oui specified by WMI_SCAN_PROB_REQ_OUI_CMDID to the probe req frame.
- * if oui is not set by WMI_SCAN_PROB_REQ_OUI_CMDID  then the flag is ignored*/
-#define WMI_SCAN_ADD_SPOOFED_MAC_IN_PROBE_REQ   0x1000
 
 /** WMI_SCAN_CLASS_MASK must be the same value as IEEE80211_SCAN_CLASS_MASK */
 #define WMI_SCAN_CLASS_MASK 0xFF000000
@@ -1822,15 +1748,6 @@ typedef struct {
     A_UINT32 max_rest_time;
 } wmi_scan_update_request_cmd_fixed_param;
 
-typedef struct {
-    A_UINT32 tlv_header;
-    /** oui to be used in probe request frame when  random mac addresss is
-     * requested part of scan parameters. this is applied to both FW internal scans and
-     * host initated scans. host can request for random mac address with
-     * WMI_SCAN_ADD_SPOOFED_MAC_IN_PROBE_REQ flag.     */
-    A_UINT32 prob_req_oui;
-} wmi_scan_prob_req_oui_cmd_fixed_param;
-
 enum wmi_scan_event_type {
     WMI_SCAN_EVENT_STARTED=0x1,
     WMI_SCAN_EVENT_COMPLETED=0x2,
@@ -1870,14 +1787,6 @@ typedef struct {
     A_UINT32 vdev_id;
 } wmi_scan_event_fixed_param;
 
-/* WMI Diag event */
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag is WMITLV_TAG_STRUC_wmi_diag_event_fixed_param */
-    A_UINT32 time_stamp; /* Reference timestamp. diag frame contains diff value */
-    A_UINT32 count;   /* Number of diag frames added to current event */
-    A_UINT32 dropped;
-    /* followed by WMITLV_TAG_ARRAY_BYTE */
-} wmi_diag_event_fixed_param;
 
 /*
 * If FW has multiple active channels due to MCC(multi channel concurrency),
@@ -1915,10 +1824,6 @@ typedef struct {
  */
  /* ATH_MAX_ANTENNA value (4) can't be changed without breaking the compatibility */
 #define ATH_MAX_ANTENNA 4 /* To support beelinear, which is up to 4 chains */
-
-/** flag indicating that the the  mgmt frame (probe req/beacon) is received in the context of extscan performed by FW */
-#define WMI_MGMT_RX_HDR_EXTSCAN     0x01
-
 typedef struct {
     A_UINT32 tlv_header;     /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_mgmt_rx_hdr */
     /** channel on which this frame is received. */
@@ -1935,8 +1840,6 @@ typedef struct {
     A_UINT32 status;
     /** RSSI of PRI 20MHz for each chain. */
     A_UINT32 rssi_ctl[ATH_MAX_ANTENNA];
-    /** information about the management frame e.g. can give a scan source for a scan result mgmt frame */
-    A_UINT32 flags;
     /* This TLV is followed by array of bytes:
          * // management frame buffer
          *   A_UINT8 bufp[];
@@ -2406,14 +2309,6 @@ typedef enum {
     WMI_PDEV_PARAM_LED_SYS_STATE,
    /** Enable/Disable LED */
     WMI_PDEV_PARAM_LED_ENABLE,
-    /** set DIRECT AUDIO time latency */
-    WMI_PDEV_PARAM_AUDIO_OVER_WLAN_LATENCY,
-    /** set DIRECT AUDIO Feature ENABLE */
-    WMI_PDEV_PARAM_AUDIO_OVER_WLAN_ENABLE,
-    /** pdev level whal mib stats update enable */
-    WMI_PDEV_PARAM_WHAL_MIB_STATS_UPDATE_ENABLE,
-    /** ht/vht info based on vdev */
-    WMI_PDEV_PARAM_VDEV_RATE_STATS_UPDATE_PERIOD,
 } WMI_PDEV_PARAM;
 
 typedef enum {
@@ -2736,7 +2631,6 @@ typedef enum {
     WMI_REQUEST_PDEV_STAT = 0x04,
     WMI_REQUEST_VDEV_STAT = 0x08,
     WMI_REQUEST_BCNFLT_STAT = 0x10,
-    WMI_REQUEST_VDEV_RATE_STAT = 0x20,
 } wmi_stats_id;
 
 typedef struct {
@@ -3086,21 +2980,7 @@ typedef struct {
 } wmi_pdev_resume_cmd_fixed_param;
 
 typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_vdev_rate_stats_event_fixed_param,  */
-    A_UINT32 num_vdev_stats; /* number of vdevs */
-}wmi_vdev_rate_stats_event_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len, tag equals WMITLV_TAG_STRUC_wmi_vdev_rate_ht_info*/
-    A_UINT32 vdevid; /* Id of the wlan vdev*/
-    A_UINT32 tx_nss; /* Bit 28 of tx_rate_kbps has this info - based on last data packet transmitted*/
-    A_UINT32 rx_nss; /* Bit 24 of rx_rate_kbps - same as above*/
-    A_UINT32 tx_preamble; /* Bits 30-29 from tx_rate_kbps */
-    A_UINT32 rx_preamble; /* Bits 26-25 from rx_rate_kbps */
-} wmi_vdev_rate_ht_info;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_stats_event_fixed_param */
+    A_UINT32   tlv_header;     /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_stats_event_fixed_param */
     wmi_stats_id stats_id;
     /** number of pdev stats event structures (wmi_pdev_stats) 0 or 1 */
     A_UINT32 num_pdev_stats;
@@ -3640,9 +3520,6 @@ typedef enum {
     * WMI_VDEV_PARAM_IBSS_PS_WARMUP_TIME_SECS seconds. */
     WMI_VDEV_PARAM_IBSS_PS_WARMUP_TIME_SECS,
 
-    /* Enable/Disable 1 RX chain usage during the ATIM window */
-    WMI_VDEV_PARAM_IBSS_PS_1RX_CHAIN_IN_ATIM_WINDOW_ENABLE,
-
 } WMI_VDEV_PARAM;
 
 /* Length of ATIM Window in TU */
@@ -3659,12 +3536,7 @@ typedef struct {
                 mutxbfee : 1,
                 sutxbfer : 1,
                 mutxbfer : 1,
-#if defined(AR900B)
-                txb_sts_cap : 3,
-                implicit_bf:1;
-#else
                 reserved : 4;
-#endif
 } wmi_vdev_txbf_en;
 
 /** Upto 8 bits are available for Roaming module to be sent along with
@@ -4274,11 +4146,6 @@ typedef struct {
             WMI_PEER_TYPE_DEFAULT = 0, /* Generic/Non-BSS/Self Peer */
             WMI_PEER_TYPE_BSS = 1,     /* Peer is BSS Peer entry */
             WMI_PEER_TYPE_TDLS = 2,    /* Peer is a TDLS Peer */
-            WMI_PEER_TYPE_HOST_MAX = 127, /* Host <-> Target Peer type
-                                           * is assigned up to 127 */
-                                          /* Reserved from 128 - 255 for
-                                           * target internal use.*/
-            WMI_PEER_TYPE_ROAMOFFLOAD_TEMP = 128, /* Temporarily created during offload roam */
         };
 
         typedef struct {
@@ -4736,7 +4603,6 @@ typedef struct _wlan_dcs_im_tgt_stats {
          *  and target chip is not in sleep.
          *
          */
-
     /** listen time from ANI */
     A_INT32   listen_time;
 
@@ -4839,8 +4705,6 @@ typedef struct {
 #define WMI_ROAM_SCAN_MODE_PERIODIC    0x1
 #define WMI_ROAM_SCAN_MODE_RSSI_CHANGE 0x2
 #define WMI_ROAM_SCAN_MODE_BOTH        0x3
-/* Note: WMI_ROAM_SCAN_MODE_ROAMOFFLOAD is one bit not conflict with LFR2.0 SCAN_MODE. */
-#define WMI_ROAM_SCAN_MODE_ROAMOFFLOAD 0x4
 
 typedef struct {
     A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_scan_cmd_fixed_param */
@@ -5050,7 +4914,7 @@ typedef struct {
          * Following this structure is the TLV:
          *     wmi_ap_profile ap_profile; //AP profile info
         */
-} wmi_roam_ap_profile_fixed_param;
+} wmi_roam_ap_profile_fixed_param;;
 
 /**
  * WMI_OFL_SCAN_ADD_AP_PROFILE: add an AP profile.
@@ -5087,76 +4951,6 @@ typedef struct {
 	A_UINT32 ofl_scan_period;
 } wmi_ofl_scan_period;
 
-/* Do not modify XXX_BYTES or XXX_LEN below as it is fixed by standard */
-#define ROAM_OFFLOAD_PMK_BYTES       (32)
-#define ROAM_OFFLOAD_PSK_MSK_BYTES   (32)
-#define ROAM_OFFLOAD_KRK_BYTES       (16)
-#define ROAM_OFFLOAD_BTK_BYTES       (32)
-#define ROAM_OFFLOAD_R0KH_ID_MAX_LEN (48)
-#define ROAM_OFFLOAD_NUM_MCS_SET     (16)
-
-/* This TLV will be filled only in case roam offload
- * for wpa2-psk/okc/ese/11r is enabled */
-typedef struct {
-    A_UINT32 tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_offload_fixed_param */
-    A_UINT32 rssi_cat_gap;   /* gap for every category bucket */
-    A_UINT32 prefer_5g;      /* prefer select 5G candidate */
-    A_UINT32 select_5g_margin;
-    A_UINT32 reassoc_failure_timeout;     /* reassoc failure timeout */
-    A_UINT32 capability;
-    A_UINT32 ht_caps_info;
-    A_UINT32 ampdu_param;
-    A_UINT32 ht_ext_cap;
-    A_UINT32 ht_txbf;
-    A_UINT32 asel_cap;
-    A_UINT32 qos_enabled;
-    A_UINT32 qos_caps;
-    A_UINT32 wmm_caps;
-    A_UINT32 mcsset[ROAM_OFFLOAD_NUM_MCS_SET>>2]; /* since this 4 byte aligned,
-                                                   * we don't declare it as
-                                                   * tlv array */
-} wmi_roam_offload_tlv_param;
-
-/* flags for 11i offload */
-#define WMI_ROAM_OFFLOAD_FLAG_OKC_ENABLED       0   /* okc is enabled */
-/* from bit 1 to bit 31 are reserved */
-
-#define WMI_SET_ROAM_OFFLOAD_OKC_ENABLED(flag) do { \
-        (flag) |=  (1 << WMI_ROAM_OFFLOAD_FLAG_OKC_ENABLED);      \
-     } while(0)
-
-#define WMI_SET_ROAM_OFFLOAD_OKC_DISABLED(flag) do { \
-        (flag) &=  ~(1 << WMI_ROAM_OFFLOAD_FLAG_OKC_ENABLED);      \
-     } while(0)
-
-#define WMI_GET_ROAM_OFFLOAD_OKC_ENABLED(flag)   \
-        ((flag) & (1 << WMI_ROAM_OFFLOAD_FLAG_OKC_ENABLED))
-
-/* This TLV will be  filled only in case of wpa-psk/wpa2-psk */
-typedef struct {
-    A_UINT32 tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_11i_offload_fixed_param */
-    A_UINT32 flags;          /** flags. see WMI_ROAM_OFFLOAD_FLAG_ above */
-    A_UINT32 pmk[ROAM_OFFLOAD_PMK_BYTES>>2]; /* pmk offload. As this 4 byte aligned, we don't declare it as tlv array */
-    A_UINT32 pmk_len; /**the length of pmk. in normal case it should be 32, but for LEAP, is should be 16*/
-} wmi_roam_11i_offload_tlv_param;
-
-/* This TLV will be  filled only in case of 11R*/
-typedef struct {
-    A_UINT32 tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_11r_offload_fixed_param */
-    A_UINT32 mdie_present;
-    A_UINT32 mdid;
-    A_UINT32 r0kh_id[ROAM_OFFLOAD_R0KH_ID_MAX_LEN>>2];
-    A_UINT32 r0kh_id_len;
-    A_UINT32 psk_msk[ROAM_OFFLOAD_PSK_MSK_BYTES>>2]; /* psk/msk offload. As this 4 byte aligned, we don't declare it as tlv array */
-    A_UINT32 psk_msk_len; /**length of psk_msk*/
-} wmi_roam_11r_offload_tlv_param;
-
-/* This TLV will be filled only in case of ESE */
-typedef struct {
-    A_UINT32 tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_ese_offload_fixed_param */
-    A_UINT32 krk[ROAM_OFFLOAD_KRK_BYTES>>2]; /* KRK offload. As this 4 byte aligned, we don't declare it as tlv array */
-    A_UINT32 btk[ROAM_OFFLOAD_BTK_BYTES>>2]; /* BTK offload. As this 4 byte aligned, we don't declare it as tlv array */
-} wmi_roam_ese_offload_tlv_param;
 
 
 /** WMI_ROAM_EVENT: roam event triggering the host roam logic.
@@ -5183,95 +4977,6 @@ typedef struct {
                                           SSID and Security profile in
                                           WMI_ROAM_AP_PROFILE, found during scan
                                           triggered upon FINAL_BMISS **/
-#define WMI_ROAM_REASON_HO_FAILED  0x5  /** LFR3.0 roaming failed, indicate the disconnection to host */
-
-/**whenever RIC request information change, host driver should pass all ric related information to firmware (now only support tsepc)
-* Once, 11r roaming happens, firmware can generate RIC request in reassoc request based on these informations
-*/
-typedef struct
-{
-    A_UINT32 tlv_header;      /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_ric_request_fixed_param */
-    A_UINT32 vdev_id;         /**unique id identifying the VDEV, generated by the caller*/
-    A_UINT32 num_ric_request; /**number of ric request ie send to firmware.(max value is 2 now)*/
-    A_UINT32 is_add_ric;      /**support add ric or delete ric*/
-}wmi_ric_request_fixed_param;
-
-/**tspec element: refer to 8.4.2.32 of 802.11 2012 spec
-* these elements are used to construct tspec field in RIC request, which allow station to require specific TS when 11r roaming
-*/
-typedef struct{
-    A_UINT32                         tlv_header;
-    A_UINT32                         ts_info; /** bits value of TS Info field.*/
-    A_UINT32                         nominal_msdu_size; /**Nominal MSDU Size field*/
-    A_UINT32                         maximum_msdu_size; /**The Maximum MSDU Size field*/
-    A_UINT32                         min_service_interval; /**The Minimum Service Interval field*/
-    A_UINT32                         max_service_interval; /**The Maximum Service Interval field*/
-    A_UINT32                         inactivity_interval; /**The Inactivity Interval field*/
-    A_UINT32                         suspension_interval; /**The Suspension Interval field*/
-    A_UINT32                         svc_start_time; /**The Service Start Time field*/
-    A_UINT32                         min_data_rate; /**The Minimum Data Rate field*/
-    A_UINT32                         mean_data_rate; /**The Mean Data Rate field*/
-    A_UINT32                         peak_data_rate; /**The Peak Data Rate field*/
-    A_UINT32                         max_burst_size; /**The Burst Size field*/
-    A_UINT32                         delay_bound; /**The Delay Bound field*/
-    A_UINT32                         min_phy_rate; /**The Minimum PHY Rate field*/
-    A_UINT32                         surplus_bw_allowance; /**The Surplus Bandwidth Allowance field*/
-    A_UINT32                         medium_time; /**The Medium Time field,in units of 32 us/s.*/
-} wmi_ric_tspec;
-
-/* flags for roam_invoke_cmd */
-/* add this channel into roam cache channel list after this command is finished */
-#define WMI_ROAM_INVOKE_FLAG_ADD_CH_TO_CACHE       0
-/* from bit 1 to bit 31 are reserved */
-
-#define WMI_SET_ROAM_INVOKE_ADD_CH_TO_CACHE(flag) do { \
-        (flag) |=  (1 << WMI_SET_ROAM_INVOKE_ADD_CH_TO_CACHE);      \
-     } while(0)
-
-#define WMI_CLEAR_ROAM_INVOKE_ADD_CH_TO_CACHE(flag) do { \
-        (flag) &=  ~(1 << WMI_SET_ROAM_INVOKE_ADD_CH_TO_CACHE);      \
-     } while(0)
-
-#define WMI_GET_ROAM_INVOKE_ADD_CH_TO_CACHE(flag)   \
-        ((flag) & (1 << WMI_SET_ROAM_INVOKE_ADD_CH_TO_CACHE))
-
-
-#define WMI_ROAM_INVOKE_SCAN_MODE_FIXED_CH      0   /* scan given channel only */
-#define WMI_ROAM_INVOKE_SCAN_MODE_CACHE_LIST    1   /* scan cached channel list */
-#define WMI_ROAM_INVOKE_SCAN_MODE_FULL_CH       2   /* scan full channel */
-
-#define WMI_ROAM_INVOKE_AP_SEL_FIXED_BSSID      0   /* roam to given BSSID only */
-#define WMI_ROAM_INVOKE_AP_SEL_ANY_BSSID        1   /* roam to any BSSID */
-
-/** WMI_ROAM_INVOKE_CMD: command to invoke roaming forcefully
- *
- * if <roam_scan_ch_mode> is zero and <channel_no> is not given, roaming is not executed.
- * if <roam_ap_sel_mode> is zero and <BSSID) is not given, roaming is not executed
- *
- * This command can be used to add specific channel into roam cached channel list by following
- * <roam_scan_ch_mode> = 0
- * <roam_ap_sel_mode> = 0
- * <roam_delay> = 0
- * <flag> |= WMI_ROAM_INVOKE_FLAG_ADD_CH_TO_CACHE
- * <BSSID> = do not fill (there will be no actual roaming because of ap_sel_mode is zero, but no BSSID is given)
- * <channel_no> = channel list to be added
- */
-typedef struct {
-    A_UINT32 tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_invoke_fixed_param */
-    A_UINT32 vdev_id; /** Unique id identifying the VDEV on which roaming is invoked */
-    A_UINT32 flags;   /** flags. see WMI_ROAM_INVOKE_FLAG_ above */
-    A_UINT32 roam_scan_mode; /** see WMI_ROAM_INVOKE_SCAN_ above */
-    A_UINT32 roam_ap_sel_mode; /** see WMI_ROAM_INVOKE_AP_SEL_ above */
-    A_UINT32 roam_delay; /** 0 = immediate roam, 1-2^32 = roam after this delay (msec) */
-    A_UINT32 num_chan; /** # if channels to scan. In the TLV channel_list[] */
-    A_UINT32 num_bssid;  /** number of bssids. In the TLV bssid_list[] */
-    /**
-     * TLV (tag length value ) parameters follows roam_invoke_req
-     * The TLV's are:
-     *     A_UINT32 channel_list[];
-     *     wmi_mac_addr bssid_list[];
-     */
-} wmi_roam_invoke_cmd_fixed_param;
 
 /** WMI_PROFILE_MATCH_EVENT: offload scan
  * generated when ever atleast one of the matching profiles is found
@@ -5500,16 +5205,16 @@ when comparing wifi header.*/
 #define WOW_DEFAULT_BITMASK_SIZE_DWORD        37
 #define WOW_MAX_BITMAP_FILTERS               32
 #define WOW_DEFAULT_MAGIG_PATTERN_MATCH_CNT  16
-#define WOW_EXTEND_PATTERN_MATCH_CNT         16
-#define WOW_SHORT_PATTERN_MATCH_CNT           8
+#define WOW_ACER_EXTEND_PATTERN_MATCH_CNT    16
+#define WOW_ACER_SHORT_PATTERN_MATCH_CNT     8
 #define WOW_DEFAULT_EVT_BUF_SIZE             148  /* Maximum 148 bytes of the data is copied starting from header incase if the match is found.
                                                                                     The 148 comes from (128 - 14 )  payload size  + 8bytes LLC + 26bytes MAC header*/
-#define WOW_DEFAULT_IOAC_PATTERN_SIZE  6
-#define WOW_DEFAULT_IOAC_PATTERN_SIZE_DWORD 2
-#define WOW_DEFAULT_IOAC_RANDOM_SIZE  6
-#define WOW_DEFAULT_IOAC_RANDOM_SIZE_DWORD 2
-#define WOW_DEFAULT_IOAC_KEEP_ALIVE_PKT_SIZE   120
-#define WOW_DEFAULT_IOAC_KEEP_ALIVE_PKT_SIZE_DWORD 30
+#define WOW_DEFAULT_ACER_IOAC_PATTERN_SIZE  6
+#define WOW_DEFAULT_ACER_IOAC_PATTERN_SIZE_DWORD 2
+#define WOW_DEFAULT_ACER_IOAC_RANDOM_SIZE  6
+#define WOW_DEFAULT_ACER_IOAC_RANDOM_SIZE_DWORD 2
+#define WOW_DEFAULT_ACER_IOAC_KEEP_ALIVE_PKT_SIZE   120
+#define WOW_DEFAULT_ACER_IOAC_KEEP_ALIVE_PKT_SIZE_DWORD 30
 
 typedef enum pattern_type_e {
     WOW_PATTERN_MIN = 0,
@@ -5520,8 +5225,8 @@ typedef enum pattern_type_e {
     WOW_TIMER_PATTERN,
     WOW_MAGIC_PATTERN,
     WOW_IPV6_RA_PATTERN,
-    WOW_IOAC_PKT_PATTERN,
-    WOW_IOAC_TMR_PATTERN,
+    WOW_ACER_IOAC_PKT_PATTERN,
+    WOW_ACER_IOAC_TMR_PATTERN,
     WOW_PATTERN_MAX
 }WOW_PATTERN_TYPE;
 
@@ -5543,13 +5248,10 @@ typedef enum event_type_e {
     WOW_HTT_EVENT,
     WOW_RA_MATCH_EVENT,
     WOW_HOST_AUTO_SHUTDOWN_EVENT,
-    WOW_IOAC_MAGIC_EVENT,
-    WOW_IOAC_SHORT_EVENT,
-    WOW_IOAC_EXTEND_EVENT,
-    WOW_IOAC_TIMER_EVENT,
-    WOW_DFS_PHYERR_RADAR_EVENT,
-    WOW_BEACON_EVENT,
-    WOW_CLIENT_KICKOUT_EVENT,
+    WOW_ACER_IOAC_MAGIC_EVENT,
+    WOW_ACER_IOAC_SHORT_EVENT,
+    WOW_ACER_IOAC_EXTEND_EVENT,
+    WOW_ACER_IOAC_TIMER_EVENT,
 }WOW_WAKE_EVENT_TYPE;
 
 typedef enum wake_reason_e {
@@ -5574,14 +5276,10 @@ typedef enum wake_reason_e {
     WOW_REASON_HTT_EVENT,
     WOW_REASON_RA_MATCH,
     WOW_REASON_HOST_AUTO_SHUTDOWN,
-    WOW_REASON_IOAC_MAGIC_EVENT,
-    WOW_REASON_IOAC_SHORT_EVENT,
-    WOW_REASON_IOAC_EXTEND_EVENT,
-    WOW_REASON_IOAC_TIMER_EVENT,
-    WOW_REASON_ROAM_HO,
-    WOW_REASON_DFS_PHYERR_RADADR_EVENT,
-    WOW_REASON_BEACON_RECV,
-    WOW_REASON_CLIENT_KICKOUT_EVENT,
+    WOW_REASON_ACER_IOAC_MAGIC_EVENT,
+    WOW_REASON_ACER_IOAC_SHORT_EVENT,
+    WOW_REASON_ACER_IOAC_EXTEND_EVENT,
+    WOW_REASON_ACER_IOAC_TIMER_EVENT,
     WOW_REASON_DEBUG_TEST = 0xFF,
 }WOW_WAKE_REASON_TYPE;
 
@@ -5634,20 +5332,20 @@ typedef enum wow_ioac_pattern_type {
     WOW_IOAC_EXTEND_PATTERN,
 } WOW_IOAC_PATTERN_TYPE;
 
-typedef struct ioac_pkt_pattern_s {
-    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_IOAC_PKT_PATTERN_T */
+typedef struct acer_ioac_pkt_pattern_s {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_ACER_IOAC_PKT_PATTERN_T */
     A_UINT32 pattern_type;
-    A_UINT32 pattern[WOW_DEFAULT_IOAC_PATTERN_SIZE_DWORD];
-    A_UINT32 random[WOW_DEFAULT_IOAC_RANDOM_SIZE_DWORD];
+    A_UINT32 pattern[WOW_DEFAULT_ACER_IOAC_PATTERN_SIZE_DWORD];
+    A_UINT32 random[WOW_DEFAULT_ACER_IOAC_RANDOM_SIZE_DWORD];
     A_UINT32 pattern_len;
     A_UINT32 random_len;
-} WOW_IOAC_PKT_PATTERN_T;
+} WOW_ACER_IOAC_PKT_PATTERN_T;
 
-typedef struct ioac_tmr_pattern_s {
-    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_IOAC_TMR_PATTERN_T */
+typedef struct acer_ioac_tmr_pattern_s {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_ACER_IOAC_TMR_PATTERN_T */
     A_UINT32 wake_in_s;
     A_UINT32 vdev_id;
-} WOW_IOAC_TMR_PATTERN_T;
+} WOW_ACER_IOAC_TMR_PATTERN_T;
 
 typedef struct {
     A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_IOAC_ADD_KEEPALIVE_CMD_fixed_param */
@@ -5659,32 +5357,32 @@ typedef struct {
     A_UINT32 nID;
 } WMI_WOW_IOAC_DEL_KEEPALIVE_CMD_fixed_param;
 
-typedef struct ioac_keepalive_s {
-    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_IOAC_KEEPALIVE_T */
-    A_UINT32 keepalive_pkt_buf[WOW_DEFAULT_IOAC_KEEP_ALIVE_PKT_SIZE_DWORD];
+typedef struct acer_ioac_keepalive_s {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_IOAC_KEEPALIVE_T */
+    A_UINT32 keepalive_pkt_buf[WOW_DEFAULT_ACER_IOAC_KEEP_ALIVE_PKT_SIZE_DWORD];
     A_UINT32 keepalive_pkt_len;
     A_UINT32 period_in_ms;
     A_UINT32 vdev_id;
-} WMI_WOW_IOAC_KEEPALIVE_T;
+} WOW_IOAC_KEEPALIVE_T;
 
 typedef struct {
-    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_IOAC_ADD_PATTERN_CMD_fixed_param */
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_ACER_IOAC_ADD_PATTERN_CMD_fixed_param */
     A_UINT32 vdev_id;
     A_UINT32 pattern_type;
 /*
  * Following this struct are these TLVs. Note that they are all array of structures
  * but can have at most one element. Which TLV is empty or has one element depends
  * on the field pattern_type. This is to emulate an union.
- *     WOW_IOAC_PKT_PATTERN_T pattern_info_pkt[];
- *     WOW_IOAC_TMR_PATTERN_T pattern_info_tmr[];
+ *     WOW_ACER_IOAC_PKT_PATTERN_T pattern_info_acer_pkt[];
+ *     WOW_ACER_IOAC_TMR_PATTERN_T pattern_info_acer_tmr[];
  */
-} WMI_WOW_IOAC_ADD_PATTERN_CMD_fixed_param;
+} WMI_WOW_ACER_IOAC_ADD_PATTERN_CMD_fixed_param;
 
 typedef struct {
-    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_IOAC_DEL_PATTERN_CMD_fixed_param */
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_ACER_IOAC_DEL_PATTERN_CMD_fixed_param */
     A_UINT32 vdev_id;
     A_UINT32 pattern_type;
-} WMI_WOW_IOAC_DEL_PATTERN_CMD_fixed_param;
+} WMI_WOW_ACER_IOAC_DEL_PATTERN_CMD_fixed_param;
 
 typedef struct {
     A_UINT32        tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_ADD_PATTERN_CMD_fixed_param */
@@ -5747,85 +5445,6 @@ typedef struct  wow_event_info_section_bitmap_s {
     A_UINT32    value;                         /*This could be the pattern id for bitmap pattern.*/
     A_UINT32    org_len;                      /*The length of the orginal packet.*/
 }WOW_EVENT_INFO_SECTION_BITMAP;
-
-/**
- * This command is sent from WLAN host driver to firmware to
- * enable or disable D0-WOW. D0-WOW means APSS suspend with
- * PCIe link and DDR being active.
- *
- *
- * Entering D0-WOW Mode (based on kernel suspend request):
- *    host->target: WMI_DO_WOW_ENABLE_DISABLE_CMDID (enable = 1)
- *    target: Take action (e.g. dbglog suspend)
- *    target->host: HTC_ACK (HTC_MSG_SEND_SUSPEND_COMPLETE message)
- *
- * Exiting D0-WOW mode (based on kernel resume OR target->host message received)
- *    host->target: WMI_DO_WOW_ENABLE_DISABLE_CMDID (enable = 0)
- *    target: Take action (e.g. dbglog resume)
- *    target->host: WMI_D0_WOW_DISABLE_ACK_EVENTID
- *
- * This command is applicable only on the PCIE LL systems
- * Host can enter either D0-WOW or WOW mode, but NOT both at same time
- * Decision to enter D0-WOW or WOW is based on active interfaces
- *
- */
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_d0_wow_enable_disable_cmd_fixed_param  */
-    A_UINT32 enable;     /* 1 = enable, 0 = disable */
-} wmi_d0_wow_enable_disable_cmd_fixed_param;
-
-typedef enum extend_wow_type_e {
-    EXTWOW_TYPE_APP_TYPE1,   /* extend wow type: only enable wakeup for app type1 */
-    EXTWOW_TYPE_APP_TYPE2,   /* extend wow type: only enable wakeup for app type2 */
-    EXTWOW_TYPE_APP_TYPE1_2, /* extend wow type: enable wakeup for app type1&2 */
-} EXTWOW_TYPE;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals wmi_extwow_enable_cmd_fixed_param  */
-    A_UINT32 vdev_id;
-    A_UINT32 type;
-    A_UINT32 wakeup_pin_num;
-} wmi_extwow_enable_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals wmi_extwow_set_app_type1_params_cmd_fixed_param  */
-    A_UINT32 vdev_id;
-    wmi_mac_addr  wakee_mac;
-    A_UINT8  ident[8];
-    A_UINT8  passwd[16];
-    A_UINT32 ident_len;
-    A_UINT32 passwd_len;
-} wmi_extwow_set_app_type1_params_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header;  /* TLV tag and len; tag equals wmi_extwow_set_app_type2_params_cmd_fixed_param  */
-    A_UINT32 vdev_id;
-
-    A_UINT8  rc4_key[16];
-    A_UINT32 rc4_key_len;
-
-    /** ip header parameter */
-    A_UINT32 ip_id;         /* NC id */
-    A_UINT32 ip_device_ip;  /* NC IP address */
-    A_UINT32 ip_server_ip;  /* Push server IP address */
-
-    /** tcp header parameter */
-    A_UINT16 tcp_src_port;  /* NC TCP port */
-    A_UINT16 tcp_dst_port;  /* Push server TCP port */
-    A_UINT32 tcp_seq;
-    A_UINT32 tcp_ack_seq;
-
-    A_UINT32 keepalive_init;  /* Initial ping interval */
-    A_UINT32 keepalive_min;   /* Minimum ping interval */
-    A_UINT32 keepalive_max;   /* Maximum ping interval */
-    A_UINT32 keepalive_inc;   /* Increment of ping interval */
-
-    wmi_mac_addr gateway_mac;
-    A_UINT32 tcp_tx_timeout_val;
-    A_UINT32 tcp_rx_timeout_val;
-} wmi_extwow_set_app_type2_params_cmd_fixed_param;
-
-
 
 #define WMI_RXERR_CRC               0x01    /* CRC error on frame */
 #define WMI_RXERR_DECRYPT           0x08    /* non-Michael decrypt error */
@@ -6190,7 +5809,6 @@ typedef struct wmi_nlo_config {
     A_UINT32    slow_scan_period; /* specific to windows */
     A_UINT32    no_of_ssids;
     A_UINT32    num_of_channels;
-    A_UINT32    delay_start_time; /* NLO scan start delay time in milliseconds */
     /* The TLVs will follow.
         * nlo_configured_parameters nlo_list[];
         * A_UINT32 channel_list[];
@@ -6443,32 +6061,6 @@ typedef struct {
      */
 } wmi_p2p_set_noa_cmd_fixed_param;
 
-typedef struct {
-    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_unit_test_cmd_fixed_param  */
-    A_UINT32 tlv_header;
-    /* unique id identifying the VDEV, generated by the caller */
-    A_UINT32 vdev_id;
-    /* Identify the wlan module */
-    A_UINT32 module_id;
-    /* Num of test arguments passed */
-    A_UINT32 num_args;
-/**
- * TLV (tag length value ) parameters follow the wmi_roam_chan_list
- * structure. The TLV's are:
- *   A_UINT32 args[];
- **/
-} wmi_unit_test_cmd_fixed_param;
-
-/** Roaming offload SYNCH_COMPLETE from host when host finished sync logic
- * after it received WMI_ROAM_SYNCH_EVENTID.
- */
-typedef struct {
-    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_synch_complete_fixed_param */
-    /** unique id identifying the VDEV, generated by the caller */
-    A_UINT32 vdev_id;
-} wmi_roam_synch_complete_fixed_param;
-
-
 typedef enum {
     RECOVERY_SIM_ASSERT          = 0x01,
     RECOVERY_SIM_NO_DETECT       = 0x02,
@@ -6476,7 +6068,6 @@ typedef enum {
     RECOVERY_SIM_EMPTY_POINT     = 0x04,
     RECOVERY_SIM_STACK_OV        = 0x05,
     RECOVERY_SIM_INFINITE_LOOP   = 0x06,
-    RECOVERY_SIM_PCIE_LINKDOWN   = 0x07,
 } RECOVERY_SIM_TYPE;
 
 /* WMI_FORCE_FW_HANG_CMDID */
@@ -6918,40 +6509,6 @@ typedef struct {
      *  wmi_channel chan_info[] */
 } wmi_tdls_peer_update_cmd_fixed_param;
 
-/* WMI_TDLS_SET_OFFCHAN_MODE_CMDID */
-
-
-/* bitmap  20, 40, 80 or 160 MHz wide channel */
-#define WMI_TDLS_OFFCHAN_20MHZ                  0x1   /*  20 MHz wide channel */
-#define WMI_TDLS_OFFCHAN_40MHZ                  0x2   /*  40 MHz wide channel */
-#define WMI_TDLS_OFFCHAN_80MHZ                  0x4   /*  80 MHz wide channel */
-#define WMI_TDLS_OFFCHAN_160MHZ                 0x8   /*  160 MHz wide channel */
-
-
-enum wmi_tdls_offchan_mode {
-    WMI_TDLS_ENABLE_OFFCHANNEL,
-    WMI_TDLS_DISABLE_OFFCHANNEL
-};
-
-typedef struct {
-    /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_tdls_set_offchan_mode_cmd_fixed_param  */
-    A_UINT32   tlv_header;
-    /** unique id identifying the VDEV */
-    A_UINT32   vdev_id;
-    /** Enable/Disable TDLS offchannel */
-    A_UINT32 offchan_mode;
-    /** peer MAC address */
-    wmi_mac_addr   peer_macaddr;
-    /* Is peer initiator or responder of TDLS setup request */
-    A_UINT32 is_peer_responder;
-    /* off channel number*/
-    A_UINT32 offchan_num;
-    /* off channel bandwidth bitmap, e.g. WMI_OFFCHAN_20MHZ */
-    A_UINT32 offchan_bw_bitmap;
-    /* operating class for offchan */
-    A_UINT32 offchan_oper_class;
-} wmi_tdls_set_offchan_mode_cmd_fixed_param;
-
 /** TDLS EVENTS */
 enum wmi_tdls_peer_notification {
     /** tdls discovery recommended for peer (based
@@ -7274,23 +6831,10 @@ typedef struct
     A_UINT32 netWorkStartIndex;  /* indicate the start index of network info*/
 } wmi_batch_scan_result_scan_list;
 
-#define LPI_IE_BITMAP_BSSID                  0x0001
-#define LPI_IE_BITMAP_IS_PROBE               0x0002
-#define LPI_IE_BITMAP_SSID                   0x0004
-#define LPI_IE_BITMAP_RSSI                   0x0008
-#define LPI_IE_BITMAP_CHAN                   0x0010
-#define LPI_IE_BITMAP_AP_TX_PWR              0x0020
-#define LPI_IE_BITMAP_TX_RATE                0x0040
-#define LPI_IE_BITMAP_80211_MC_SUPPORT       0x0080
-#define LPI_IE_BITMAP_TSF_TIMER_VALUE        0x0100
-#define LPI_IE_BITMAP_AGE_OF_MESAUREMENT     0x0200
-#define LPI_IE_BITMAP_CONN_STATUS            0x0400
-#define LPI_IE_BITMAP_MSAP_IE                0x0800
-#define LPI_IE_BITMAP_SEC_STATUS             0x1000
-#define LPI_IE_BITMAP_DEVICE_TYPE            0x2000
-#define LPI_IE_BITMAP_CHAN_IS_PASSIVE        0x4000
-#define LPI_IE_BITMAP_DWELL_TIME             0x8000
-#define LPI_IE_BITMAP_ALL                    0xFFFF
+#define LPI_IE_BITMAP_BSSID              0x0001
+#define LPI_IE_BITMAP_SSID               0x0002
+#define LPI_IE_BITMAP_RSSI               0x0004
+#define LPI_IE_BITMAP_CHAN               0x0008
 
 typedef struct {
     A_UINT32 tlv_header;
@@ -7367,8 +6911,8 @@ typedef struct {
 
 typedef struct {
     A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_stop_scan_cmd_fixed_param */
-    /** Scan requestor ID */
-    A_UINT32 scan_req_id;
+    /** requestor requesting cancel  */
+    A_UINT32 requestor;
     /** Scan ID */
     A_UINT32 scan_id;
     /**
@@ -7386,57 +6930,15 @@ typedef struct {
     A_UINT32 vdev_id;
 } wmi_lpi_stop_scan_cmd_fixed_param;
 
-typedef enum {
-   WMI_LPI_DEVICE_TYPE_AP = 1,
-   WMI_LPI_DEVICE_TYPE_P2P = 2,
-   WMI_LPI_DEVICE_TYPE_NAN = 3,
-}wmi_lpi_device_type;
-
 typedef struct
 {
     A_UINT32 tlv_header;
-    /** Scan requestor ID */
-    A_UINT32 scan_req_id;
     A_UINT32 ie_bitmap;
     A_UINT32 data_len;
+    /* This buffer is used to send lpi scan result data
+      *  A_UINT8 data[];	 // length in byte given by field data_len.
+      */
 } wmi_lpi_result_event_fixed_param;
-
-typedef enum {
-   /** User scan Request completed */
-   WMI_LPI_STATUS_SCAN_REQ_COMPLED = 0,
-   /** User Request was never serviced */
-   WMI_LPI_STATUS_DROPPED_REQ = 1,
-   /** Illegal channel Req */
-   WMI_LPI_STATUS_ILLEGAL_CHAN_REQ = 2,
-   /** Illegal Operation Req */
-   WMI_LPI_STATUS_ILLEGAL_OPER_REQ = 3,
-   /** Request Aborted */
-   WMI_LPI_STATUS_REQ_ABORTED = 4,
-   /** Request Timed Out */
-   WMI_LPI_STATUS_REQ_TIME_OUT = 5,
-   /** Medium Bussy, already there
-    * is a scan is going on */
-   WMI_LPI_STATUS_MEDIUM_BUSY = 6,
-}wmi_lpi_staus;
-
-typedef struct
-{
-    A_UINT32      tlv_header;
-    wmi_lpi_staus status;
-    /** Scan requestor ID */
-    A_UINT32      scan_req_id;
-}  wmi_lpi_status_event_fixed_param;
-
-
-typedef struct
-{
-    A_UINT32      tlv_header;
-    wmi_mac_addr  bssid;
-    wmi_ssid      ssid;
-    A_UINT32      freq;
-    A_UINT32      rssi;
-    A_UINT32      vdev_id;
-}  wmi_lpi_handoff_event_fixed_param;
 
 typedef struct
 {
@@ -7779,170 +7281,6 @@ typedef struct{
 } wmi_host_auto_shutdown_event_fixed_param;
 
 
-/** New WMI command to support TPC CHAINMASK ADJUSTMENT ACCORDING TO a set of conditions specified in the command.
- *  fw will save c tpc offset/chainmask along with conditions and adjust tpc/chainmask when condition meet.
- *  This command is only used by some customer for  verification test.  It is not for end-user.
- *
- *  array of wmi_tpc_chainmask_config structures are passed with the command to specify multiple conditions.
- *
- *  The set of conditions include bt status, stbc status, band, phy_mode, 1stream/2streams, channel, rate. when all these conditions meet,
- *  the output(tpc_offset,chainmask) will be applied on per packet basis. ack_offset is applied based on channel condtion only. When multiple
- *  conditions has the same channel ,then the first ack_offset will be applied. It is better for host driver to make sure the
- *  <channel, ack_offset> pair is unique.
- *
- *  the conditions (bt status, stbc status, band, phy_mode, 1steam/2streams, tpc_offset, ack_offset, chainmask) are combinedi into a single word
- *  called basic_config_info by bitmap
- *  to save memory. And channel & rate info will be tracked by 'channel' field and 'rate0', 'rate1' field because of its large combination.
- *
- *  'rate bit' or 'channel bit' field of basic_config_info indicate validity of the channel and rate fields.if rate bit is 0 then the rate field
- *   is ignored.
- *  disable will remove preious conditions from FW.
- *  conditions from the later command will over write conditions stored from a previous command.
- *
- */
-
-#define WMI_TPC_CHAINMASK_CONFIG_BT_ON_OFF    0   /** dont' care the bt status */
-#define WMI_TPC_CHAINMASK_CONFIG_BT_ON        1   /** apply only when bt on */
-#define WMI_TPC_CHAINMASK_CONFIG_BT_OFF       2   /** apply only when bt off  */
-#define WMI_TPC_CHAINMASK_CONFIG_BT_RESV1     3   /** reserved  */
-
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_DONT_CARE   0   /**  don't care the chainmask */
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_CHAIN0      1   /**  force to use Chain0 to send */
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_CHAIN1      2   /**  force to use Chain1 to send */
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_CHAIN0_CHAIN1  3   /** force to use Chain0 & Chain1 to send */
-
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_ON_OFF  0   /**  don't care about stbc  */
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_ON      1   /**  apply only when stbc on */
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_OFF     2   /**  apply only when stbc off */
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_RESV1   3   /**  reserved */
-
-#define WMI_TPC_CHAINMASK_CONFIG_BAND_2G      0   /**  2G */
-#define WMI_TPC_CHAINMASK_CONFIG_BAND_5G      1   /**  5G */
-
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11B_2G    0        /** 11b 2G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11G_2G    1        /** 11g 2G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11N_2G    2        /** 11n 2G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11N_11AC_2G   3    /** 11n + 11ac 2G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11A_5G    4        /** 11a 5G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11N_5G    5        /** 11n 5G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11AC_5G   6        /** 11ac 5G */
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11N_11AC_5G  7     /** 11n + 11ac 5G */
-
-#define WMI_TPC_CHAINMASK_CONFIG_STREAM_1           0    /** 1 stream  */
-#define WMI_TPC_CHAINMASK_CONFIG_STREAM_2           1    /** 2 streams */
-
-#define WMI_TPC_CHAINMASK_CONFIG_CHANNEL_OFF        0    /** channel field is ignored */
-#define WMI_TPC_CHAINMASK_CONFIG_CHANNEL_ON         1    /** channel field needs to be checked */
-
-#define WMI_TPC_CHAINMASK_CONFIG_RATE_OFF           0    /** rate field is ignored */
-#define WMI_TPC_CHAINMASK_CONFIG_RATE_ON            1    /** rate field needs to be checked */
-
-/**  Bit map definition for basic_config_info starts   */
-#define WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET_S   0
-#define WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET     (0x1f << WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET_S)
-#define WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET_GET(x)     WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET)
-#define WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET_SET(x,z)   WMI_F_RMW(x,(z) & 0x1f,WMI_TPC_CHAINMASK_CONFIG_TPC_OFFSET)
-
-#define WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET_S      5
-#define WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET        (0x1f << WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET_S)
-#define WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET_GET(x)     WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET)
-#define WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET_SET(x,z)   WMI_F_RMW(x, (z) & 0x1f, WMI_TPC_CHAINMASK_CONFIG_ACK_OFFSET)
-
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_S  10
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK   (0x3 << WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_S)
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_GET(x)   WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_CHAINMASK)
-#define WMI_TPC_CHAINMASK_CONFIG_CHAINMASK_SET(x,z)  WMI_F_RMW(x, (z)&0x3, WMI_TPC_CHAINMASK_CONFIG_CHAINMASK)
-
-#define WMI_TPC_CHAINMASK_CONFIG_BT_S       12
-#define WMI_TPC_CHAINMASK_CONFIG_BT         (0x3 << WMI_TPC_CHAINMASK_CONFIG_BT_S)
-#define WMI_TPC_CHAINMASK_CONFIG_BT_GET(x)     WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_BT)
-#define WMI_TPC_CHAINMASK_CONFIG_BT_SET(x,z)   WMI_F_RMW(x, (z)&0x3, WMI_TPC_CHAINMASK_CONFIG_BT)
-
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_S     14
-#define WMI_TPC_CHAINMASK_CONFIG_STBC       (0x3 << WMI_TPC_CHAINMASK_CONFIG_STBC_S)
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_GET(x)     WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_STBC)
-#define WMI_TPC_CHAINMASK_CONFIG_STBC_SET(x,z)   WMI_F_RMW(x, (z)& 0x3, WMI_TPC_CHAINMASK_CONFIG_STBC)
-
-#define WMI_TPC_CHAINMASK_CONFIG_BAND_S     16
-#define WMI_TPC_CHAINMASK_CONFIG_BAND       (0x1 << WMI_TPC_CHAINMASK_CONFIG_BAND_S)
-#define WMI_TPC_CHAINMASK_CONFIG_BAND_GET(x)  WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_BAND)
-#define WMI_TPC_CHAINMASK_CONFIG_BAND_SET(x,z) WMI_F_RMW(x, (z) &0x1, WMI_TPC_CHAINMASK_CONFIG_BAND)
-
-#define WMI_TPC_CHAINMASK_CONFIG_STREAM_S   17
-#define WMI_TPC_CHAINMASK_CONFIG_STREAM     (0x1 << WMI_TPC_CHAINMASK_CONFIG_STREAM_S)
-#define WMI_TPC_CHAINMASK_CONFIG_STREAM_GET(x)  WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_STREAM)
-#define WMI_TPC_CHAINMASK_CONFIG_STREAM_SET(x,z)  WMI_F_RMW(x, (z)&0x1, WMI_TPC_CHAINMASK_CONFIG_STREAM)
-
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_S     18
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE       (0x7 << WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_S)
-#define WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_GET(x) WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_PHY_MODE)
-#define WMI_TPC_CHAINAMSK_CONFIG_PHY_MODE_SET(x,z)  WMI_F_RMW(x, (z)&0x7, WMI_TPC_CHAINMASK_CONFIG_PHY_MODE)
-
-#define WMI_TPC_CHAINMASK_CONFIG_CHANNEL_S     21
-#define WMI_TPC_CHAINMASK_CONFIG_CHANNEL_EXIST     (0x1 << WMI_TPC_CHAINMASK_CONFIG_CHANNEL_S)
-#define WMI_TPC_CHAINMASK_CONFIG_CHANNEL_GET(x)  WMI_F_MS(x,WMI_TPC_CHAINMASK_CONFIG_CHANNEL_EXIST)
-#define WMI_TPC_CHAINMASK_CONFIG_CHANNEL_SET(x,z)  WMI_F_RMW(x, (z)&0x1, WMI_TPC_CHAINMASK_CONFIG_CHANNEL_EXIST)
-
-#define WMI_TPC_CHAINMASK_CONFIG_RATE_S  22
-#define WMI_TPC_CHAINMASK_CONFIG_RATE_EXIST    (0x1 << WMI_TPC_CHAINMASK_CONFIG_RATE_S)
-#define WMI_TPC_CHAINMASK_CONFIG_RATE_GET(x)   WMI_F_MS(x, WMI_TPC_CHAINMASK_CONFIG_RATE_EXIST)
-#define WMI_TPC_CHAINMASK_CONFIG_RATE_SET(x,z)  WMI_F_RMW(x, (z)&0x1, WMI_TPC_CHAINMASK_CONFIG_RATE_EXIST)
-/**  Bit map definition for basic_config_info ends   */
-
-typedef struct{
-    A_UINT32 tlv_header;
-    /** Basic condition defined as bit map above, bitmap is chosen to save memory.
-     * Bit0  ~ Bit4: tpc offset which will be adjusted if condtion matches, the unit is 0.5dB.  bit4 indicates signed
-     * Bit5  ~ Bit9: ack offset which will be adjusted if condtion matches, the unit is 0.5dB.  bit9 indicates signed
-     * Bit10 ~ Bit11: chainmask  b'00: don't care, b'01: force to use chain0, b'10: force to use chain1, b'11: force to use chain0&chain1
-     * Bit12 ~ Bit13: bt condition  b'00: don't care, b'01: apply only when bt on, b'10: apply only when bt off,  b'11: reserved
-     * Bit14 ~ Bit15: stbc condition  b'00: don't care, b'01: apply only when stbc on, b'10: apply only when stbc off, b'11: reserved
-     * Bit16 : band condition  b'0: 2G,  b'1: 5G
-     * Bit17 : stream condition:  b'0: 1 stream, b'1: 2 streams
-     * Bit18 ~ Bit20: phy mode condition: b'000: 11b 2g, b'001: 11g 2g, b'010: 11n 2g, b'011: 11n+11ac 2g, b'100: 11a, b'101: 11n 5g, b'110: 11ac 5g, b'111: 11n+11ac 5g
-     * Bit21 : channel bit, if this bit is 0, then the following channel field is ignored
-     * Bit22 : rate bit, if this bit is 0, then the following rate0&rate1 is ignored.
-     * Bit23 ~ Bit31:  reserved
-     */
-    A_UINT32 basic_config_info;
-
-    /** channel mapping bit rule: The lower bit corresponds with smaller channel.
-     *  it depends on Bit14 of basic_config_info
-     *  Total 24 channels for 5G
-     *  36    40    44    48    52    56    60    64   100   104   108   112   116   120   124   128   132   136   140   149   153   157   161   165
-     *  Total 14 channels for 2G
-     *  1 ~ 14
-     */
-    A_UINT32 channel;
-
-    /** rate mapping bit rule:  The lower bit corresponds with lower rate.
-     *  it depends on Bit16 ~ Bit18 of basic_config_info, "phy mode condition"
-     *  Legacy rates , 11b, 11g, 11A
-     *  11n one stream ( ht20, ht40 ) 8+8
-     *  11n two streams ( ht20, ht40 ) 8+8
-     *  11ac one stream ( vht20, vht40, vht80 ) 10+10+10
-     *  11ac two streams (vht20, vht40, vht80 ) 10+10+10
-     */
-    A_UINT32 rate0;
-    /** For example, for 11b, when rate0 equals 0x3, it means if actual_rate in [ "1Mbps", "2Mbps"] connection, the rate condition is true.
-     *  For example, for 11g/11a, when rate0 equals 0xf0,it means "54Mbps", "48Mbps", "36Mbps", "24Mb's" is selected, while "18Mbps", "12Mbps", "9Mbps", "6Mbps" is not selected
-     */
-
-    /** only used for "11n+11ac" combined phy_mode, (WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11N_11AC_2G , WMI_TPC_CHAINMASK_CONFIG_PHY_MODE_11N_11AC_5G) in this case, 11n rates begins on rate0, while 11ac rates begins on rate1
-     */
-    A_UINT32 rate1;
-} wmi_tpc_chainmask_config;
-
-#define WMI_TPC_CHAINMASK_CONFIG_DISABLE   0   /** control the off for the tpc & chainmask*/
-#define WMI_TPC_CHAINMASK_CONFIG_ENABLE    1   /** control the on for the tpc & chainmask*/
-
-typedef struct{
-    A_UINT32 tlv_header;
-    A_UINT32 enable;  /** enable to set tpc & chainmask when condtions meet, 0: disabled,   1: enabled.  */
-    A_UINT32 num_tpc_chainmask_configs;
-    /** following this structure is num_tpc_chainmask_configs number of wmi_tpc_chainmask_config  */
-} wmi_tpc_chainmask_config_cmd_fixed_param;
-
 typedef struct {
     A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_nan_cmd_param */
     A_UINT32 data_len; /** length in byte of data[]. */
@@ -8020,55 +7358,6 @@ enum {
     WMI_MODEM_STATE_OFF = 0,
     WMI_MODEM_STATE_ON
 };
-
-#define WMI_ROAM_AUTH_STATUS_CONNECTED       0x1 /** connected, but not authenticated */
-#define WMI_ROAM_AUTH_STATUS_AUTHENTICATED   0x2 /** connected and authenticated */
-
-/** WMI_ROAM_SYNCH_EVENT: roam synch event triggering the host propagation logic
-    generated whenever firmware roamed to new AP silently and
-    (a) If the host is awake, FW sends the event to the host immediately .
-    (b) If host is in sleep then either
-        (1) FW waits until  host sends WMI_PDEV_RESUME_CMDID or WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID
-    command to FW (part of host wake up sequence  from low power mode) before sending the event host.
-        (2) data/mgmt frame is received from roamed AP, which needs to return to host
-*/
-
-typedef struct {
-    /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_key_material */
-    A_UINT32 tlv_header;
-
-    A_UINT8  kck[GTK_OFFLOAD_KCK_BYTES]; /* EAPOL-Key Key Confirmation Key (KCK) */
-    A_UINT8  kek[GTK_OFFLOAD_KEK_BYTES]; /* EAPOL-Key Key Encryption Key (KEK) */
-    A_UINT8  replay_counter[GTK_REPLAY_COUNTER_BYTES];
-} wmi_key_material;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_roam_synch_event_fixed_param  */
-    /** Unique id identifying the VDEV on which roaming is done by firmware */
-    A_UINT32 vdev_id;
-    /** auth_status: connected or authorized */
-    A_UINT32 auth_status;
-    /** roam_reason: the reason of roam. see the WMI_ROAM_REASON_ XXX */
-    A_UINT32 roam_reason;
-    /** associated AP's rssi calculated by FW when reason code is WMI_ROAM_REASON_LOW_RSSI. not valid if roam_reason is BMISS */
-    A_UINT32 rssi;
-    /** MAC address of roamed AP */
-    wmi_mac_addr bssid;     /* BSSID */
-    /** whether the frame is beacon or probe rsp */
-    A_UINT32 is_beacon;
-    /** the length of beacon/probe rsp */
-    A_UINT32 bcn_probe_rsp_len;
-    /** the length of reassoc rsp */
-    A_UINT32 reassoc_rsp_len;
-    /**
-     * TLV (tag length value ) parameters follows roam_synch_event
-     * The TLV's are:
-     *     A_UINT8 bcn_probe_rsp_frame[];  length identified by bcn_probe_rsp_len
-     *     A_UINT8 reassoc_rsp_frame[];  length identified by reassoc_rsp_len
-     *     wmi_channel chan;
-     *     wmi_key_material key;
-     **/
-} wmi_roam_synch_event_fixed_param;
 
 #define WMI_PEER_ESTIMATED_LINKSPEED_INVALID    0xFFFFFFFF
 
@@ -8849,231 +8138,6 @@ typedef struct {
      *     wmi_extscan_hotlist_monitor_capabilities     hotlist_capabilities[]       // capabilities of hotlist_monitor_tables
      */
 } wmi_extscan_capabilities_event_fixed_param;
-
-/* WMI_D0_WOW_DISABLE_ACK_EVENTID  */
-typedef struct{
-    A_UINT32    tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_d0_wow_disable_ack_event_fixed_param  */
-    A_UINT32    reserved0; /* for future need */
-} wmi_d0_wow_disable_ack_event_fixed_param;
-
-/** value representing all modules */
-#define WMI_DEBUG_LOG_MODULE_ALL 0xffff
-
-/* param definitions */
-
-/**
-  * Log level for a given module. Value contains both module id and log level.
-  * here is the bitmap definition for value.
-  * module Id   : 16
-  *     Flags   :  reserved
-  *     Level   :  8
-  * if odule Id  is WMI_DEBUG_LOG_MODULE_ALL then  log level is  applied to all modules (global).
-  * WMI_DEBUG_LOG_MIDULE_ALL will overwrites per module level setting.
-  */
-#define WMI_DEBUG_LOG_PARAM_LOG_LEVEL      0x1
-
-#define WMI_DBGLOG_SET_LOG_LEVEL(val,lvl) do { \
-        (val) |=  (lvl & 0xff);                \
-     } while(0)
-
-#define WMI_DBGLOG_GET_LOG_LEVEL(val) ((val) & 0xff)
-
-#define WMI_DBGLOG_SET_MODULE_ID(val,mid) do { \
-        (val) |=  ((mid & 0xffff) << 16);        \
-     } while(0)
-
-#define WMI_DBGLOG_GET_MODULE_ID(val) (( (val) >> 16) & 0xffff)
-
-/**
-  * Enable the debug log for a given vdev. Value is vdev id
-  */
-#define WMI_DEBUG_LOG_PARAM_VDEV_ENABLE    0x2
-
-
-/**
-  * Disable the debug log for a given vdev. Value is vdev id
-  * All the log level  for a given VDEV is disabled except the ERROR log messages
-  */
-
-#define WMI_DEBUG_LOG_PARAM_VDEV_DISABLE   0x3
-
-/**
-  * set vdev enable bitmap. value is the vden enable bitmap
-  */
-#define WMI_DEBUG_LOG_PARAM_VDEV_ENABLE_BITMAP    0x4
-
-/**
-  * set a given log level to all the modules specified in the module bitmap.
-  * and set the log levle for all other modules to DBGLOG_ERR.
-  *  value: log levelt to be set.
-  *  module_id_bitmap : identifies the modules for which the log level should be set and
-  *                      modules for which the log level should be reset to DBGLOG_ERR.
-  */
-#define WMI_DEBUG_LOG_PARAM_MOD_ENABLE_BITMAP    0x5
-
-#define NUM_MODULES_PER_ENTRY ((sizeof(A_UINT32)) << 3)
-
-#define WMI_MODULE_ENABLE(pmid_bitmap,mod_id) \
-    ( (pmid_bitmap)[(mod_id)/NUM_MODULES_PER_ENTRY] |= \
-         (1 << ((mod_id)%NUM_MODULES_PER_ENTRY)) )
-
-#define WMI_MODULE_DISABLE(pmid_bitmap,mod_id)     \
-    ( (pmid_bitmap)[(mod_id)/NUM_MODULES_PER_ENTRY] &=  \
-      ( ~(1 << ((mod_id)%NUM_MODULES_PER_ENTRY)) ) )
-
-#define WMI_MODULE_IS_ENABLED(pmid_bitmap,mod_id) \
-    ( ((pmid_bitmap)[(mod_id)/NUM_MODULES_PER_ENTRY ] &  \
-       (1 << ((mod_id)%NUM_MODULES_PER_ENTRY)) ) != 0)
-
-#define MAX_MODULE_ID_BITMAP_WORDS 16 /* 16*32=512 module ids. should be more than sufficient */
-typedef struct {
-        A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_debug_log_config_cmd_fixed_param */
-        A_UINT32 dbg_log_param; /** param types are defined above */
-        A_UINT32 value;
-        /* The below array will follow this tlv ->fixed length module_id_bitmap[]
-        A_UINT32 module_id_bitmap[MAX_MODULE_ID_BITMAP_WORDS];
-     */
-} wmi_debug_log_config_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_pdev_get_temperature_cmd_fixed_param  */
-    A_UINT32 param;     /* Reserved for future use */
-} wmi_pdev_get_temperature_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_pdev_temperature_event_fixed_param */
-    A_INT32  value;     /* temprature value in Celcius degree */
-} wmi_pdev_temperature_event_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_set_dhcp_server_offload_cmd_fixed_param */
-    A_UINT32 vdev_id;
-    A_UINT32 enable;
-    A_UINT32 srv_ipv4; /* server IP */
-    A_UINT32 start_lsb; /* starting address assigned to client */
-    A_UINT32 num_client; /* number of clients we support */
-} wmi_set_dhcp_server_offload_cmd_fixed_param;
-
-typedef enum {
-    AP_RX_DATA_OFFLOAD             = 0x00,
-    STA_RX_DATA_OFFLOAD            = 0x01,
-} wmi_ipa_offload_types;
-
-/**
- * This command is sent from WLAN host driver to firmware for
- * enabling/disabling IPA data-path offload features.
- *
- *
- * Enabling data path offload to IPA(based on host INI configuration), example:
- *    when STA interface comes up,
- *    host->target: WMI_IPA_OFFLOAD_ENABLE_DISABLE_CMD,
- *                  (enable = 1, vdev_id = STA vdev id, offload_type = STA_RX_DATA_OFFLOAD)
- *
- * Disabling data path offload to IPA, example:
- *    host->target: WMI_IPA_OFFLOAD_ENABLE_DISABLE_CMD,
- *                  (enable = 0, vdev_id = STA vdev id, offload_type = STA_RX_DATA_OFFLOAD)
- *
- *
- * This command is applicable only on the PCIE LL systems
- *
- */
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_ipa_offload_enable_disable_cmd_fixed_param */
-    A_UINT32 offload_type; /* wmi_ipa_offload_types enum values */
-    A_UINT32 vdev_id;
-    A_UINT32 enable; /* 1 == enable, 0 == disable */
-} wmi_ipa_offload_enable_disable_cmd_fixed_param;
-
-typedef enum {
-    WMI_LED_FLASHING_PATTERN_NOT_CONNECTED    = 0,
-    WMI_LED_FLASHING_PATTERN_CONNECTED   = 1,
-    WMI_LED_FLASHING_PATTERN_RESERVED    = 2,
-} wmi_set_led_flashing_type;
-
-/**
-The state of the LED GPIO control is determined by two 32 bit values(X_0 and X_1) to produce a 64 bit value.
-Each 32 bit value consists of 4 bytes, where each byte defines the number of 50ms intervals that the GPIO will
-remain at a predetermined state. The 64 bit value provides 8 unique GPIO timing intervals. The pattern starts
-with the MSB of X_0 and continues to the LSB of X_1. After executing the timer interval of the LSB of X_1, the
-pattern returns to the MSB of X_0 and repeats. The GPIO state for each timing interval  alternates from Low to
-High and the first interval of the pattern represents the time when the GPIO is Low. When a timing interval of
-Zero is reached, it is skipped and moves on to the next interval.
-*/
-typedef struct{
-    A_UINT32    tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_set_led_flashing_cmd_fixed_param  */
-    A_UINT32    pattern_id; /* pattern identifier */
-    A_UINT32    led_x0; /* led flashing parameter0 */
-    A_UINT32    led_x1; /* led flashing parameter1 */
-} wmi_set_led_flashing_cmd_fixed_param;
-
-/**
- * The purpose of the multicast Domain Name System (mDNS) is to resolve host names to IP addresses
- * within small networks that do not include a local name server.
- * It utilizes essentially the same programming interfaces, packet formats and operating semantics
- * as the unicast DNS, and the advantage is zero configuration service while no need for central or
- * global server.
- * Based on mDNS, the DNS-SD (Service Discovery) allows clients to discover a named list of services
- * by type in a specified domain using standard DNS queries.
- * Here, we provide the ability to advertise the available services by responding to mDNS queries.
- */
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_mdns_offload_cmd_fixed_param */
-    A_UINT32 vdev_id;
-    A_UINT32 enable;
-} wmi_mdns_offload_cmd_fixed_param;
-
-#define WMI_MAX_MDNS_FQDN_LEN         64
-#define WMI_MAX_MDNS_RESP_LEN         512
-#define WMI_MDNS_FQDN_TYPE_GENERAL    0
-#define WMI_MDNS_FQDN_TYPE_UNIQUE     1
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_mdns_set_fqdn_cmd_fixed_param */
-    A_UINT32 vdev_id;
-    /** type of fqdn, general or unique */
-    A_UINT32 type;
-    /** length of fqdn */
-    A_UINT32 fqdn_len;
-    /* Following this structure is the TLV byte stream of fqdn data of length fqdn_len
-     * A_UINT8  fqdn_data[]; // fully-qualified domain name to check if match with the received queries
-     */
-} wmi_mdns_set_fqdn_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_mdns_set_resp_cmd_fixed_param */
-    A_UINT32 vdev_id;
-    /** Answer Resource Record count */
-    A_UINT32 AR_count;
-    /** length of response */
-    A_UINT32 resp_len;
-    /* Following this structure is the TLV byte stream of resp data of length resp_len
-     * A_UINT8  resp_data[]; // responses consisits of Resource Records
-     */
-} wmi_mdns_set_resp_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_mdns_get_stats_cmd_fixed_param */
-    A_UINT32 vdev_id;
-} wmi_mdns_get_stats_cmd_fixed_param;
-
-typedef struct {
-    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_mdns_stats_event_fixed_param */
-    A_UINT32 vdev_id;
-    /** curTimestamp in milliseconds */
-    A_UINT32 curTimestamp;
-    /** last received Query in milliseconds */
-    A_UINT32 lastQueryTimestamp;
-    /** last sent Response in milliseconds */
-    A_UINT32 lastResponseTimestamp;
-    /** stats of received queries */
-    A_UINT32 totalQueries;
-    /** stats of macth queries */
-    A_UINT32 totalMatches;
-    /** stats of responses */
-    A_UINT32 totalResponses;
-    /** indicate the current status of mDNS offload */
-    A_UINT32 status;
-} wmi_mdns_stats_event_fixed_param;
 
 #ifdef __cplusplus
 }

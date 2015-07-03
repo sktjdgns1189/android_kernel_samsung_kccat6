@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -37,9 +37,6 @@
   ------------------------------------------------------------------------*/
 #include "aniGlobal.h"
 #include "limDebug.h"
-#ifdef WLAN_FEATURE_VOWIFI_11R
-#include "limFTDefs.h"
-#endif
 #include "limSession.h"
 #include "limSessionUtils.h"
 #include "limUtils.h"
@@ -47,11 +44,11 @@
 /*--------------------------------------------------------------------------
   \brief peGetVhtCapable() - Returns the Vht capable from a valid session.
 
-  This function iterates the session Table and returns the VHT capable from
-  first valid session if no sessions are valid/present  it returns FALSE
+  This function itrates the session Table and returns the VHT capable from first valid session
+   if no sessions are valid/present  it returns FALSE
 
   \param pMac                   - pointer to global adapter context
-  \return                       - channel to scan from valid session else zero.
+  \return                           - channel to scan from valid session else zero.
 
   \sa
 
@@ -76,7 +73,7 @@ tANI_U8 peGetVhtCapable(tpAniSirGlobal pMac)
 /*--------------------------------------------------------------------------
   \brief peGetCurrentChannel() - Returns the  channel number for scanning,
                                 from a valid session.
-   This function iterates the session Table and returns the channel number
+   This function itrates the session Table and returns the channel number
    from first valid session if no sessions are valid/present  it returns zero
 
   \param pMac                   - pointer to global adapter context
@@ -132,12 +129,11 @@ tANI_U8 peValidateBtJoinRequest(tpAniSirGlobal pMac)
 }
 
 /*--------------------------------------------------------------------------
-  \brief peGetValidPowerSaveSession() - Fetches the valid session for power save
+  \brief peGetValidPowerSaveSession() - Fetches the valid session for powersave .
 
-  This function is called to check the valid session for power save, if more
-  than one session is active , this function it returns NULL.
-  if there is only one valid "infrastructure" session present in
-  "link established" state this function returns sessionentry.
+  This function is called to check the valid session for power save, if more than one session is active , this function
+  it returns NULL.
+  if there is only one valid "infrastructure" session present in "linkestablished" state this function returns sessionentry.
   For all other cases it returns NULL.
 
   \param pMac                   - pointer to global adapter context
@@ -182,12 +178,10 @@ tpPESession peGetValidPowerSaveSession(tpAniSirGlobal pMac)
 /*--------------------------------------------------------------------------
   \brief peIsAnySessionActive() - checks for the active session presence .
 
-  This function returns TRUE if at least one valid session is present
-  else it returns FALSE
+  This function returns TRUE if atleast one valid session is present else it returns FALSE
 
   \param pMac                   - pointer to global adapter context
-  \return                       - return TRUE if at least one session
-  is active else return FALSE.
+  \return                            - return TRUE if atleast one session is active else return FALSE.
 
   \sa
   --------------------------------------------------------------------------*/
@@ -209,39 +203,11 @@ tANI_U8 peIsAnySessionActive(tpAniSirGlobal pMac)
 }
 
 /*--------------------------------------------------------------------------
-  \brief pePrintActiveSession() - print all the active pesession present .
-
-  This function print all the active pesession present
-
-  \param pMac                   - pointer to global adapter context
-
-  \sa
-  --------------------------------------------------------------------------*/
-
-
-void pePrintActiveSession(tpAniSirGlobal pMac)
-{
-    tANI_U8 i;
-    for(i =0; i < pMac->lim.maxBssId; i++)
-    {
-        if(pMac->lim.gpSession[i].valid == TRUE)
-        {
-            limLog(pMac, LOGE, FL("Active sessionId: %d BSID: "MAC_ADDRESS_STR
-                   "opmode = %d bssIdx = %d"), i,
-                   MAC_ADDR_ARRAY(pMac->lim.gpSession[i].bssId),
-                   pMac->lim.gpSession[i].operMode,
-                   pMac->lim.gpSession[i].bssIdx);
-        }
-    }
-    return;
-}
-
-/*--------------------------------------------------------------------------
   \brief isLimSessionOffChannel() - Determines if the there is any other off channel
                                     session.
 
   This function returns TRUE if the session Id passed needs to be on a different
-  channel than at least one session already active.
+  channel than atleast one session already active.
 
   \param pMac                   - pointer to global adapter context
   \param sessionId              - session ID of the session to be verified.
@@ -269,8 +235,8 @@ isLimSessionOffChannel(tpAniSirGlobal pMac, tANI_U8 sessionId)
           //Skip the sessionId that is to be joined.
           continue;
         }
-        /* If another session is valid and it is on different channel
-           it is an off channel operation. */
+        //if another ession is valid and it is on different channel
+        //it is an off channel operation.
         if( (pMac->lim.gpSession[i].valid) &&
             (pMac->lim.gpSession[i].currentOperChannel !=
              pMac->lim.gpSession[sessionId].currentOperChannel) )
@@ -381,7 +347,7 @@ limIsInQuietDuration (tpAniSirGlobal pMac)
     return 0;
 }
 /*--------------------------------------------------------------------------
-  \brief limIsQuietBegin() - Check if channel quieting is beginning on any
+  \brief limIsQuietBegin() - Check if channel quieting is begining on any
                                     valid session.
 
   \param pMac                   - pointer to global adapter context

@@ -170,13 +170,12 @@ radar_summary_parse(struct ath_dfs *dfs, const char *buf, size_t len,
     struct rx_radar_status *rsu)
 {
    uint32_t rs[2];
-   int freq_centre, freq;
 
    /* Drop out if we have < 2 DWORDs available */
    if (len < sizeof(rs)) {
       DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR |
           ATH_DEBUG_DFS_PHYERR_SUM,
-          "%s: len (%zu) < expected (%zu)!",
+          "%s: len (%d) < expected (%d)!",
           __func__,
           len,
           sizeof(rs));
@@ -212,33 +211,6 @@ radar_summary_parse(struct ath_dfs *dfs, const char *buf, size_t len,
            6);
    rsu->delta_diff =
        MS(rs[RADAR_REPORT_PULSE_REG_1], RADAR_REPORT_PULSE_DELTA_DIFF);
-
-   /* WAR for FCC Type 4*/
-   /*
-    * HW is giving longer pulse duration (in case of VHT80, with traffic)
-    * which fails to detect FCC type4 radar pulses. Added a work around to
-    * fix the pulse duration and duration delta.
-    *
-    * IF VHT80
-    *   && (primary_channel==30MHz || primary_channel== -30MHz)
-    *   && -4 <= pulse_index <= 4
-    *   && !chirp
-    *   && pulse duration > 20 us
-    * THEN
-    *   Set pulse duration to 20 us
-    */
-
-   freq = ieee80211_chan2freq(dfs->ic, dfs->ic->ic_curchan);
-   freq_centre = dfs->ic->ic_curchan->ic_vhtop_ch_freq_seg1;
-
-   if ((IEEE80211_IS_CHAN_11AC_VHT80(dfs->ic->ic_curchan) &&
-            (abs(freq - freq_centre) == 30) &&
-            !rsu->is_chirp &&
-            abs(rsu->sidx) <= 4 &&
-            rsu->pulse_duration > 20)){
-      rsu->pulse_duration = 20;
-   }
-
 }
 
 static void
@@ -251,7 +223,7 @@ radar_fft_search_report_parse(struct ath_dfs *dfs, const char *buf, size_t len,
    if (len < sizeof(rs)) {
       DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR |
           ATH_DEBUG_DFS_PHYERR_SUM,
-          "%s: len (%zu) < expected (%zu)!",
+          "%s: len (%d) < expected (%d)!",
           __func__,
           len,
           sizeof(rs));
@@ -304,13 +276,13 @@ tlv_parse_frame(struct ath_dfs *dfs, struct rx_radar_status *rs,
         bool false_detect = false;
 
    DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR,
-       "%s: total length = %zu bytes", __func__, len);
+       "%s: total length = %d bytes", __func__, len);
    while ((i < len ) && (false_detect == false)) {
       /* Ensure we at least have four bytes */
       if ((len - i) < sizeof(tlv_hdr)) {
          DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR |
              ATH_DEBUG_DFS_PHYERR_SUM,
-             "%s: ran out of bytes, len=%zu, i=%d",
+             "%s: ran out of bytes, len=%d, i=%d",
              __func__, len, i);
          return (0);
       }
@@ -337,7 +309,7 @@ tlv_parse_frame(struct ath_dfs *dfs, struct rx_radar_status *rs,
        */
       if (MS(tlv_hdr[TLV_REG], TLV_LEN) + i >= len) {
          DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR,
-             "%s: TLV oversize: TLV LEN=%d, available=%zu, "
+             "%s: TLV oversize: TLV LEN=%d, available=%d, "
              "i=%d",
              __func__,
              MS(tlv_hdr[TLV_REG], TLV_LEN),
@@ -429,7 +401,9 @@ tlv_calc_freq_info(struct ath_dfs *dfs, struct rx_radar_status *rs)
        * appropriately!
        */
 
-      chan_centre = dfs->ic->ic_curchan->ic_vhtop_ch_freq_seg1;
+      chan_centre = dfs->ic->ic_ieee2mhz(
+          dfs->ic->ic_curchan->ic_vhtop_ch_freq_seg1,
+          dfs->ic->ic_curchan->ic_flags);
    } else {
       /* HT20/HT40 */
 

@@ -40,13 +40,22 @@
 #define __WLAN_HDD_OEM_DATA_H__
 
 #ifndef OEM_DATA_REQ_SIZE
+#ifdef QCA_WIFI_2_0
 #define OEM_DATA_REQ_SIZE 280
+#else
+#define OEM_DATA_REQ_SIZE 134
+#endif
 #endif
 
 #ifndef OEM_DATA_RSP_SIZE
+#ifdef QCA_WIFI_2_0
 #define OEM_DATA_RSP_SIZE 1724
+#else
+#define OEM_DATA_RSP_SIZE 1968
+#endif
 #endif
 
+#ifdef QCA_WIFI_2_0
 #define OEM_APP_SIGNATURE_LEN      16
 #define OEM_APP_SIGNATURE_STR      "QUALCOMM-OEM-APP"
 
@@ -63,7 +72,7 @@ typedef enum
   /* OEM App is not registered */
   OEM_ERR_APP_NOT_REGISTERED,
 
-  /* Invalid signature */
+  /* Inavalid signature */
   OEM_ERR_INVALID_SIGNATURE,
 
   /* Invalid message type */
@@ -91,7 +100,7 @@ typedef PACKED_PRE struct PACKED_POST
 
 typedef PACKED_PRE struct PACKED_POST
 {
-    /* Signature of chip set vendor, e.g. QUALCOMM */
+    /* Signature of chipset vendor, e.g. QUALCOMM */
     tANI_U8 oem_target_signature[OEM_TARGET_SIGNATURE_LEN];
     tANI_U32 oem_target_type;         /* Chip type */
     tANI_U32 oem_fw_version;          /* FW version */
@@ -113,7 +122,7 @@ typedef PACKED_PRE struct PACKED_POST
     /* reserved0 */
     tANI_U32 reserved0;
 
-    /* Primary 20 MHz channel frequency in MHz */
+    /* primary 20 MHz channel frequency in mhz */
     tANI_U32 mhz;
 
     /* Center frequency 1 in MHz */
@@ -143,12 +152,7 @@ typedef PACKED_PRE struct PACKED_POST
     /* vdev_id for the peer mac */
     tANI_U8 vdev_id;
 
-    /* peer capability:
-     * 0: RTT/RTT2
-     * 1: RTT3(timing Meas Capability)
-     * 2: RTT3(fine timing Meas Capability)
-     * Default is 0
-     */
+    /* peer capability: 0: RTT/RTT2, 1: RTT3. Default is 0 */
     tANI_U32 peer_capability;
 
     /* reserved0 */
@@ -157,6 +161,7 @@ typedef PACKED_PRE struct PACKED_POST
     /* channel info on which peer is connected */
     tHddChannelInfo peer_chan_info;
 } tPeerStatusInfo;
+#endif /* QCA_WIFI_2_0 */
 
 struct iw_oem_data_req
 {

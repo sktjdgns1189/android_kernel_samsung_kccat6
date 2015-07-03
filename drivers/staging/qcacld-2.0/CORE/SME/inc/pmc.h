@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,6 +39,7 @@
 #define __PMC_H__
 
 
+#include "palTimer.h"
 #include "csrLinkList.h"
 #include "pmcApi.h"
 #include "smeInternal.h"
@@ -187,6 +188,7 @@ typedef struct sPmcInfo
     void *enterWowlCallbackContext;/* value to be passed as parameter to routine specified above */
     tSirSmeWowlEnterParams wowlEnterParams; /* WOWL mode configuration */
     tDblLinkList deferredMsgList;   //The message in here are deferred and DONOT expect response from PE
+    tANI_BOOLEAN rfSuppliesVotedOff;  //Whether RF supplies are voted off or not.
 #ifdef FEATURE_WLAN_SCAN_PNO
     preferredNetworkFoundIndCallback  prefNetwFoundCB; /* routine to call for Preferred Network Found Indication */
     void *preferredNetworkFoundIndCallbackContext;/* value to be passed as parameter to routine specified above */
@@ -205,11 +207,8 @@ typedef struct sPmcInfo
     void *wakeReasonIndCBContext;  /* value to be passed as parameter to routine specified above */
 #endif // WLAN_WAKEUP_EVENTS
 
-/*
- * If TRUE driver will go to BMPS only if host operating system
- * asks to enter BMPS. For android wlan_hdd_cfg80211_set_power_mgmt API will
- * be used to set host power save
- */
+/* If TRUE driver will go to BMPS only if host operatiing system asks to enter BMPS.
+* For android wlan_hdd_cfg80211_set_power_mgmt API will be used to set host powersave*/
     v_BOOL_t    isHostPsEn;
     v_BOOL_t    ImpsReqFailed;
     v_BOOL_t    ImpsReqTimerFailed;
@@ -349,7 +348,7 @@ typedef struct sPsOffloadPerSessionInfo
     tDblLinkList uapsdCbList;
 
     /*
-     * Whether TDLS session allows power save or not
+     * Whether TDLS session allows powersave or not
      */
 #ifdef FEATURE_WLAN_TDLS
     v_BOOL_t isTdlsPowerSaveProhibited;

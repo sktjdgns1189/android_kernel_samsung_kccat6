@@ -89,34 +89,25 @@ when           who        what, where, why
 /*----------------------------------------------------------------------------
  *  Defines
  * -------------------------------------------------------------------------*/
-//DFS Non Occupancy Period =30 minutes, in microseconds
-#define SAP_DFS_NON_OCCUPANCY_PERIOD      (30 * 60 * 1000 * 1000)
+//DFS Non Occupancy Period =30 minutes, in milliseconds
+#define SAP_DFS_NON_OCCUPANCY_PERIOD      (30 * 60 * 1000 )
 
 #define SAP_DEBUG
 // Used to enable or disable security on the BT-AMP link
 #define WLANSAP_SECURITY_ENABLED_STATE VOS_TRUE
-#ifdef WLAN_FEATURE_MBSSID
-// When MBSSID feature is enabled, SAP context is directly passed to SAP APIs
-#define VOS_GET_SAP_CB(ctx) (ptSapContext)(ctx)
-#else
 // How do I get SAP context from voss context?
 #define VOS_GET_SAP_CB(ctx) vos_get_context( VOS_MODULE_ID_SAP, ctx)
-#endif
 
 #define VOS_GET_HAL_CB(ctx) vos_get_context( VOS_MODULE_ID_PE, ctx)
 //MAC Address length
 #define ANI_EAPOL_KEY_RSN_NONCE_SIZE      32
 
-#define IS_ETSI_WEATHER_CH(_ch)   ((_ch >= 120) && (_ch <= 130))
-#define IS_CHAN_JAPAN_W53(_ch)    ((_ch >= 52)  && (_ch <= 64))
-#define IS_CHAN_JAPAN_INDOOR(_ch) ((_ch >= 36)  && (_ch <= 64))
-#define IS_CHAN_JAPAN_OUTDOOR(_ch)((_ch >= 100) && (_ch <= 140))
+#define IS_ETSI_WEATHER_CH(_ch) ((_ch >= 120) && (_ch <= 130))
 #define DEFAULT_CAC_TIMEOUT (60 * 1000) //msecs - 1 min
 #define ETSI_WEATHER_CH_CAC_TIMEOUT (10 * 60 * 1000) //msecs - 10 min
-#define SAP_CHAN_PREFERRED_INDOOR  1
-#define SAP_CHAN_PREFERRED_OUTDOOR 2
 
-extern const sRegulatoryChannel *regChannels;
+extern sRegulatoryChannel *regChannels;
+extern const tRfChannelProps rfChannels[NUM_RF_CHANNELS];
 
 /*----------------------------------------------------------------------------
  *  Typedefs
@@ -153,6 +144,40 @@ typedef enum {
 typedef struct sSapQosCfg {
     v_U8_t              WmmIsEnabled;
 } tSapQosCfg;
+
+typedef enum {
+        eSAP_DFS_CHANNEL_USABLE,
+        eSAP_DFS_CHANNEL_AVAILABLE,
+        eSAP_DFS_CHANNEL_UNAVAILABLE
+}eSapDfsChanStatus_t;
+
+typedef struct sSapDfsNolInfo {
+    v_U8_t              dfs_channel_number;
+    eSapDfsChanStatus_t radar_status_flag;
+    unsigned long       radar_found_timestamp;
+}tSapDfsNolInfo;
+
+typedef struct sSapDfsInfo {
+    vos_timer_t         sap_dfs_cac_timer;
+    v_U8_t              sap_radar_found_status;
+    v_U8_t              is_dfs_cac_timer_running;
+
+    /*
+     * New channel to move to when a  Radar is
+     * detected on current Channel
+     */
+    v_U8_t              target_channel;
+    v_U8_t              last_radar_found_channel;
+    v_U8_t              ignore_cac;
+
+    /* Requests for Channel Switch Announcement IE
+     * generation and transmission
+     */
+    v_U8_t              csaIERequired;
+    v_U8_t              numCurrentRegDomainDfsChannels;
+    tSapDfsNolInfo      sapDfsChannelNolList[NUM_5GHZ_CHANNELS];
+
+}tSapDfsInfo;
 
 typedef struct sSapAcsChannelInfo {
     v_U32_t             channelNum;
@@ -223,11 +248,6 @@ typedef struct sSapContext {
     tSirAPWPSIEs      APWPSIEs;
     tSirRSNie         APWPARSNIEs;
 
-#ifdef FEATURE_WLAN_WAPI
-    v_U32_t           nStaWAPIReqIeLength;
-    v_U8_t            pStaWapiReqIE[MAX_ASSOC_IND_IE_LEN];
-#endif
-
     v_U32_t           nStaAddIeLength;
     v_U8_t            pStaAddIE[MAX_ASSOC_IND_IE_LEN];
     v_U8_t            *channelList;
@@ -242,8 +262,10 @@ typedef struct sSapContext {
      * any random channel[5Ghz-(NON-DFS/DFS)],if SAP is operating
      * on a DFS channel and a RADAR is detected on the channel.
      */
-    tAll5GChannelList  SapAllChnlList;
+    tSapChannelListInfo SapAllChnlList;
 
+    //Information Required for SAP DFS Master mode
+    tSapDfsInfo         SapDfsInfo;
 
     tANI_BOOLEAN       allBandScanned;
     eCsrBand           currentPreferredBand;
@@ -251,27 +273,6 @@ typedef struct sSapContext {
     v_U16_t            acsBandSwitchThreshold;
     tSapAcsChannelInfo acsBestChannelInfo;
     tANI_BOOLEAN       enableOverLapCh;
-    v_BOOL_t           apAutoChannelSelection;
-    v_U8_t             apStartChannelNum;
-    v_U8_t             apEndChannelNum;
-#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
-    v_U8_t             cc_switch_mode;
-#endif
-#ifdef FEATURE_WLAN_AP_AP_ACS_OPTIMIZE
-    v_U8_t          skip_acs_scan_status;
-    v_U8_t          skip_acs_scan_range1_stch;
-    v_U8_t          skip_acs_scan_range1_endch;
-    v_U8_t          skip_acs_scan_range2_stch;
-    v_U8_t          skip_acs_scan_range2_endch;
-#endif
-
-#if defined(FEATURE_WLAN_STA_AP_MODE_DFS_DISABLE) ||\
-    defined(WLAN_FEATURE_MBSSID)
-    v_BOOL_t           dfs_ch_disable;
-#endif
-    tANI_BOOLEAN       isCacEndNotified;
-    tANI_BOOLEAN       isCacStartNotified;
-    tANI_BOOLEAN       is_sap_ready_for_chnl_chng;
 } *ptSapContext;
 
 
@@ -312,7 +313,6 @@ typedef struct sWLAN_SAPEvent {
     tHalHandle:  the tHalHandle passed in with the scan request
     *p2: the second context pass in for the caller, opaque sap Handle here
     scanID:
-    sessionId: Session identifier
     status: Status of scan -success, failure or abort
 
   RETURN VALUE
@@ -328,7 +328,6 @@ WLANSAP_ScanCallback
 (
   tHalHandle halHandle,
   void *pContext,
-  v_U8_t sessionId,
   v_U32_t scanID,
   eCsrScanStatus scanStatus
 );
@@ -802,6 +801,21 @@ sap_AcquireGlobalLock( ptSapContext  pSapCtx );
 VOS_STATUS
 sap_ReleaseGlobalLock( ptSapContext  pSapCtx );
 
+/*==========================================================================
+FUNCTION  sapConvertSapPhyModeToCsrPhyMode
+
+DESCRIPTION Function to implement selection of CSR PhyMode using SAP PhyMode
+
+DEPENDENCIES PARAMETERS
+
+IN sapPhyMode : SAP Phy Module
+
+RETURN VALUE If SUCCESS or FAILURE
+
+SIDE EFFECTS
+============================================================================*/
+eCsrPhyMode sapConvertSapPhyModeToCsrPhyMode( eSapPhyMode sapPhyMode );
+
 #ifdef FEATURE_WLAN_CH_AVOID
 /*==========================================================================
 	FUNCTION    sapUpdateUnsafeChannelList
@@ -840,150 +854,8 @@ SIDE EFFECTS
 v_U8_t
 sapIndicateRadar(ptSapContext sapContext,tSirSmeDfsEventInd *dfs_event);
 
-/*
- * This function initializes the NOL list
- * parameters required to track the radar
- * found DFS channels in the current Reg. Domain.
- */
 VOS_STATUS
 sapInitDfsChannelNolList(ptSapContext sapContext);
-
-/*
- * This Function Checks if a given channel is AVAILABLE or USABLE
- * for DFS operation.
- */
-v_BOOL_t sapDfsIsChannelInNolList(ptSapContext sapContext,
-      v_U8_t channelNumber, ePhyChanBondState chanBondState);
-/*---------------------------------------------------------------------------
-FUNCTION  sapDfsCacTimerCallback
-
-DESCRIPTION Function will be called up on DFS CAC timer expiry
-
-DEPENDENCIES PARAMETERS
-      data : void pointer to the data which being passed.
-
-RETURN VALUE  : void
-
-SIDE EFFECTS
----------------------------------------------------------------------------*/
-void sapDfsCacTimerCallback(void *data);
-
-
-/*---------------------------------------------------------------------------
-FUNCTION  sap_CacResetNotify
-
-DESCRIPTION Function will be called up on stop bss indication to clean up
-            DFS global structure.
-
-DEPENDENCIES PARAMETERS
-IN hHAL : HAL pointer
-
-RETURN VALUE  : void.
-
-SIDE EFFECTS
----------------------------------------------------------------------------*/
-void sap_CacResetNotify(tHalHandle hHal);
-
-v_BOOL_t sapAcsChannelCheck(ptSapContext sapContext, v_U8_t channelNumber);
-
-/*
- * This function is added to check if channel is in tx leak range
- *
- * PARAMETERS
- * IN
- * sapContext: Pointer to vos global context structure
- * target_channel: the target channel to switch to
- *
- * RETURN VALUE
- * BOOLEAN to indicate if the target channel is good or bad to switch
- *
- * TRUE: the channel is above the tx leak threshold
- * FALSE: good to be used
- */
-v_BOOL_t
-sapChannelMatrixCheck(ptSapContext sapContext,
-                      ePhyChanBondState cbMode,
-                      v_U8_t target_channel);
-
-/*
- * This function will find the concurrent sap context apart from
- * passed sap context and return its channel change ready status
- *
- * PARAMETERS
- * IN
- * sapContext: pointer to sap context
- * hHal: pointer to hal structure.
- *
- * RETURN VALUE
- * v_BOOL_t
- * returns change change ready indication for concurrent sapctx
- */
-v_BOOL_t is_concurrent_sap_ready_for_channel_change(tHalHandle hHal,
-                                                    ptSapContext sapContext);
-
-/*
- * This function will calculate how many interfaces
- * have sap persona and returns total number of sap persona.
- *
- * PARAMETERS
- * IN
- * hHal: pointer to hal structure.
- *
- * RETURN VALUE
- * v_U8_t
- * Returns total number of sap interfaces.
- *
- */
-v_U8_t sap_get_total_number_sap_intf(tHalHandle hHal);
-/*---------------------------------------------------------------------------
-FUNCTION  sapFetchRegulatoryDomain
-
-DESCRIPTION Fetches the Regulatory domain based up on the coutry code.
-
-DEPENDENCIES PARAMETERS
-IN hHAL : HAL pointer
-
-RETURN VALUE  : v_REGDOMAIN_t, returns the regulatory domain
-
-SIDE EFFECTS
----------------------------------------------------------------------------*/
-v_REGDOMAIN_t sapFetchRegulatoryDomain(tHalHandle hHal);
-
-/*---------------------------------------------------------------------------
-FUNCTION  sapDfsIsW53Invalid
-
-DESCRIPTION Checks if the passed channel is W53 and returns if
-            SAP W53 opearation is allowed.
-
-DEPENDENCIES PARAMETERS
-IN hHAL : HAL pointer
-channelID: Channel Number to be verified
-
-RETURN VALUE  : v_BOOL_t
-                VOS_TRUE: If W53 operation is disabled
-                VOS_FALSE: If W53 operation is enabled
-
-SIDE EFFECTS
----------------------------------------------------------------------------*/
-v_BOOL_t sapDfsIsW53Invalid(tHalHandle hHal, v_U8_t channelID);
-
-/*---------------------------------------------------------------------------
-FUNCTION  sapDfsIsChannelInPreferredLocation
-
-DESCRIPTION Checks if the passed channel is in accordance with preferred
-            Channel location settings.
-
-DEPENDENCIES PARAMETERS
-IN hHAL : HAL pointer
-channelID: Channel Number to be verified
-
-RETURN VALUE  :v_BOOL_t
-          VOS_TRUE:If Channel location is same as the preferred location
-          VOS_FALSE:If Channel location is not same as the preferred location
-
-SIDE EFFECTS
----------------------------------------------------------------------------*/
-v_BOOL_t sapDfsIsChannelInPreferredLocation(tHalHandle hHal, v_U8_t channelID);
 
 #ifdef __cplusplus
 }

@@ -50,6 +50,8 @@
 
 #include "limGlobal.h"
 
+//#include "parserApi.h"
+
 #include "sirMacProtDef.h"
 
 #include "sirMacPropExts.h"
@@ -61,6 +63,76 @@
 
 #define DPH_STATS
 
+
+/// traffic category not allowed
+
+#define DPH_TID_NOTALLOWED           0xFF
+
+
+/// Periodicity of invocation of rate adaptation (in ms)
+
+#define DPH_RATE_ADAPTATION_PERIOD     20
+
+
+// Rate indices
+
+#define DPH_PHY_RATE_1_INDEX     0
+
+#define DPH_PHY_RATE_2_INDEX     1
+
+#define DPH_PHY_RATE_5_5_INDEX   2
+
+#define DPH_PHY_RATE_11_INDEX    3
+
+#define DPH_PHY_RATE_6_INDEX     4
+
+#define DPH_PHY_RATE_9_INDEX     5
+
+#define DPH_PHY_RATE_12_INDEX    6
+
+#define DPH_PHY_RATE_18_INDEX    7
+
+#define DPH_PHY_RATE_24_INDEX    8
+
+#define DPH_PHY_RATE_36_INDEX    9
+
+#define DPH_PHY_RATE_48_INDEX   10
+
+#define DPH_PHY_RATE_54_INDEX   11
+
+#define DPH_PHY_RATE_72_INDEX   12
+
+#define DPH_PHY_RATE_96_INDEX   13
+
+#define DPH_PHY_RATE_108_INDEX  14
+
+#define DPH_PHY_RATE_144_INDEX  15
+
+#define DPH_PHY_RATE_MAX_INDEX  16
+
+
+/// Maximum time to wait for a management packet to go out (ms)
+
+#define DPH_MAX_MGMT_WAIT_TIME  10000
+
+
+/// Step size for the wait time histogram (ms)
+
+#define DPH_WAIT_HIST_STEP 20
+
+
+/// Number of entries in wait time histogram
+
+#define DPH_WAIT_HIST_SIZE  100
+
+
+/// TCID for Management & Keep Alive Mgmt frames
+
+#define DPH_MGMT_TCID                      4
+
+#define DPH_KEEPALIVE_PROBE_RESPONSE_TCID  0
+
+
 /// STAID for Management frames
 
 #define DPH_USE_MGMT_STAID  -1
@@ -71,6 +143,35 @@
 #define DPH_NON_KEEPALIVE_FRAME  0
 
 #define DPH_KEEPALIVE_FRAME      1
+
+
+/// Mask for subtype, type, protocol version, order and wep fields in the mac frame control
+
+#define DPH_FC_BD_FILL_MASK  0xFFCC
+
+
+/// Enable/Disable Txop generation in TFP for HCF mode
+
+#define DPH_ENABLE_HCF_TXOP_GEN_AT_TFP   0x00
+
+#define DPH_DISABLE_HCF_TXOP_GEN_AT_TFP  0x02
+
+
+/// Enable/Disable Txop generation in TFP for EDCF mode
+
+#define DPH_ENABLE_EDCF_TXOP_GEN_AT_TFP   0x00
+
+#define DPH_DISABLE_EDCF_TXOP_GEN_AT_TFP  0x01
+
+
+#define DPH_DUMP_ALL_STA_ID     -1
+
+#define DPH_DUMP_RX_BD           0
+
+#define DPH_DUMP_TX_BD           1
+
+#define DPH_DUMP_TX_MGMT_BD      2
+
 
 //DPH Hash Index for BSS(STA's Peer) on station.
 
@@ -274,6 +375,12 @@ typedef struct sDphHashNode
 
     tANI_U8   staAuthenticated:1;
 
+    /// Whether the peer is ANI or not
+
+    tANI_U8  aniPeer:1;
+
+    tANI_U8   titanPeer:1;                // flag to indicate if its a titan peer
+
     tANI_U8  fAniCount:1;
 
     tANI_U8   rmfEnabled:1;
@@ -294,8 +401,11 @@ typedef struct sDphHashNode
     tANI_U8  timWaitCount;
 
 
-    /* Number of Successful MPDU's being sent */
+    /// Number of Successfull MPDU's being sent
+
     tANI_U32    curTxMpduCnt;
+
+
 
 
     /// number of consecutive TIMs sent without response
@@ -312,6 +422,11 @@ typedef struct sDphHashNode
 
     tSirMacPropVersion version;
 
+    // station proprietary capability
+
+    tANI_U16                propCapability;
+
+
 #ifdef PLM_WDS
 
     tANI_U8  wdsIndex;
@@ -321,11 +436,15 @@ typedef struct sDphHashNode
 #endif
 
 
+   //Taurus capabilities
+
    tANI_U16 baPolicyFlag;                 //BA Policy for each TID.
 
 
     /*
-    * All the legacy supported rates.
+
+    * All the legacy and airgo supported rates.
+
     */
 
     tSirSupportedRates supportedRates;
@@ -412,7 +531,7 @@ typedef struct sDphHashNode
 
     ///////////////////////////////////////////////////////////////////////
 
-    tANI_U8 dpuSig:4;                       /* DPU signature */
+    tANI_U8 dpuSig:4;                       // DPU signiture
 
     tANI_U8 staSig:4;                       // STA signature
 
@@ -463,6 +582,27 @@ typedef struct sDphHashNode
     tCfgTrafficClass tcCfg[STACFG_MAX_TC];
 
 
+    // Block Ack state
+
+    // This is used between PE and HAL only.
+
+    // can be set to one of the values from the following enum
+
+    /*typedef enum eLimBAState
+
+    {
+
+        eLIM_BA_STATE_IDLE, // we are not waiting for anything from HAL.
+
+        eLIM_BA_STATE_WT_ADD_RSP, //We are waiting for Add rsponse from HAL.
+
+        eLIM_BA_STATE_WT_DEL_RSP //  We are waiting for Del response from HAL.
+
+    } tLimBAState; */
+
+
+
+
     //BA state bitmap 2 bits per tid
 
     // BA state for tid i  = (baState >> tid*2) & 0x3
@@ -491,7 +631,6 @@ typedef struct sDphHashNode
     tANI_U32 vht_caps;
 #endif
 
-    /* Timing and fine Timing measurement capability clubbed together */
     tANI_U8 timingMeasCap;
     /* key installed for this STA or not in the firmware */
     tANI_U8 isKeyInstalled;
@@ -516,6 +655,17 @@ typedef struct sDphHashNode
 
 
 // -------------------------------------------------------------------
+
+
+// get protection overrides from config variable
+
+// bit0: force cts to self protection for tx to Airgo peers
+
+// bit1: force cts to self protection for tx to non Airgo peers
+
+#define DPH_PROT_OVERRIDE_NONANI_PEER_GET(cfgval)    ((cfgval) & 1)
+
+#define DPH_PROT_OVERRIDE_ANI_PEER_GET(cfgval) (((cfgval) & 2) >> 1)
 
 
 typedef struct sAniSirDph

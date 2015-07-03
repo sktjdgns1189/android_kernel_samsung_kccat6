@@ -27,7 +27,6 @@
 
 
 #include "ol_if_athvar.h"
-#include "htc_debug.h"
 #include "htc_internal.h"
 #include <adf_nbuf.h>     /* adf_nbuf_t */
 #include <adf_os_types.h> /* adf_os_print */
@@ -146,9 +145,6 @@ static void HTCCleanup(HTC_TARGET *target)
 
     if (target->hif_dev != NULL) {
         HIFDetachHTC(target->hif_dev);
-#ifdef HIF_SDIO
-        HIFMaskInterrupt(target->hif_dev);
-#endif
         target->hif_dev = NULL;
     }
 
@@ -335,35 +331,60 @@ A_STATUS HTCSetupTargetBufferAssignments(HTC_TARGET *target)
     pEntry->CreditAllocation = credits;
 
     if (WLAN_IS_EPPING_ENABLED(vos_get_conparam())) {
-        /* endpoint ping is a testing tool directly on top of HTC in
-         * both target and host sides.
-         * In target side, the endppint ping fw has no wlan stack and the
-         * FW mboxping app directly sits on HTC and it simply drops
-         * or loops back TX packets. For rx perf, FW mboxping app
-         * generates packets and passes packets to HTC to send to host.
-         * There is no WMI mesage exchanges between host and target
-         * in endpoint ping case.
-         * In host side, the endpoint ping driver is a Ethernet driver
-         * and it directly sits on HTC. Only HIF, HTC, VOSS, ADF are
-         * used by the endpoint ping driver. There is no wifi stack
-         * at all in host side also. For tx perf use case,
-         * the user space mboxping app sends the raw packets to endpoint
-         * ping driver and it directly forwards to HTC for transmission
-         * to stress the bus. For the rx perf, HTC passes the received
-         * packets to endpoint ping driver and it is passed to the user
-         * space through the Ethernet interface.
-         * For credit allocation, in SDIO bus case, only BE service is
-         * used for tx/rx perf testing so that all credits are given
-         * to BE service. In PCIe and USB bus case, endpoint ping uses both
-         * BE and BK services to stress the bus so that the total credits
-         * are equally distributed to BE and BK services.
-         */
 #if !defined(HIF_USB)
         pEntry++;
         pEntry->ServiceID = WMI_DATA_BE_SVC;
         pEntry->CreditAllocation = credits;
 #endif
- #if defined(HIF_PCI) || defined(HIF_USB)
+#if defined(HIF_USB)
+        do {
+            pEntry++;
+            pEntry->ServiceID = WMI_DATA_VI_SVC;
+            pEntry->CreditAllocation = credits / 4;
+            if (pEntry->CreditAllocation == 0) {
+                pEntry->CreditAllocation++;
+            }
+            credits -= (int)pEntry->CreditAllocation;
+            if (credits <= 0) {
+                break;
+            }
+            pEntry++;
+            pEntry->ServiceID = WMI_DATA_VO_SVC;
+            pEntry->CreditAllocation = credits / 3;
+            if (pEntry->CreditAllocation == 0) {
+                pEntry->CreditAllocation++;
+            }
+            credits -= (int)pEntry->CreditAllocation;
+            if (credits <= 0) {
+                break;
+            }
+            pEntry++;
+            pEntry->ServiceID = WMI_DATA_BK_SVC;
+            pEntry->CreditAllocation = credits / 2;
+            credits -= (int)pEntry->CreditAllocation;
+            if (credits <= 0) {
+                break;
+            }
+            /*
+             * HTT_DATA_MSG_SVG is unidirectional from target -> host,
+             * so no target buffers are needed.
+             */
+            pEntry++;
+            pEntry->ServiceID = WMI_DATA_BE_SVC;
+            pEntry->CreditAllocation = credits / 2;
+            credits -= (int)pEntry->CreditAllocation;
+            if (credits <= 0) {
+                break;
+            }
+            /* leftovers go to best effort */
+            pEntry++;
+            pEntry->ServiceID = WMI_CONTROL_SVC;
+            pEntry->CreditAllocation = (A_UINT8)credits;
+            status = A_OK;
+        } while (FALSE);
+ #endif
+ #if defined(HIF_PCI)
+        //pEntry++;
         pEntry->ServiceID = WMI_DATA_BE_SVC;
         pEntry->CreditAllocation = (credits >> 1);
 
@@ -539,15 +560,9 @@ A_STATUS HTCWaitTarget(HTC_HANDLE HTCHandle)
 
         target->TotalTransmitCredits = HTC_GET_FIELD(rdy_msg, HTC_READY_MSG, CREDITCOUNT);
         target->TargetCreditSize = (int)HTC_GET_FIELD(rdy_msg, HTC_READY_MSG, CREDITSIZE);
-        target->MaxMsgsPerHTCBundle = (A_UINT8)pReadyMsg->MaxMsgsPerHTCBundle;
-        /* for old fw this value is set to 0. But the minimum value should be 1,
-         * i.e., no bundling */
-        if (target->MaxMsgsPerHTCBundle < 1)
-            target->MaxMsgsPerHTCBundle = 1;
 
-        AR_DEBUG_PRINTF(ATH_DEBUG_INIT,
-            ("Target Ready! : transmit resources : %d size:%d, MaxMsgsPerHTCBundle = %d\n",
-            target->TotalTransmitCredits, target->TargetCreditSize, target->MaxMsgsPerHTCBundle));
+        AR_DEBUG_PRINTF(ATH_DEBUG_INIT, ("Target Ready! : transmit resources : %d size:%d\n",
+                target->TotalTransmitCredits, target->TargetCreditSize));
 
         if ((0 == target->TotalTransmitCredits) || (0 == target->TargetCreditSize)) {
             status = A_ECOMM;
@@ -573,6 +588,11 @@ A_STATUS HTCWaitTarget(HTC_HANDLE HTCHandle)
                                    &resp);
 
     } while (FALSE);
+
+#if defined(HIF_USB)
+    if (WLAN_IS_EPPING_ENABLED(vos_get_conparam()))
+        HIFStart_INPipe(target->hif_dev);
+#endif
 
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("HTCWaitTarget - Exit (%d)\n",status));
     AR_DEBUG_PRINTF(ATH_DEBUG_ANY, ("-HWT\n"));
@@ -645,14 +665,6 @@ A_STATUS HTCStart(HTC_HANDLE HTCHandle)
         } else {
             AR_DEBUG_PRINTF(ATH_DEBUG_INIT, ("HTC using TX credit flow control\n"));
         }
-
-#ifdef HIF_SDIO
-#if ENABLE_BUNDLE_RX
-        if (HTC_ENABLE_BUNDLE(target))
-            pSetupComp->SetupFlags |=
-                HTC_SETUP_COMPLETE_FLAGS_ENABLE_BUNDLE_RECV;
-#endif /* ENABLE_BUNDLE_RX */
-#endif /* HIF_SDIO */
 
         SET_HTC_PACKET_INFO_TX(pSendPacket,
                                NULL,
@@ -839,7 +851,6 @@ void *htc_get_targetdef(HTC_HANDLE htc_handle)
 
 void HTCSetTargetToSleep(void *context)
 {
-#ifdef HIF_PCI
 #if CONFIG_ATH_PCIE_MAX_PERF == 0
 #if CONFIG_ATH_PCIE_AWAKE_WHILE_DRIVER_LOAD
     struct ol_softc *sc = (struct ol_softc *)context;
@@ -847,33 +858,12 @@ void HTCSetTargetToSleep(void *context)
     HIFSetTargetSleep(sc->hif_hdl, true, false);
 #endif
 #endif
-#endif
 }
 
 void HTCCancelDeferredTargetSleep(void *context)
 {
-#ifdef HIF_PCI
 #if CONFIG_ATH_PCIE_MAX_PERF == 0
     struct ol_softc *sc = (struct ol_softc *)context;
     HIFCancelDeferredTargetSleep(sc->hif_hdl);
 #endif
-#endif
 }
-
-#ifdef IPA_UC_OFFLOAD
-void HTCIpaGetCEResource(HTC_HANDLE htc_handle,
-                      a_uint32_t *ce_sr_base_paddr,
-                      a_uint32_t *ce_sr_ring_size,
-                      a_uint32_t *ce_reg_paddr)
-{
-    HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
-
-    if (target->hif_dev != NULL) {
-        HIFIpaGetCEResource(target->hif_dev,
-                            ce_sr_base_paddr,
-                            ce_sr_ring_size,
-                            ce_reg_paddr);
-    }
-}
-#endif /* IPA_UC_OFFLOAD */
-

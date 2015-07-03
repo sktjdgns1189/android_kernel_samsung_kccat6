@@ -45,6 +45,7 @@
 #include <linux/firmware.h>
 #include <wcnss_api.h>
 #include <wlan_hdd_tx_rx.h>
+#include <palTimer.h>
 #include <wniApi.h>
 #include <wlan_nlink_srv.h>
 #include <wlan_btc_svc.h>
@@ -361,8 +362,8 @@ void epping_tx_complete_multiple(void *ctx,
          ASSERT(htc_pkt->ActualLength == adf_nbuf_len(pktSkb));
       }
       EPPING_LOG(VOS_TRACE_LEVEL_INFO,
-         "%s skb=%p data=%p len=0x%x eid=%d ",
-         __func__, pktSkb, htc_pkt->pBuffer,
+         "%s skb=0x%x data=0x%x len=0x%x eid=%d ",
+         __func__, (A_UINT32)pktSkb, (A_UINT32)htc_pkt->pBuffer,
          htc_pkt->ActualLength, eid);
 
       if (A_FAILED(status)) {

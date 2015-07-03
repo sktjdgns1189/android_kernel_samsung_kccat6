@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -45,10 +45,9 @@
 #include "ol_params.h"
 #include <wdi_event_api.h>
 
-#ifdef CONFIG_CNSS
-#include <net/cnss.h>
+#ifdef QCA_WIFI_ISOC
+#include "dmux_dxe_api.h"
 #endif
-
 
 #include "ol_ctrl_addba_api.h"
 typedef void * hif_handle_t;
@@ -67,7 +66,6 @@ typedef enum _ATH_BIN_FILE {
     ATH_PATCH_FILE,
     ATH_BOARD_DATA_FILE,
     ATH_FLASH_FILE,
-    ATH_SETUP_FILE,
 } ATH_BIN_FILE;
 
 typedef enum _ol_target_status  {
@@ -88,19 +86,6 @@ enum ol_ath_tx_ecodes  {
     RX_RCV_MSG_TYPE_TEST
 } ;
 
-#ifdef HIF_SDIO
-#define MAX_FILE_NAME     20
-struct ol_fw_files {
-    char image_file[MAX_FILE_NAME];
-    char board_data[MAX_FILE_NAME];
-    char otp_data[MAX_FILE_NAME];
-    char utf_file[MAX_FILE_NAME];
-    char utf_board_data[MAX_FILE_NAME];
-    char setup_file[MAX_FILE_NAME];
-    char epping_file[MAX_FILE_NAME];
-};
-#endif
-
 #ifndef ATH_CAP_DCS_CWIM
 #define ATH_CAP_DCS_CWIM 0x1
 #define ATH_CAP_DCS_WLANIM 0x2
@@ -112,36 +97,6 @@ struct ol_ath_stats {
     int hif_pipe_no_resrc_count;
     int ce_ring_delta_fail_count;
 };
-
-#ifdef HIF_USB
-/* Magic patterns for FW to report crash information (Rome USB) */
-#define FW_ASSERT_PATTERN       0x0000c600
-#define FW_REG_PATTERN          0x0000d600
-#define FW_REG_END_PATTERN      0x0000e600
-#define FW_RAMDUMP_PATTERN      0x0000f600
-#define FW_RAMDUMP_END_PATTERN  0x0000f601
-#define FW_RAMDUMP_PATTERN_MASK 0xfffffff0
-
-#define FW_REG_DUMP_CNT       60
-
-/* FW RAM segments (Rome USB) */
-enum {
-    FW_RAM_SEG_DRAM,
-    FW_RAM_SEG_IRAM,
-    FW_RAM_SEG_AXI,
-    FW_RAM_SEG_CNT
-};
-
-/* Allocate 384K memory to save each segment of ram dump */
-#define FW_RAMDUMP_SEG_SIZE     393216
-
-/* structure to save RAM dump information */
-struct fw_ramdump {
-    A_UINT32 start_addr;
-    A_UINT32 length;
-    A_UINT8 *mem;
-};
-#endif
 
 struct ol_softc {
     /*
@@ -162,7 +117,6 @@ struct ol_softc {
     struct ol_ath_stats     pkt_stats;
 
     u_int32_t target_type;  /* A_TARGET_TYPE_* */
-    u_int32_t target_fw_version;
     u_int32_t target_version;
     u_int32_t target_revision;
     u_int8_t  crm_version_string[64];  /* store pHalStartRsp->startRspParams.wcnssCrmVersionString */
@@ -193,13 +147,7 @@ struct ol_softc {
 
     /* Handles for Lower Layers : filled in at init time */
     hif_handle_t            hif_hdl;
-#if defined(HIF_PCI)
     struct hif_pci_softc    *hif_sc;
-#elif defined(HIF_USB)
-    struct hif_usb_softc    *hif_sc;
-#else
-    struct ath_hif_sdio_softc    *hif_sc;
-#endif
 
     /* HTC handles */
     void                    *htc_handle;
@@ -228,15 +176,6 @@ struct ol_softc {
 #endif
     bool                    enableuartprint;    /* enable uart/serial prints from target */
     bool                    enablefwlog;        /* enable fwlog */
-    /* enable FW self-recovery for Rome USB */
-    bool                    enableFwSelfRecovery;
-#ifdef HIF_USB
-    /* structure to save FW RAM dump (Rome USB) */
-    struct fw_ramdump       *ramdump[FW_RAM_SEG_CNT];
-    A_UINT8                 ramdump_index;
-    bool                    fw_ram_dumping;
-#endif
-
     bool                    enablesinglebinary; /* Use single binary for FW */
     HAL_REG_CAPABILITIES hal_reg_capabilities;
     struct ol_regdmn *ol_regdmn_handle;
@@ -269,18 +208,9 @@ struct ol_softc {
     bool                    scn_cwmenable;    /*CWM enable/disable state*/
     u_int8_t                max_no_of_peers;
 #ifdef CONFIG_CNSS
-    struct cnss_fw_files fw_files;
-#elif defined(HIF_SDIO)
-    struct ol_fw_files fw_files;
-#endif
-#if defined(CONFIG_CNSS) || defined(HIF_SDIO)
     void __iomem *ramdump_base;
     unsigned long ramdump_address;
     unsigned long ramdump_size;
-#endif
-
-#ifdef WLAN_FEATURE_LPSS
-    bool                    enablelpasssupport;
 #endif
 };
 
@@ -316,6 +246,9 @@ struct ol_ath_vap_net80211 {
 
 struct ol_ath_node_net80211 {
     ol_txrx_peer_handle         an_txrx_handle;    /* ol data path handle */
+#ifdef QCA_WIFI_ISOC
+    ol_ctrl_addba_handle        an_ctrl_addba_handle;
+#endif /* QCA_WIFI_ISOC */
 };
 
 #define OL_ATH_NODE_NET80211(_ni)      ((struct ol_ath_node_net80211 *)(_ni))

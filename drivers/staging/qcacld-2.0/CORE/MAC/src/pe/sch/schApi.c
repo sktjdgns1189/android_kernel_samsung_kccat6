@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -65,6 +65,9 @@
 //                          Static Variables
 //
 //-------------------------------------------------------------------
+static tANI_U8 gSchProbeRspTemplate[SCH_MAX_PROBE_RESP_SIZE];
+static tANI_U8 gSchBeaconFrameBegin[SCH_MAX_BEACON_SIZE];
+static tANI_U8 gSchBeaconFrameEnd[SCH_MAX_BEACON_SIZE];
 
 // --------------------------------------------------------------------
 /**
@@ -182,6 +185,11 @@ schInitGlobals(tpAniSirGlobal pMac)
     pMac->sch.multipleSched = 1;
     pMac->sch.maxPollTimeouts = 20;
     pMac->sch.checkCfbFlagStuck = 0;
+
+    pMac->sch.schObject.gSchProbeRspTemplate = gSchProbeRspTemplate;
+    pMac->sch.schObject.gSchBeaconFrameBegin = gSchBeaconFrameBegin;
+    pMac->sch.schObject.gSchBeaconFrameEnd   = gSchBeaconFrameEnd;
+
 }
 
 // --------------------------------------------------------------------
@@ -287,6 +295,8 @@ tSirRetStatus schSendBeaconReq( tpAniSirGlobal pMac, tANI_U8 *beaconPayload, tAN
   msgQ.reserved = 0;
 
   // Fill in tSendbeaconParams members
+  /* Knock off all pMac global addresses */
+  // limGetBssid( pMac, beaconParams->bssId);
   vos_mem_copy(beaconParams->bssId, psessionEntry->bssId, sizeof(psessionEntry->bssId));
 
   if (eLIM_STA_IN_IBSS_ROLE == psessionEntry->limSystemRole)
@@ -295,13 +305,12 @@ tSirRetStatus schSendBeaconReq( tpAniSirGlobal pMac, tANI_U8 *beaconPayload, tAN
   }
   else
   {
-      beaconParams->timIeOffset = psessionEntry->schBeaconOffsetBegin;
+      beaconParams->timIeOffset = pMac->sch.schObject.gSchBeaconOffsetBegin;
   }
-
-  /* p2pIeOffset should be at-least greater than timIeOffset */
+  /* p2pIeOffset should be atleast greater than timIeOffset */
   if ((pMac->sch.schObject.p2pIeOffset != 0) &&
           (pMac->sch.schObject.p2pIeOffset <
-           psessionEntry->schBeaconOffsetBegin))
+           pMac->sch.schObject.gSchBeaconOffsetBegin))
   {
       schLog(pMac, LOGE,FL("Invalid p2pIeOffset:[%d]"),
               pMac->sch.schObject.p2pIeOffset);
@@ -349,6 +358,7 @@ tSirRetStatus schSendBeaconReq( tpAniSirGlobal pMac, tANI_U8 *beaconPayload, tAN
         FL("Successfully posted WDA_SEND_BEACON_REQ to HAL"));
 
     if( (psessionEntry->limSystemRole == eLIM_AP_ROLE )
+        && (psessionEntry->proxyProbeRspEn)
         && (pMac->sch.schObject.fBeaconChanged))
     {
         if(eSIR_SUCCESS != (retCode = limSendProbeRspTemplateToHal(pMac,psessionEntry,
@@ -363,67 +373,19 @@ tSirRetStatus schSendBeaconReq( tpAniSirGlobal pMac, tANI_U8 *beaconPayload, tAN
   return retCode;
 }
 
-tANI_U32 limRemoveP2pIeFromAddIe(tpAniSirGlobal pMac,
-                                 tpPESession psessionEntry,
-                                 tANI_U8 *addIeWoP2pIe,
-                                 tANI_U32 *addnIELenWoP2pIe)
-{
-    tANI_U32 left = psessionEntry->addIeParams.probeRespDataLen;
-    v_U8_t *ptr = psessionEntry->addIeParams.probeRespData_buff;
-    v_U8_t elem_id,elem_len;
-    tANI_U32 offset=0;
-    v_U8_t eid = 0xDD;
-
-    vos_mem_copy(addIeWoP2pIe, ptr, left);
-    *addnIELenWoP2pIe = left;
-
-    if (addIeWoP2pIe != NULL)
-    {
-        while (left >= 2)
-        {
-            elem_id  = ptr[0];
-            elem_len = ptr[1];
-            left -= 2;
-            if(elem_len > left)
-            {
-                schLog(pMac, LOGE, FL("Invalid IEs"));
-                return eSIR_FAILURE;
-            }
-            if ((elem_id == eid) &&
-                (vos_mem_compare( &ptr[2], "\x50\x6f\x9a\x09", 4)==VOS_TRUE))
-            {
-                left -= elem_len;
-                ptr += (elem_len + 2);
-                vos_mem_copy(&addIeWoP2pIe[offset], ptr, left);
-                *addnIELenWoP2pIe -= (2 + elem_len);
-            }
-            else
-            {
-                left -= elem_len;
-                ptr += (elem_len + 2);
-                offset += 2 + elem_len;
-            }
-        }
-    }
-    return eSIR_SUCCESS;
-}
-
 tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal pMac,tpPESession psessionEntry
                                   ,tANI_U32* IeBitmap)
 {
     tSirMsgQ  msgQ;
-    tANI_U8 *pFrame2Hal = psessionEntry->pSchProbeRspTemplate;
+    tANI_U8 *pFrame2Hal = pMac->sch.schObject.gSchProbeRspTemplate;
     tpSendProbeRespParams pprobeRespParams=NULL;
     tANI_U32  retCode = eSIR_FAILURE;
     tANI_U32             nPayload,nBytes,nStatus;
     tpSirMacMgmtHdr      pMacHdr;
-    tANI_U32             addnIEPresent = VOS_FALSE;
+    tANI_U32             addnIEPresent;
     tANI_U32             addnIELen=0;
     tSirRetStatus        nSirStatus;
     tANI_U8              *addIE = NULL;
-    tANI_U8              *addIeWoP2pIe = NULL;
-    tANI_U32             addnIELenWoP2pIe = 0;
-    tANI_U32             retStatus;
 
     nStatus = dot11fGetPackedProbeResponseSize( pMac, &psessionEntry->probeRespFrame, &nPayload );
     if ( DOT11F_FAILED( nStatus ) )
@@ -444,53 +406,47 @@ tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal pMac,tpPESession psessionEn
     nBytes = nPayload + sizeof( tSirMacMgmtHdr );
 
     //Check if probe response IE is present or not
-    addnIEPresent = (psessionEntry->addIeParams.probeRespDataLen != 0);
+    if (wlan_cfgGetInt(pMac, WNI_CFG_PROBE_RSP_ADDNIE_FLAG, &addnIEPresent) != eSIR_SUCCESS)
+    {
+        schLog(pMac, LOGE, FL("Unable to get WNI_CFG_PROBE_RSP_ADDNIE_FLAG"));
+        return retCode;
+    }
+
     if (addnIEPresent)
     {
-        /*
-         * probe response template should not have P2P IE.
-         * In case probe request has P2P IE or WPS IE, the
-         * probe request will be forwarded to the Host and
-         * Host will send the probe response. In other cases
-         * FW will send the probe response. So, if the template
-         * has P2P IE, the probe response sent to non P2P devices
-         * by the FW, may also have P2P IE which will fail
-         * P2P cert case 6.1.3
-         */
-        addIeWoP2pIe = vos_mem_malloc(psessionEntry->addIeParams.probeRespDataLen);
-        if ( NULL == addIeWoP2pIe )
-        {
-            schLog(pMac, LOGE, FL("FAILED to alloc memory when removing P2P IE"));
-            return eSIR_FAILURE;
-        }
-
-        retStatus = limRemoveP2pIeFromAddIe(pMac, psessionEntry,
-                                            addIeWoP2pIe, &addnIELenWoP2pIe);
-        if (retStatus != eSIR_SUCCESS)
-        {
-            vos_mem_free(addIeWoP2pIe);
-            return eSIR_FAILURE;
-        }
-
         //Probe rsp IE available
-        /*need to check the data length*/
-        addIE = vos_mem_malloc(addnIELenWoP2pIe);
-
+        addIE = vos_mem_malloc(WNI_CFG_PROBE_RSP_ADDNIE_DATA1_LEN);
         if ( NULL == addIE )
         {
              schLog(pMac, LOGE,
                  FL("Unable to get WNI_CFG_PROBE_RSP_ADDNIE_DATA1 length"));
-             vos_mem_free(addIeWoP2pIe);
              return retCode;
         }
-        addnIELen = addnIELenWoP2pIe;
+
+        if (wlan_cfgGetStrLen(pMac, WNI_CFG_PROBE_RSP_ADDNIE_DATA1,
+                                               &addnIELen) != eSIR_SUCCESS)
+        {
+            schLog(pMac, LOGE,
+                FL("Unable to get WNI_CFG_PROBE_RSP_ADDNIE_DATA1 length"));
+
+            vos_mem_free(addIE);
+            return retCode;
+        }
 
         if (addnIELen <= WNI_CFG_PROBE_RSP_ADDNIE_DATA1_LEN && addnIELen &&
                                  (nBytes + addnIELen) <= SIR_MAX_PACKET_SIZE)
         {
-            vos_mem_copy(addIE, addIeWoP2pIe, addnIELenWoP2pIe);
+            if ( eSIR_SUCCESS != wlan_cfgGetStr(pMac,
+                                    WNI_CFG_PROBE_RSP_ADDNIE_DATA1, &addIE[0],
+                                    &addnIELen) )
+            {
+               schLog(pMac, LOGE,
+                   FL("Unable to get WNI_CFG_PROBE_RSP_ADDNIE_DATA1 String"));
+
+                vos_mem_free(addIE);
+               return retCode;
+            }
         }
-        vos_mem_free(addIeWoP2pIe);
     }
 
     if (addnIEPresent)
@@ -556,11 +512,17 @@ tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal pMac,tpPESession psessionEn
     }
     else
     {
+        /*
+        PELOGE(sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOGE,
+                            pFrame2Hal,
+                            nBytes);)
+        */
+
         sirCopyMacAddr( pprobeRespParams->bssId, psessionEntry->bssId);
         pprobeRespParams->pProbeRespTemplate   = pFrame2Hal;
         pprobeRespParams->probeRespTemplateLen = nBytes;
         vos_mem_copy(pprobeRespParams->ucProxyProbeReqValidIEBmap,IeBitmap,(sizeof(tANI_U32) * 8));
-        msgQ.type     = WDA_SEND_PROBE_RSP_TMPL;
+        msgQ.type     = WDA_UPDATE_PROBE_RSP_TEMPLATE_IND;
         msgQ.reserved = 0;
         msgQ.bodyptr  = pprobeRespParams;
         msgQ.bodyval  = 0;

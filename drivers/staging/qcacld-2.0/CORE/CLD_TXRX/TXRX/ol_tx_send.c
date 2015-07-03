@@ -114,18 +114,14 @@
 do {                                                                              \
     struct ol_txrx_vdev_t *vdev;                                                  \
     TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {                       \
-        if (adf_os_atomic_read(&vdev->os_q_paused) &&                            \
-                          (vdev->tx_fl_hwm != 0)) {                               \
+        if (adf_os_atomic_read(&vdev->os_q_paused)) {                             \
             adf_os_spin_lock(&pdev->tx_mutex);                                    \
             if (pdev->tx_desc.num_free > vdev->tx_fl_hwm) {                       \
-               adf_os_atomic_set(&vdev->os_q_paused, 0);                          \
-               adf_os_spin_unlock(&pdev->tx_mutex);                               \
                vdev->osif_flow_control_cb(vdev->osif_dev,                         \
                                           vdev->vdev_id, A_TRUE);                 \
+               adf_os_atomic_set(&vdev->os_q_paused, 0);                          \
             }                                                                     \
-            else {                                                                \
-               adf_os_spin_unlock(&pdev->tx_mutex);                               \
-            }                                                                     \
+            adf_os_spin_unlock(&pdev->tx_mutex);                                  \
         }                                                                         \
     }                                                                             \
 } while(0)
@@ -326,14 +322,7 @@ ol_tx_download_done_hl_free(
 
     tx_desc = ol_tx_desc_find(pdev, msdu_id);
     adf_os_assert(tx_desc);
-
-    ol_tx_download_done_base(pdev, status, msdu, msdu_id);
-
-    if ((tx_desc->pkt_type != ol_tx_frm_no_free) &&
-        (tx_desc->pkt_type < OL_TXRX_MGMT_TYPE_BASE)) {
-        adf_os_atomic_add(1, &pdev->tx_queue.rsrc_cnt);
-        ol_tx_desc_frame_free_nonstd(pdev, tx_desc, status != A_OK);
-    }
+    ol_tx_desc_frame_free_nonstd(pdev, tx_desc, status != A_OK);
 #if 0 /* TODO: Advanced feature */
     //ol_tx_dwl_sched(pdev, OL_TX_HL_SCHED_DOWNLOAD_DONE);
 adf_os_assert(0);
@@ -473,17 +462,6 @@ ol_tx_discard_target_frms(ol_txrx_pdev_handle pdev)
                 pdev, &pdev->tx_desc.array[i].tx_desc, 1);
         }
     }
-}
-
-void
-ol_tx_credit_completion_handler(ol_txrx_pdev_handle pdev, int credits)
-{
-    ol_tx_target_credit_update(pdev, credits);
-    if (pdev->cfg.is_high_latency) {
-        ol_tx_sched(pdev);
-    }
-    /* UNPAUSE OS Q */
-    OL_TX_FLOW_CT_UNPAUSE_OS_Q(pdev);
 }
 
 /* WARNING: ol_tx_inspect_handler()'s bahavior is similar to that of ol_tx_completion_handler().
@@ -916,15 +894,13 @@ ol_tx_delay_compute(
      */
 
     cat = ol_tx_delay_category(pdev, desc_ids[0]);
-    if (cat < 0 || cat >= QCA_TX_DELAY_NUM_CATEGORIES)
+    if (cat == -1)
         return;
 
     pdev->packet_count[cat] = pdev->packet_count[cat] + num_msdus;
     if (status != htt_tx_status_ok) {
         for (i = 0; i < num_msdus; i++) {
             cat = ol_tx_delay_category(pdev, desc_ids[i]);
-            if (cat < 0 || cat >= QCA_TX_DELAY_NUM_CATEGORIES)
-                return;
             pdev->packet_loss_count[cat]++;
         }
         return;

@@ -53,9 +53,6 @@
 #endif //FEATURE_WLAN_DIAG_SUPPORT
 #include "limIbssPeerMgmt.h"
 #include "limSessionUtils.h"
-#ifdef WLAN_FEATURE_VOWIFI_11R
-#include "limFTDefs.h"
-#endif
 #include "limSession.h"
 #include "vos_nvitem.h"
 
@@ -70,30 +67,8 @@
  * this information. */
 static tAniBool glimTriggerBackgroundScanDuringQuietBss_Status = eSIR_TRUE;
 
-/* 11A Channel list to decode RX BD channel information */
-static const tANI_U8 abChannel[]= {36,40,44,48,52,56,60,64,100,104,108,112,116,
-            120,124,128,132,136,140,149,153,157,161,165
-#ifdef FEATURE_WLAN_CH144
-                ,144
-#endif
-};
-#define abChannelSize (sizeof(abChannel)/  \
-        sizeof(abChannel[0]))
-
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-static const tANI_U8 aUnsortedChannelList[]= {52,56,60,64,100,104,108,112,116,
-            120,124,128,132,136,140,36,40,44,48,149,153,157,161,165
-#ifdef FEATURE_WLAN_CH144
-                ,144
-#endif
-};
-#define aUnsortedChannelListSize (sizeof(aUnsortedChannelList)/  \
-        sizeof(aUnsortedChannelList[0]))
-#endif
-
-#define SUCCESS 1
-
-#define MAX_BA_WINDOW_SIZE_FOR_CISCO 25
+//#define LIM_MAX_ACTIVE_SESSIONS 3  //defined temporarily for BT-AMP SUPPORT
+#define SUCCESS 1                   //defined temporarily for BT-AMP
 
 /** -------------------------------------------------------------
 \fn limAssignDialogueToken
@@ -168,7 +143,6 @@ limSearchAndDeleteDialogueToken(tpAniSirGlobal pMac, tANI_U8 token, tANI_U16 ass
         if(NULL == pMac->lim.pDialogueTokenHead)
             pMac->lim.pDialogueTokenTail = NULL;
         vos_mem_free(pCurrNode);
-        pMac->lim.pDialogueTokenHead = NULL;
         return eSIR_SUCCESS;
     }
 
@@ -194,7 +168,6 @@ limSearchAndDeleteDialogueToken(tpAniSirGlobal pMac, tANI_U8 token, tANI_U16 ass
         if(NULL == pCurrNode->next)
               pMac->lim.pDialogueTokenTail = pPrevNode;
         vos_mem_free(pCurrNode);
-        pMac->lim.pDialogueTokenHead = NULL;
         return eSIR_SUCCESS;
     }
 
@@ -252,64 +225,6 @@ limGetBssidFromBD(tpAniSirGlobal pMac, tANI_U8 * pRxPacketInfo, tANI_U8 *bssId, 
         *pIgnore = 1;
     }
 }
-
-
-char *
-limDot11ReasonStr(tANI_U16 reasonCode)
-{
-    switch (reasonCode)
-    {
-        case 0: return " ";
-        CASE_RETURN_STRING(eSIR_MAC_UNSPEC_FAILURE_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_PREV_AUTH_NOT_VALID_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_DEAUTH_LEAVING_BSS_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_DISASSOC_DUE_TO_INACTIVITY_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_DISASSOC_DUE_TO_DISABILITY_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_CLASS2_FRAME_FROM_NON_AUTH_STA_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_CLASS3_FRAME_FROM_NON_ASSOC_STA_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_DISASSOC_LEAVING_BSS_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_STA_NOT_PRE_AUTHENTICATED_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_PWR_CAPABILITY_BAD_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_SPRTD_CHANNELS_BAD_REASON);
-
-        CASE_RETURN_STRING(eSIR_MAC_INVALID_IE_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_MIC_FAILURE_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_4WAY_HANDSHAKE_TIMEOUT_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_GR_KEY_UPDATE_TIMEOUT_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_RSN_IE_MISMATCH_REASON);
-
-        CASE_RETURN_STRING(eSIR_MAC_INVALID_MC_CIPHER_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_INVALID_UC_CIPHER_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_INVALID_AKMP_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_UNSUPPORTED_RSN_IE_VER_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_INVALID_RSN_CAPABILITIES_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_1X_AUTH_FAILURE_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_CIPHER_SUITE_REJECTED_REASON);
-#ifdef FEATURE_WLAN_TDLS
-        CASE_RETURN_STRING(eSIR_MAC_TDLS_TEARDOWN_PEER_UNREACHABLE);
-        CASE_RETURN_STRING(eSIR_MAC_TDLS_TEARDOWN_UNSPEC_REASON);
-#endif
-        /* Reserved   27 - 30*/
-#ifdef WLAN_FEATURE_11W
-        CASE_RETURN_STRING(eSIR_MAC_ROBUST_MGMT_FRAMES_POLICY_VIOLATION);
-#endif
-        CASE_RETURN_STRING(eSIR_MAC_QOS_UNSPECIFIED_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_QAP_NO_BANDWIDTH_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_XS_UNACKED_FRAMES_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_BAD_TXOP_USE_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_PEER_STA_REQ_LEAVING_BSS_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_PEER_REJECT_MECHANISIM_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_MECHANISM_NOT_SETUP_REASON);
-
-        CASE_RETURN_STRING(eSIR_MAC_PEER_TIMEDOUT_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_CIPHER_NOT_SUPPORTED_REASON);
-        CASE_RETURN_STRING(eSIR_MAC_DISASSOC_DUE_TO_FTHANDOFF_REASON);
-        /* Reserved 47 - 65535 */
-        default:
-            return "Unknown";
-    }
-}
-
 
 char *
 limMlmStateStr(tLimMlmStates state)
@@ -383,6 +298,121 @@ limPrintMlmState(tpAniSirGlobal pMac, tANI_U16 logLevel, tLimMlmStates state)
     limLog(pMac, logLevel, limMlmStateStr(state));
 }
 
+char *
+limSmeStateStr(tLimSmeStates state)
+{
+#ifdef FIXME_GEN6
+    switch (state)
+    {
+        case eLIM_SME_OFFLINE_STATE:
+            return "eLIM_SME_OFFLINE_STATE";
+        case eLIM_SME_IDLE_STATE:
+            return "eLIM_SME_IDLE_STATE";
+        case eLIM_SME_SUSPEND_STATE:
+            return "eLIM_SME_SUSPEND_STATE";
+        case eLIM_SME_WT_SCAN_STATE:
+            return "eLIM_SME_WT_SCAN_STATE";
+        case eLIM_SME_WT_JOIN_STATE:
+            return "eLIM_SME_WT_JOIN_STATE";
+        case eLIM_SME_WT_AUTH_STATE:
+            return "eLIM_SME_WT_AUTH_STATE";
+        case eLIM_SME_WT_ASSOC_STATE:
+            return "eLIM_SME_WT_ASSOC_STATE";
+        case eLIM_SME_WT_REASSOC_STATE:
+            return "eLIM_SME_WT_REASSOC_STATE";
+        case eLIM_SME_WT_REASSOC_LINK_FAIL_STATE:
+            return "eLIM_SME_WT_REASSOC_LINK_FAIL_STATE";
+        case eLIM_SME_JOIN_FAILURE_STATE:
+            return "eLIM_SME_JOIN_FAILURE_STATE";
+        case eLIM_SME_ASSOCIATED_STATE:
+            return "eLIM_SME_ASSOCIATED_STATE";
+        case eLIM_SME_REASSOCIATED_STATE:
+            return "eLIM_SME_REASSOCIATED_STATE";
+        case eLIM_SME_LINK_EST_STATE:
+            return "eLIM_SME_LINK_EST_STATE";
+        case eLIM_SME_LINK_EST_WT_SCAN_STATE:
+            return "eLIM_SME_LINK_EST_WT_SCAN_STATE";
+        case eLIM_SME_WT_PRE_AUTH_STATE:
+            return "eLIM_SME_WT_PRE_AUTH_STATE";
+        case eLIM_SME_WT_DISASSOC_STATE:
+            return "eLIM_SME_WT_DISASSOC_STATE";
+        case eLIM_SME_WT_DEAUTH_STATE:
+            return "eLIM_SME_WT_DEAUTH_STATE";
+        case eLIM_SME_WT_START_BSS_STATE:
+            return "eLIM_SME_WT_START_BSS_STATE";
+        case eLIM_SME_WT_STOP_BSS_STATE:
+            return "eLIM_SME_WT_STOP_BSS_STATE";
+        case eLIM_SME_NORMAL_STATE:
+            return "eLIM_SME_NORMAL_STATE";
+        case eLIM_SME_CHANNEL_SCAN_STATE:
+            return "eLIM_SME_CHANNEL_SCAN_STATE";
+        case eLIM_SME_NORMAL_CHANNEL_SCAN_STATE:
+            return "eLIM_SME_NORMAL_CHANNEL_SCAN_STATE";
+        default:
+            return "INVALID SME state";
+    }
+#endif
+return "";
+}
+
+
+char* limDot11ModeStr(tpAniSirGlobal pMac, tANI_U8 dot11Mode)
+{
+#ifdef FIXME_GEN6
+
+    switch(dot11Mode)
+        {
+            case WNI_CFG_DOT11_MODE_ALL:
+                return "ALL";
+            case WNI_CFG_DOT11_MODE_11A:
+                return "11A";
+            case WNI_CFG_DOT11_MODE_11B:
+                return "11B";
+            case WNI_CFG_DOT11_MODE_11G:
+                return "11G";
+            case WNI_CFG_DOT11_MODE_11N:
+                return "11N";
+            case WNI_CFG_DOT11_MODE_POLARIS:
+                return "Polaris";
+            case WNI_CFG_DOT11_MODE_TITAN:
+                return "Titan";
+            case WNI_CFG_DOT11_MODE_TAURUS:
+                return "Taurus";
+            default:
+                return "Invalid Dot11 Mode";
+        }
+#endif
+return "";
+}
+
+
+char* limStaOpRateModeStr(tStaRateMode opRateMode)
+{
+#ifdef FIXME_GEN6
+
+    switch(opRateMode)
+        {
+            case eSTA_TAURUS:
+                return "Taurus";
+            case eSTA_11a:
+                return "11A";
+            case eSTA_11b:
+                return "11B";
+            case eSTA_11bg:
+                return "11G";
+            case eSTA_11n:
+                return "11N";
+            case eSTA_POLARIS:
+                return "Polaris";
+            case eSTA_TITAN:
+                return "Titan";
+            default:
+                return "Invalid Dot11 Mode";
+        }
+#endif
+return "";
+}
+
 char* limBssTypeStr(tSirBssType bssType)
 {
     switch(bssType)
@@ -401,6 +431,263 @@ char* limBssTypeStr(tSirBssType bssType)
             return "Invalid BSS Type";
     }
 }
+
+void
+limPrintSmeState(tpAniSirGlobal pMac, tANI_U16 logLevel, tLimSmeStates state)
+{
+    limLog(pMac, logLevel, limSmeStateStr(state));
+}
+
+char *limMsgStr(tANI_U32 msgType)
+{
+#ifdef FIXME_GEN6
+    switch (msgType)
+    {
+        case eWNI_SME_START_REQ:
+            return "eWNI_SME_START_REQ";
+        case eWNI_SME_START_RSP:
+            return "eWNI_SME_START_RSP";
+        case eWNI_SME_SYS_READY_IND:
+            return "eWNI_SME_SYS_READY_IND";
+        case eWNI_SME_SCAN_REQ:
+            return "eWNI_SME_SCAN_REQ";
+#ifdef FEATURE_OEM_DATA_SUPPORT
+        case eWNI_SME_OEM_DATA_REQ:
+            return "eWNI_SME_OEM_DATA_REQ";
+        case eWNI_SME_OEM_DATA_RSP:
+            return "eWNI_SME_OEM_DATA_RSP";
+#endif
+        case eWNI_SME_SCAN_RSP:
+            return "eWNI_SME_SCAN_RSP";
+        case eWNI_SME_JOIN_REQ:
+            return "eWNI_SME_JOIN_REQ";
+        case eWNI_SME_JOIN_RSP:
+            return "eWNI_SME_JOIN_RSP";
+        case eWNI_SME_SETCONTEXT_REQ:
+            return "eWNI_SME_SETCONTEXT_REQ";
+        case eWNI_SME_SETCONTEXT_RSP:
+            return "eWNI_SME_SETCONTEXT_RSP";
+        case eWNI_SME_REASSOC_REQ:
+            return "eWNI_SME_REASSOC_REQ";
+        case eWNI_SME_REASSOC_RSP:
+            return "eWNI_SME_REASSOC_RSP";
+        case eWNI_SME_AUTH_REQ:
+            return "eWNI_SME_AUTH_REQ";
+        case eWNI_SME_AUTH_RSP:
+            return "eWNI_SME_AUTH_RSP";
+        case eWNI_SME_DISASSOC_REQ:
+            return "eWNI_SME_DISASSOC_REQ";
+        case eWNI_SME_DISASSOC_RSP:
+            return "eWNI_SME_DISASSOC_RSP";
+        case eWNI_SME_DISASSOC_IND:
+            return "eWNI_SME_DISASSOC_IND";
+        case eWNI_SME_DISASSOC_CNF:
+            return "eWNI_SME_DISASSOC_CNF";
+        case eWNI_SME_DEAUTH_REQ:
+            return "eWNI_SME_DEAUTH_REQ";
+        case eWNI_SME_DEAUTH_RSP:
+            return "eWNI_SME_DEAUTH_RSP";
+        case eWNI_SME_DEAUTH_IND:
+            return "eWNI_SME_DEAUTH_IND";
+        case eWNI_SME_WM_STATUS_CHANGE_NTF:
+            return "eWNI_SME_WM_STATUS_CHANGE_NTF";
+        case eWNI_SME_START_BSS_REQ:
+            return "eWNI_SME_START_BSS_REQ";
+        case eWNI_SME_START_BSS_RSP:
+            return "eWNI_SME_START_BSS_RSP";
+        case eWNI_SME_AUTH_IND:
+            return "eWNI_SME_AUTH_IND";
+        case eWNI_SME_ASSOC_IND:
+            return "eWNI_SME_ASSOC_IND";
+        case eWNI_SME_ASSOC_CNF:
+            return "eWNI_SME_ASSOC_CNF";
+        case eWNI_SME_REASSOC_IND:
+            return "eWNI_SME_REASSOC_IND";
+        case eWNI_SME_REASSOC_CNF:
+            return "eWNI_SME_REASSOC_CNF";
+        case eWNI_SME_SWITCH_CHL_REQ:
+            return "eWNI_SME_SWITCH_CHL_REQ";
+        case eWNI_SME_SWITCH_CHL_RSP:
+            return "eWNI_SME_SWITCH_CHL_RSP";
+        case eWNI_SME_SWITCH_CHL_CB_PRIMARY_REQ:
+            return "eWNI_SME_SWITCH_CHL_CB_PRIMARY_REQ";
+        case eWNI_SME_SWITCH_CHL_CB_SECONDARY_REQ:
+            return "eWNI_SME_SWITCH_CHL_CB_SECONDARY_REQ";
+        case eWNI_SME_STOP_BSS_REQ:
+            return "eWNI_SME_STOP_BSS_REQ";
+        case eWNI_SME_STOP_BSS_RSP:
+            return "eWNI_SME_STOP_BSS_RSP";
+        case eWNI_SME_PROMISCUOUS_MODE_REQ:
+            return "eWNI_SME_PROMISCUOUS_MODE_REQ";
+        case eWNI_SME_PROMISCUOUS_MODE_RSP:
+            return "eWNI_SME_PROMISCUOUS_MODE_RSP";
+        case eWNI_SME_NEIGHBOR_BSS_IND:
+            return "eWNI_SME_NEIGHBOR_BSS_IND";
+        case eWNI_SME_MEASUREMENT_REQ:
+            return "eWNI_SME_MEASUREMENT_REQ";
+        case eWNI_SME_MEASUREMENT_RSP:
+            return "eWNI_SME_MEASUREMENT_RSP";
+        case eWNI_SME_MEASUREMENT_IND:
+            return "eWNI_SME_MEASUREMENT_IND";
+        case eWNI_SME_SET_WDS_INFO_REQ:
+            return "eWNI_SME_SET_WDS_INFO_REQ";
+        case eWNI_SME_SET_WDS_INFO_RSP:
+            return "eWNI_SME_SET_WDS_INFO_RSP";
+        case eWNI_SME_WDS_INFO_IND:
+            return "eWNI_SME_WDS_INFO_IND";
+        case eWNI_SME_DEAUTH_CNF:
+            return "eWNI_SME_DEAUTH_CNF";
+        case eWNI_SME_MIC_FAILURE_IND:
+            return "eWNI_SME_MIC_FAILURE_IND";
+        case eWNI_SME_ADDTS_REQ:
+            return "eWNI_SME_ADDTS_REQ";
+        case eWNI_SME_ADDTS_RSP:
+            return "eWNI_SME_ADDTS_RSP";
+        case eWNI_SME_ADDTS_CNF:
+            return "eWNI_SME_ADDTS_CNF";
+        case eWNI_SME_ADDTS_IND:
+            return "eWNI_SME_ADDTS_IND";
+        case eWNI_SME_DELTS_REQ:
+            return "eWNI_SME_DELTS_REQ";
+        case eWNI_SME_DELTS_RSP:
+            return "eWNI_SME_DELTS_RSP";
+        case eWNI_SME_DELTS_IND:
+            return "eWNI_SME_DELTS_IND";
+#if defined WLAN_FEATURE_VOWIFI_11R || defined FEATURE_WLAN_ESE || defined(FEATURE_WLAN_LFR)
+        case eWNI_SME_GET_ROAM_RSSI_REQ:
+            return "eWNI_SME_GET_ROAM_RSSI_REQ";
+        case eWNI_SME_GET_ROAM_RSSI_RSP:
+            return "eWNI_SME_GET_ROAM_RSSI_RSP";
+#endif
+
+        case WDA_SUSPEND_ACTIVITY_RSP:
+            return "WDA_SUSPEND_ACTIVITY_RSP";
+        case SIR_LIM_RETRY_INTERRUPT_MSG:
+            return "SIR_LIM_RETRY_INTERRUPT_MSG";
+        case SIR_BB_XPORT_MGMT_MSG:
+            return "SIR_BB_XPORT_MGMT_MSG";
+        case SIR_LIM_INV_KEY_INTERRUPT_MSG:
+            return "SIR_LIM_INV_KEY_INTERRUPT_MSG";
+        case SIR_LIM_KEY_ID_INTERRUPT_MSG:
+            return "SIR_LIM_KEY_ID_INTERRUPT_MSG";
+        case SIR_LIM_REPLAY_THRES_INTERRUPT_MSG:
+            return "SIR_LIM_REPLAY_THRES_INTERRUPT_MSG";
+        case SIR_LIM_MIN_CHANNEL_TIMEOUT:
+            return "SIR_LIM_MIN_CHANNEL_TIMEOUT";
+        case SIR_LIM_MAX_CHANNEL_TIMEOUT:
+            return "SIR_LIM_MAX_CHANNEL_TIMEOUT";
+        case SIR_LIM_JOIN_FAIL_TIMEOUT:
+            return "SIR_LIM_JOIN_FAIL_TIMEOUT";
+        case SIR_LIM_AUTH_FAIL_TIMEOUT:
+            return "SIR_LIM_AUTH_FAIL_TIMEOUT";
+        case SIR_LIM_AUTH_RSP_TIMEOUT:
+            return "SIR_LIM_AUTH_RSP_TIMEOUT";
+        case SIR_LIM_ASSOC_FAIL_TIMEOUT:
+            return "SIR_LIM_ASSOC_FAIL_TIMEOUT";
+        case SIR_LIM_REASSOC_FAIL_TIMEOUT:
+            return "SIR_LIM_REASSOC_FAIL_TIMEOUT";
+        case SIR_LIM_HEART_BEAT_TIMEOUT:
+            return "SIR_LIM_HEART_BEAT_TIMEOUT";
+        case SIR_LIM_ADDTS_RSP_TIMEOUT:
+            return "SIR_LIM_ADDTS_RSP_TIMEOUT";
+        case SIR_LIM_CHANNEL_SCAN_TIMEOUT:
+            return "SIR_LIM_CHANNEL_SCAN_TIMEOUT";
+        case SIR_LIM_LINK_TEST_DURATION_TIMEOUT:
+            return "SIR_LIM_LINK_TEST_DURATION_TIMEOUT";
+        case SIR_LIM_HASH_MISS_THRES_TIMEOUT:
+            return "SIR_LIM_HASH_MISS_THRES_TIMEOUT";
+        case SIR_LIM_KEEPALIVE_TIMEOUT:
+            return "SIR_LIM_KEEPALIVE_TIMEOUT";
+        case SIR_LIM_UPDATE_OLBC_CACHEL_TIMEOUT:
+            return "SIR_LIM_UPDATE_OLBC_CACHEL_TIMEOUT";
+        case SIR_LIM_CNF_WAIT_TIMEOUT:
+            return "SIR_LIM_CNF_WAIT_TIMEOUT";
+        case SIR_LIM_RADAR_DETECT_IND:
+            return "SIR_LIM_RADAR_DETECT_IND";
+#ifdef WLAN_FEATURE_VOWIFI_11R
+        case SIR_LIM_FT_PREAUTH_RSP_TIMEOUT:
+            return "SIR_LIM_FT_PREAUTH_RSP_TIMEOUT";
+#endif
+
+        case SIR_HAL_APP_SETUP_NTF:
+            return "SIR_HAL_APP_SETUP_NTF";
+        case SIR_HAL_INITIAL_CAL_FAILED_NTF:
+            return "SIR_HAL_INITIAL_CAL_FAILED_NTF";
+        case SIR_HAL_NIC_OPER_NTF:
+            return "SIR_HAL_NIC_OPER_NTF";
+        case SIR_HAL_INIT_START_REQ:
+            return "SIR_HAL_INIT_START_REQ";
+        case SIR_HAL_SHUTDOWN_REQ:
+            return "SIR_HAL_SHUTDOWN_REQ";
+        case SIR_HAL_SHUTDOWN_CNF:
+            return "SIR_HAL_SHUTDOWN_CNF";
+        case SIR_HAL_RESET_REQ:
+            return "SIR_HAL_RESET_REQ";
+        case SIR_HAL_RESET_CNF:
+            return "SIR_HAL_RESET_CNF";
+        case SIR_WRITE_TO_TD:
+            return "SIR_WRITE_TO_TD";
+
+        case WNI_CFG_PARAM_UPDATE_IND:
+            return "WNI_CFG_PARAM_UPDATE_IND";
+        case WNI_CFG_DNLD_REQ:
+            return "WNI_CFG_DNLD_REQ";
+        case WNI_CFG_DNLD_CNF:
+            return "WNI_CFG_DNLD_CNF";
+        case WNI_CFG_GET_RSP:
+            return "WNI_CFG_GET_RSP";
+        case WNI_CFG_SET_CNF:
+            return "WNI_CFG_SET_CNF";
+        case WNI_CFG_GET_ATTRIB_RSP:
+            return "WNI_CFG_GET_ATTRIB_RSP";
+        case WNI_CFG_ADD_GRP_ADDR_CNF:
+            return "WNI_CFG_ADD_GRP_ADDR_CNF";
+        case WNI_CFG_DEL_GRP_ADDR_CNF:
+            return "WNI_CFG_DEL_GRP_ADDR_CNF";
+        case ANI_CFG_GET_RADIO_STAT_RSP:
+            return "ANI_CFG_GET_RADIO_STAT_RSP";
+        case ANI_CFG_GET_PER_STA_STAT_RSP:
+            return "ANI_CFG_GET_PER_STA_STAT_RSP";
+        case ANI_CFG_GET_AGG_STA_STAT_RSP:
+            return "ANI_CFG_GET_AGG_STA_STAT_RSP";
+        case ANI_CFG_CLEAR_STAT_RSP:
+            return "ANI_CFG_CLEAR_STAT_RSP";
+        case WNI_CFG_DNLD_RSP:
+            return "WNI_CFG_DNLD_RSP";
+        case WNI_CFG_GET_REQ:
+            return "WNI_CFG_GET_REQ";
+        case WNI_CFG_SET_REQ:
+            return "WNI_CFG_SET_REQ";
+        case WNI_CFG_SET_REQ_NO_RSP:
+            return "WNI_CFG_SET_REQ_NO_RSP";
+        case eWNI_PMC_ENTER_IMPS_RSP:
+            return "eWNI_PMC_ENTER_IMPS_RSP";
+        case eWNI_PMC_EXIT_IMPS_RSP:
+            return "eWNI_PMC_EXIT_IMPS_RSP";
+        case eWNI_PMC_ENTER_BMPS_RSP:
+            return "eWNI_PMC_ENTER_BMPS_RSP";
+        case eWNI_PMC_EXIT_BMPS_RSP:
+            return "eWNI_PMC_EXIT_BMPS_RSP";
+        case eWNI_PMC_EXIT_BMPS_IND:
+            return "eWNI_PMC_EXIT_BMPS_IND";
+        case eWNI_SME_SET_BCN_FILTER_REQ:
+            return "eWNI_SME_SET_BCN_FILTER_REQ";
+#if defined(FEATURE_WLAN_ESE) && defined(FEATURE_WLAN_ESE_UPLOAD)
+        case eWNI_SME_GET_TSM_STATS_REQ:
+            return "eWNI_SME_GET_TSM_STATS_REQ";
+        case eWNI_SME_GET_TSM_STATS_RSP:
+            return "eWNI_SME_GET_TSM_STATS_RSP";
+#endif /* FEATURE_WLAN_ESE && FEATURE_WLAN_ESE_UPLOAD */
+        case eWNI_SME_CSA_OFFLOAD_EVENT:
+            return "eWNI_SME_CSA_OFFLOAD_EVENT";
+        default:
+            return "INVALID SME message";
+    }
+#endif
+return "";
+}
+
+
 
 char *limResultCodeStr(tSirResultCodes resultCode)
 {
@@ -514,6 +801,8 @@ char *limResultCodeStr(tSirResultCodes resultCode)
             return "eSIR_SME_LINK_TEST_INVALID_STATE";
       case eSIR_SME_LINK_TEST_INVALID_ADDRESS:
             return "eSIR_SME_LINK_TEST_INVALID_ADDRESS";
+      case eSIR_SME_POLARIS_RESET:
+            return "eSIR_SME_POLARIS_RESET";
       case eSIR_SME_SETCONTEXT_FAILED:
             return "eSIR_SME_SETCONTEXT_FAILED";
       case eSIR_SME_BSS_RESTART:
@@ -530,6 +819,7 @@ char *limResultCodeStr(tSirResultCodes resultCode)
             return "eSIR_SME_RECEIVED";
       case eSIR_SME_CHANNEL_SWITCH_FAIL:
             return "eSIR_SME_CHANNEL_SWITCH_FAIL";
+#ifdef GEN4_SCAN
       case eSIR_SME_CHANNEL_SWITCH_DISABLED:
             return "eSIR_SME_CHANNEL_SWITCH_DISABLED";
       case eSIR_SME_HAL_SCAN_INIT_FAILED:
@@ -542,9 +832,38 @@ char *limResultCodeStr(tSirResultCodes resultCode)
             return "eSIR_SME_HAL_SCAN_FINISH_FAILED";
       case eSIR_SME_HAL_SEND_MESSAGE_FAIL:
             return "eSIR_SME_HAL_SEND_MESSAGE_FAIL";
+#else // GEN4_SCAN
+      case eSIR_SME_CHANNEL_SWITCH_DISABLED:
+            return "eSIR_SME_CHANNEL_SWITCH_DISABLED";
+      case eSIR_SME_HAL_SEND_MESSAGE_FAIL:
+            return "eSIR_SME_HAL_SEND_MESSAGE_FAIL";
+#endif // GEN4_SCAN
 
         default:
             return "INVALID resultCode";
+    }
+}
+
+void
+limPrintMsgName(tpAniSirGlobal pMac, tANI_U16 logLevel, tANI_U32 msgType)
+{
+    limLog(pMac, logLevel, limMsgStr(msgType));
+}
+
+void
+limPrintMsgInfo(tpAniSirGlobal pMac, tANI_U16 logLevel, tSirMsgQ *msg)
+{
+    if (logLevel <= pMac->utils.gLogDbgLevel[SIR_LIM_MODULE_ID - LOG_FIRST_MODULE_ID])
+    {
+        switch (msg->type)
+        {
+            case SIR_BB_XPORT_MGMT_MSG:
+                limPrintMsgName(pMac, logLevel,msg->type);
+                break;
+            default:
+                limPrintMsgName(pMac, logLevel,msg->type);
+                break;
+        }
     }
 }
 
@@ -593,6 +912,11 @@ limInitMlm(tpAniSirGlobal pMac)
 
     /// Initialize MAC based Authentication STA list
     limInitPreAuthList(pMac);
+
+    //pMac->lim.gpLimMlmJoinReq = NULL;
+
+    if (pMac->lim.gLimTimersCreated)
+        return;
 
     // Create timers used by LIM
     retVal = limCreateTimers(pMac);
@@ -725,6 +1049,8 @@ limCleanupMlm(tpAniSirGlobal pMac)
             tx_timer_delete(&pAuthNode->timer);
         }
 
+
+
         // Deactivate and delete Hash Miss throttle timer
         tx_timer_deactivate(&pMac->lim.limTimers.gLimSendDisassocFrameThresholdTimer);
         tx_timer_delete(&pMac->lim.limTimers.gLimSendDisassocFrameThresholdTimer);
@@ -734,6 +1060,17 @@ limCleanupMlm(tpAniSirGlobal pMac)
         tx_timer_deactivate(&pMac->lim.limTimers.gLimPreAuthClnupTimer);
         tx_timer_delete(&pMac->lim.limTimers.gLimPreAuthClnupTimer);
 
+#if 0 // The WPS PBC clean up timer is disabled
+        if (pMac->lim.gLimSystemRole == eLIM_AP_ROLE)
+        {
+            if(pMac->lim.limTimers.gLimWPSOverlapTimerObj.isTimerCreated == eANI_BOOLEAN_TRUE)
+            {
+                tx_timer_deactivate(&pMac->lim.limTimers.gLimWPSOverlapTimerObj.gLimWPSOverlapTimer);
+                tx_timer_delete(&pMac->lim.limTimers.gLimWPSOverlapTimerObj.gLimWPSOverlapTimer);
+                pMac->lim.limTimers.gLimWPSOverlapTimerObj.isTimerCreated = eANI_BOOLEAN_FALSE;
+            }
+        }
+#endif
 #ifdef WLAN_FEATURE_VOWIFI_11R
         // Deactivate and delete FT Preauth response timer
         tx_timer_deactivate(&pMac->lim.limTimers.gLimFTPreAuthRspTimer);
@@ -1187,6 +1524,118 @@ limSysProcessMmhMsgApi(tpAniSirGlobal pMac,
    return eSIR_SUCCESS;
 }
 
+char *limFrameStr(tANI_U32 type, tANI_U32 subType)
+{
+#ifdef FIXME_GEN6
+
+    if (type == SIR_MAC_MGMT_FRAME)
+    {
+        switch (subType)
+        {
+            case SIR_MAC_MGMT_ASSOC_REQ:
+                return "MAC_MGMT_ASSOC_REQ";
+            case SIR_MAC_MGMT_ASSOC_RSP:
+                return "MAC_MGMT_ASSOC_RSP";
+            case SIR_MAC_MGMT_REASSOC_REQ:
+                return "MAC_MGMT_REASSOC_REQ";
+            case SIR_MAC_MGMT_REASSOC_RSP:
+                return "MAC_MGMT_REASSOC_RSP";
+            case SIR_MAC_MGMT_PROBE_REQ:
+                return "MAC_MGMT_PROBE_REQ";
+            case SIR_MAC_MGMT_PROBE_RSP:
+                return "MAC_MGMT_PROBE_RSP";
+            case SIR_MAC_MGMT_BEACON:
+                return "MAC_MGMT_BEACON";
+            case SIR_MAC_MGMT_ATIM:
+                return "MAC_MGMT_ATIM";
+            case SIR_MAC_MGMT_DISASSOC:
+                return "MAC_MGMT_DISASSOC";
+            case SIR_MAC_MGMT_AUTH:
+                return "MAC_MGMT_AUTH";
+            case SIR_MAC_MGMT_DEAUTH:
+                return "MAC_MGMT_DEAUTH";
+            case SIR_MAC_MGMT_ACTION:
+                return "MAC_MGMT_ACTION";
+            case SIR_MAC_MGMT_RESERVED15:
+                return "MAC_MGMT_RESERVED15";
+            default:
+                return "Unknown MGMT Frame";
+        }
+    }
+
+    else if (type == SIR_MAC_CTRL_FRAME)
+    {
+        switch (subType)
+        {
+            case SIR_MAC_CTRL_RR:
+                return "MAC_CTRL_RR";
+            case SIR_MAC_CTRL_BAR:
+                return "MAC_CTRL_BAR";
+            case SIR_MAC_CTRL_BA:
+                return "MAC_CTRL_BA";
+            case SIR_MAC_CTRL_PS_POLL:
+                return "MAC_CTRL_PS_POLL";
+            case SIR_MAC_CTRL_RTS:
+                return "MAC_CTRL_RTS";
+            case SIR_MAC_CTRL_CTS:
+                return "MAC_CTRL_CTS";
+            case SIR_MAC_CTRL_ACK:
+                return "MAC_CTRL_ACK";
+            case SIR_MAC_CTRL_CF_END:
+                return "MAC_CTRL_CF_END";
+            case SIR_MAC_CTRL_CF_END_ACK:
+                return "MAC_CTRL_CF_END_ACK";
+            default:
+                return "Unknown CTRL Frame";
+        }
+    }
+
+    else if (type == SIR_MAC_DATA_FRAME)
+    {
+        switch (subType)
+        {
+            case SIR_MAC_DATA_DATA:
+                return "MAC_DATA_DATA";
+            case SIR_MAC_DATA_DATA_ACK:
+                return "MAC_DATA_DATA_ACK";
+            case SIR_MAC_DATA_DATA_POLL:
+                return "MAC_DATA_DATA_POLL";
+            case SIR_MAC_DATA_DATA_ACK_POLL:
+                return "MAC_DATA_DATA_ACK_POLL";
+            case SIR_MAC_DATA_NULL:
+                return "MAC_DATA_NULL";
+            case SIR_MAC_DATA_NULL_ACK:
+                return "MAC_DATA_NULL_ACK";
+            case SIR_MAC_DATA_NULL_POLL:
+                return "MAC_DATA_NULL_POLL";
+            case SIR_MAC_DATA_NULL_ACK_POLL:
+                return "MAC_DATA_NULL_ACK_POLL";
+            case SIR_MAC_DATA_QOS_DATA:
+                return "MAC_DATA_QOS_DATA";
+            case SIR_MAC_DATA_QOS_DATA_ACK:
+                return "MAC_DATA_QOS_DATA_ACK";
+            case SIR_MAC_DATA_QOS_DATA_POLL:
+                return "MAC_DATA_QOS_DATA_POLL";
+            case SIR_MAC_DATA_QOS_DATA_ACK_POLL:
+                return "MAC_DATA_QOS_DATA_ACK_POLL";
+            case SIR_MAC_DATA_QOS_NULL:
+                return "MAC_DATA_QOS_NULL";
+            case SIR_MAC_DATA_QOS_NULL_ACK:
+                return "MAC_DATA_QOS_NULL_ACK";
+            case SIR_MAC_DATA_QOS_NULL_POLL:
+                return "MAC_DATA_QOS_NULL_POLL";
+            case SIR_MAC_DATA_QOS_NULL_ACK_POLL:
+                return "MAC_DATA_QOS_NULL_ACK_POLL";
+            default:
+                return "Unknown Data Frame";
+        }
+    }
+    else
+        return "Unknown";
+#endif
+return "";
+}
+
 void limHandleUpdateOlbcCache(tpAniSirGlobal pMac)
 {
     int i;
@@ -1267,8 +1716,7 @@ void limHandleUpdateOlbcCache(tpAniSirGlobal pMac)
         enable = 0;
     }
 
-    if ((VOS_FALSE == pMac->sap.SapDfsInfo.is_dfs_cac_timer_running)
-        && beaconParams.paramChangeBitmap)
+    if(beaconParams.paramChangeBitmap)
     {
         schSetFixedBeaconFields(pMac,psessionEntry);
         limSendBeaconParams(pMac, &beaconParams, psessionEntry);
@@ -2239,10 +2687,11 @@ void limProcessChannelSwitchTimeout(tpAniSirGlobal pMac)
  * @param psessionentry
  */
 void
-limUpdateChannelSwitch(struct sAniSirGlobal *pMac, tpSirProbeRespBeacon pBeacon,
-                       tpPESession psessionEntry)
+limUpdateChannelSwitch(struct sAniSirGlobal *pMac,  tpSirProbeRespBeacon pBeacon, tpPESession psessionEntry)
 {
+
     tANI_U16                         beaconPeriod;
+    tChannelSwitchPropIEStruct       *pPropChnlSwitch;
     tDot11fIEChanSwitchAnn           *pChnlSwitch;
 #ifdef WLAN_FEATURE_11AC
     tDot11fIEWiderBWChanSwitchAnn    *pWiderChnlSwitch;
@@ -2250,75 +2699,89 @@ limUpdateChannelSwitch(struct sAniSirGlobal *pMac, tpSirProbeRespBeacon pBeacon,
 
     beaconPeriod = psessionEntry->beaconParams.beaconInterval;
 
-    /* 802.11h standard channel switch IE */
-    pChnlSwitch = &(pBeacon->channelSwitchIE);
-    psessionEntry->gLimChannelSwitch.primaryChannel = pChnlSwitch->newChannel;
-    psessionEntry->gLimChannelSwitch.switchCount = pChnlSwitch->switchCount;
-    psessionEntry->gLimChannelSwitch.switchTimeoutValue =
-              SYS_MS_TO_TICKS(beaconPeriod)* (pChnlSwitch->switchCount);
-    psessionEntry->gLimChannelSwitch.switchMode = pChnlSwitch->switchMode;
-#ifdef WLAN_FEATURE_11AC
-    pWiderChnlSwitch = &(pBeacon->WiderBWChanSwitchAnn);
-    if (pBeacon->WiderBWChanSwitchAnnPresent) {
-        psessionEntry->gLimWiderBWChannelSwitch.newChanWidth =
-                                                 pWiderChnlSwitch->newChanWidth;
-        psessionEntry->gLimWiderBWChannelSwitch.newCenterChanFreq0 =
-                                           pWiderChnlSwitch->newCenterChanFreq0;
-        psessionEntry->gLimWiderBWChannelSwitch.newCenterChanFreq1 =
-                                           pWiderChnlSwitch->newCenterChanFreq1;
+    /* STA either received proprietary channel switch IE or 802.11h
+     * standard channel switch IE.
+     */
+    if (pBeacon->propIEinfo.propChannelSwitchPresent)
+    {
+        pPropChnlSwitch = &(pBeacon->propIEinfo.channelSwitch);
+
+        /* Add logic to determine which change this is:  */
+        /*      primary, secondary, both.  For now assume both. */
+        psessionEntry->gLimChannelSwitch.state = eLIM_CHANNEL_SWITCH_PRIMARY_AND_SECONDARY;
+        psessionEntry->gLimChannelSwitch.primaryChannel = pPropChnlSwitch->primaryChannel;
+        psessionEntry->gLimChannelSwitch.secondarySubBand = (ePhyChanBondState)pPropChnlSwitch->subBand;
+        psessionEntry->gLimChannelSwitch.switchCount = pPropChnlSwitch->channelSwitchCount;
+        psessionEntry->gLimChannelSwitch.switchTimeoutValue =
+                 SYS_MS_TO_TICKS(beaconPeriod)* (pPropChnlSwitch->channelSwitchCount);
+        psessionEntry->gLimChannelSwitch.switchMode = pPropChnlSwitch->mode;
     }
+    else
+    {
+       pChnlSwitch = &(pBeacon->channelSwitchIE);
+       psessionEntry->gLimChannelSwitch.primaryChannel = pChnlSwitch->newChannel;
+       psessionEntry->gLimChannelSwitch.switchCount = pChnlSwitch->switchCount;
+       psessionEntry->gLimChannelSwitch.switchTimeoutValue =
+                 SYS_MS_TO_TICKS(beaconPeriod)* (pChnlSwitch->switchCount);
+       psessionEntry->gLimChannelSwitch.switchMode = pChnlSwitch->switchMode;
+#ifdef WLAN_FEATURE_11AC
+       pWiderChnlSwitch = &(pBeacon->WiderBWChanSwitchAnn);
+       if(pBeacon->WiderBWChanSwitchAnnPresent)
+       {
+           psessionEntry->gLimWiderBWChannelSwitch.newChanWidth = pWiderChnlSwitch->newChanWidth;
+           psessionEntry->gLimWiderBWChannelSwitch.newCenterChanFreq0 = pWiderChnlSwitch->newCenterChanFreq0;
+           psessionEntry->gLimWiderBWChannelSwitch.newCenterChanFreq1 = pWiderChnlSwitch->newCenterChanFreq1;
+       }
 #endif
 
-     /* Only primary channel switch element is present */
-     psessionEntry->gLimChannelSwitch.state = eLIM_CHANNEL_SWITCH_PRIMARY_ONLY;
-     psessionEntry->gLimChannelSwitch.secondarySubBand =
-                                                   PHY_SINGLE_CHANNEL_CENTERED;
+        /* Only primary channel switch element is present */
+        psessionEntry->gLimChannelSwitch.state = eLIM_CHANNEL_SWITCH_PRIMARY_ONLY;
+        psessionEntry->gLimChannelSwitch.secondarySubBand = PHY_SINGLE_CHANNEL_CENTERED;
 
-     /* Do not bother to look and operate on extended channel switch element
-      * if our own channel-bonding state is not enabled
-      */
-     if (psessionEntry->htSupportedChannelWidthSet) {
-         if (pBeacon->extChannelSwitchPresent) {
-             if ((pBeacon->extChannelSwitchIE.secondaryChannelOffset ==
-                                 PHY_DOUBLE_CHANNEL_LOW_PRIMARY) ||
-                 (pBeacon->extChannelSwitchIE.secondaryChannelOffset ==
-                                 PHY_DOUBLE_CHANNEL_HIGH_PRIMARY)) {
-                 psessionEntry->gLimChannelSwitch.state =
-                                      eLIM_CHANNEL_SWITCH_PRIMARY_AND_SECONDARY;
-                 psessionEntry->gLimChannelSwitch.secondarySubBand =
-                             pBeacon->extChannelSwitchIE.secondaryChannelOffset;
-             }
+        /* Do not bother to look and operate on extended channel switch element
+         * if our own channel-bonding state is not enabled
+         */
+        if (psessionEntry->htSupportedChannelWidthSet)
+        {
+            if (pBeacon->extChannelSwitchPresent)
+            {
+                if ((pBeacon->extChannelSwitchIE.secondaryChannelOffset == PHY_DOUBLE_CHANNEL_LOW_PRIMARY) ||
+                    (pBeacon->extChannelSwitchIE.secondaryChannelOffset == PHY_DOUBLE_CHANNEL_HIGH_PRIMARY))
+                {
+                    psessionEntry->gLimChannelSwitch.state = eLIM_CHANNEL_SWITCH_PRIMARY_AND_SECONDARY;
+                    psessionEntry->gLimChannelSwitch.secondarySubBand = pBeacon->extChannelSwitchIE.secondaryChannelOffset;
+                }
 #ifdef WLAN_FEATURE_11AC
-             if (psessionEntry->vhtCapability &&
-                               pBeacon->WiderBWChanSwitchAnnPresent) {
-                 if (pWiderChnlSwitch->newChanWidth ==
-                                   WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ) {
-                     if (pBeacon->extChannelSwitchPresent) {
-                         if ((pBeacon->extChannelSwitchIE.secondaryChannelOffset ==
-                                              PHY_DOUBLE_CHANNEL_LOW_PRIMARY) ||
-                             (pBeacon->extChannelSwitchIE.secondaryChannelOffset ==
-                                              PHY_DOUBLE_CHANNEL_HIGH_PRIMARY)) {
-                             psessionEntry->gLimChannelSwitch.state =
-                                      eLIM_CHANNEL_SWITCH_PRIMARY_AND_SECONDARY;
-                             psessionEntry->gLimChannelSwitch.secondarySubBand =
-                                limGet11ACPhyCBState(pMac,
-                                    psessionEntry->gLimChannelSwitch.primaryChannel,
-                                    pBeacon->extChannelSwitchIE.secondaryChannelOffset,
-                                    pWiderChnlSwitch->newCenterChanFreq0,
-                                    psessionEntry);
-                         }
-                     }
-                 }
-             }
+                if(psessionEntry->vhtCapability && pBeacon->WiderBWChanSwitchAnnPresent)
+                {
+                    if (pWiderChnlSwitch->newChanWidth == WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ)
+                    {
+                        if(pBeacon->extChannelSwitchPresent)
+                        {
+                            if ((pBeacon->extChannelSwitchIE.secondaryChannelOffset == PHY_DOUBLE_CHANNEL_LOW_PRIMARY) ||
+                                (pBeacon->extChannelSwitchIE.secondaryChannelOffset == PHY_DOUBLE_CHANNEL_HIGH_PRIMARY))
+                            {
+                                psessionEntry->gLimChannelSwitch.state = eLIM_CHANNEL_SWITCH_PRIMARY_AND_SECONDARY;
+                                psessionEntry->gLimChannelSwitch.secondarySubBand = limGet11ACPhyCBState(pMac,
+                                                                                                         psessionEntry->gLimChannelSwitch.primaryChannel,
+                                                                                                         pBeacon->extChannelSwitchIE.secondaryChannelOffset,
+                                                                                                         pWiderChnlSwitch->newCenterChanFreq0,
+                                                                                                         psessionEntry);
+                            }
+                        }
+                    }
+                }
 #endif
-         }
-    }
-    if (eSIR_SUCCESS != limStartChannelSwitch(pMac, psessionEntry)) {
+            }
+        }
+     }
+    if (eSIR_SUCCESS != limStartChannelSwitch(pMac, psessionEntry))
+    {
         PELOGW(limLog(pMac, LOGW, FL("Could not start Channel Switch"));)
     }
 
     limLog(pMac, LOGW,
-        FL("session %d primary chl %d, subband %d, count  %d (%d ticks)"),
+        FL("session %d primary chl %d, subband %d, count  %d (%d ticks) "),
         psessionEntry->peSessionId,
         psessionEntry->gLimChannelSwitch.primaryChannel,
         psessionEntry->gLimChannelSwitch.secondarySubBand,
@@ -2439,6 +2902,8 @@ void limCancelDot11hQuiet(tpAniSirGlobal pMac, tpPESession psessionEntry)
  */
 void limProcessQuietTimeout(tpAniSirGlobal pMac)
 {
+    //fetch the sessionEntry based on the sessionId
+    //priority - MEDIUM
     tpPESession psessionEntry;
 
     if((psessionEntry = peFindSessionBySessionId(pMac, pMac->lim.limTimers.gLimQuietTimer.sessionId))== NULL)
@@ -2471,6 +2936,12 @@ void limProcessQuietTimeout(tpAniSirGlobal pMac)
             FL("Unable to change gLimQuietBssTimer! Will still attempt to activate anyway..."));
       }
       MTRACE(macTrace(pMac, TRACE_CODE_TIMER_ACTIVATE, pMac->lim.limTimers.gLimQuietTimer.sessionId, eLIM_QUIET_BSS_TIMER));
+#ifdef GEN6_TODO
+        /* revisit this piece of code to assign the appropriate sessionId below
+         * priority - HIGH
+         */
+        pMac->lim.limTimers.gLimQuietBssTimer.sessionId = sessionId;
+#endif
       if( TX_SUCCESS !=
           tx_timer_activate( &pMac->lim.limTimers.gLimQuietBssTimer ))
       {
@@ -2529,7 +3000,8 @@ void limProcessQuietTimeout(tpAniSirGlobal pMac)
  * If 802.11H is enabled, the Quiet BSS IE is sent as per
  * the 11H spec
  * If 802.11H is not enabled, the Quiet BSS IE is sent as
- * a Proprietary IE.
+ * a Proprietary IE. This will be understood by all the
+ * TITAN STA's
  * Transitioning gLimQuietState to eLIM_QUIET_BEGIN will
  * initiate the SCH to include the Quiet BSS IE in all
  * its subsequent Beacons/PR's.
@@ -2621,6 +3093,46 @@ void limProcessQuietBssTimeout( tpAniSirGlobal pMac )
     }
   }
 }
+/**
+ * limProcessWPSOverlapTimeout
+ *
+ * FUNCTION: This function call limWPSPBCTimeout() to clean WPS PBC probe request entries
+ *
+ * LOGIC:
+ *
+ * ASSUMPTIONS:
+ *
+ * NOTE:
+ *
+ * @param pMac - Pointer to Global MAC structure
+ *
+ * @return None
+ */
+#if 0
+void limProcessWPSOverlapTimeout(tpAniSirGlobal pMac)
+{
+
+    tpPESession psessionEntry;
+    tANI_U32 sessionId;
+
+    if (tx_timer_activate(&pMac->lim.limTimers.gLimWPSOverlapTimerObj.gLimWPSOverlapTimer) != TX_SUCCESS)
+    {
+            limLog(pMac, LOGP, FL("tx_timer_activate failed"));
+    }
+
+    sessionId = pMac->lim.limTimers.gLimWPSOverlapTimerObj.sessionId;
+
+    PELOGE(limLog(pMac, LOGE, FL("WPS overlap timeout, sessionId=%d"), sessionId);)
+
+    if((psessionEntry = peFindSessionBySessionId(pMac, sessionId)) == NULL)
+    {
+        PELOGE(limLog(pMac, LOGP,FL("Session Does not exist for given sessionID"));)
+        return;
+    }
+
+    limWPSPBCTimeout(pMac, psessionEntry);
+}
+#endif
 
 /**----------------------------------------------
 \fn        limStartQuietTimer
@@ -2679,7 +3191,7 @@ void limStartQuietTimer(tpAniSirGlobal pMac, tANI_U8 sessionId)
  * For the first and last ANI peer, we have to update EDCA params as needed
  *
  * When the first ANI peer joins the BSS, we notify SCH
- * When the last ANI peer leaves the BSS, we notify SCH
+ * When the last ANI peer leaves the BSS, we notfiy SCH
  */
 void
 limUtilCountStaAdd(
@@ -2688,7 +3200,7 @@ limUtilCountStaAdd(
     tpPESession psessionEntry)
 {
 
-    if ((! pSta) || (! pSta->valid) || (pSta->fAniCount))
+    if ((! pSta) || (! pSta->valid) || (! pSta->aniPeer) || (pSta->fAniCount))
         return;
 
     pSta->fAniCount = 1;
@@ -2707,7 +3219,7 @@ limUtilCountStaDel(
     tpPESession psessionEntry)
 {
 
-    if ((pSta == NULL) || (! pSta->fAniCount))
+    if ((pSta == NULL) || (pSta->aniPeer == eHAL_CLEAR) || (! pSta->fAniCount))
         return;
 
     /* Only if sta is invalid and the validInDummyState bit is set to 1,
@@ -2776,6 +3288,7 @@ void limSwitchChannelCback(tpAniSirGlobal pMac, eHalStatus status,
    pSirSmeSwitchChInd->length = sizeof(tSirSmeSwitchChannelInd);
    pSirSmeSwitchChInd->newChannelId = psessionEntry->gLimChannelSwitch.primaryChannel;
    pSirSmeSwitchChInd->sessionId = psessionEntry->smeSessionId;
+   //BSS ID
    vos_mem_copy( pSirSmeSwitchChInd->bssId, psessionEntry->bssId, sizeof(tSirMacAddr));
    mmhMsg.bodyptr = pSirSmeSwitchChInd;
    mmhMsg.bodyval = 0;
@@ -2794,7 +3307,7 @@ void limSwitchChannelCback(tpAniSirGlobal pMac, eHalStatus status,
  *
  *NOTE:
  * @param  pMac        Pointer to Global MAC structure
- * @param  newChannel  new channel ID
+ * @param  newChannel  new chnannel ID
  * @return NONE
  */
 void limSwitchPrimaryChannel(tpAniSirGlobal pMac, tANI_U8 newChannel,tpPESession psessionEntry)
@@ -2840,7 +3353,7 @@ void limSwitchPrimaryChannel(tpAniSirGlobal pMac, tANI_U8 newChannel,tpPESession
  *
  *NOTE:
  * @param  pMac        Pointer to Global MAC structure
- * @param  newChannel  New channel ID (or current channel ID)
+ * @param  newChannel  New chnannel ID (or current channel ID)
  * @param  subband     CB secondary info:
  *                       - eANI_CB_SECONDARY_NONE
  *                       - eANI_CB_SECONDARY_UP
@@ -2980,6 +3493,10 @@ tANI_U8 limActiveScanAllowed(
 tAniBool limTriggerBackgroundScanDuringQuietBss( tpAniSirGlobal pMac )
 {
     tAniBool bScanTriggered = eSIR_FALSE;
+
+
+
+    //TBD-RAJESH HOW TO GET sessionEntry?????
     tpPESession psessionEntry = &pMac->lim.gpSession[0];
 
     if (psessionEntry->limSystemRole != eLIM_STA_ROLE)
@@ -3072,7 +3589,7 @@ tSirMacASCapabilityInfo macASCapabilityInfo = {0};
   if( htCap >= eHT_ANTENNA_SELECTION &&
       htCap < eHT_SI_GRANULARITY )
   {
-    /* Get Antenna Selection HT Capabilities */
+    // Get Antenna Seletion HT Capabilities
     if( eSIR_SUCCESS != wlan_cfgGetInt( pMac, WNI_CFG_AS_CAP, &cfgValue ))
       cfgValue = 0;
     ptr = (tANI_U8 *) &macASCapabilityInfo;
@@ -3333,7 +3850,7 @@ limEnable11aProtection(tpAniSirGlobal pMac, tANI_U8 enable,
             }
         }
 
-        /* This part is common for station as well. */
+        //This part is common for staiton as well.
         if(false == psessionEntry->beaconParams.llaCoexist)
         {
             PELOG1(limLog(pMac, LOG1, FL(" => protection from 11A Enabled"));)
@@ -3353,7 +3870,7 @@ limEnable11aProtection(tpAniSirGlobal pMac, tANI_U8 enable,
                 //Overlap Legacy protection disabled.
                 pMac->lim.gLimOverlap11aParams.protectionEnabled = false;
 
-                /* We need to take care of HT OP mode if we are HT AP. */
+                //We need to take care of HT OP mode iff we are HT AP.
                 if(psessionEntry->htCapability)
                 {
                    // no HT op mode change if any of the overlap protection enabled.
@@ -3536,7 +4053,7 @@ limEnable11gProtection(tpAniSirGlobal pMac, tANI_U8 enable,
                 }
             }
 
-        /* This part is common for station as well. */
+        //This part is common for staiton as well.
         if(false == psessionEntry->beaconParams.llbCoexist)
         {
             PELOG1(limLog(pMac, LOG1, FL("=> 11G Protection Enabled"));)
@@ -3569,9 +4086,12 @@ limEnable11gProtection(tpAniSirGlobal pMac, tANI_U8 enable,
                         {
                             limEnableHtRifsProtection(pMac, false, overlap, pBeaconParams,psessionEntry);
                             limEnableHtOBSSProtection(pMac,  false, overlap, pBeaconParams,psessionEntry);
-                            if (psessionEntry->gLimHt20Params.protectionEnabled) {
+                            if(psessionEntry->gLimHt20Params.protectionEnabled){
+                                //Commenting out beacuse of CR 258588 WFA cert
+                                //psessionEntry->htOperMode = eSIR_HT_OP_MODE_NO_LEGACY_20MHZ_HT;
                                 psessionEntry->htOperMode = eSIR_HT_OP_MODE_PURE;
-                            } else
+                            }
+                            else
                                 psessionEntry->htOperMode = eSIR_HT_OP_MODE_PURE;
                         }
                     }
@@ -3628,7 +4148,7 @@ limEnable11gProtection(tpAniSirGlobal pMac, tANI_U8 enable,
                     //Overlap Legacy protection disabled.
                 psessionEntry->gLimOlbcParams.protectionEnabled = false;
 
-                    /* We need to take care of HT OP mode if we are HT AP. */
+                    //We need to take care of HT OP mode iff we are HT AP.
                     if(psessionEntry->htCapability)
                     {
                         // no HT op mode change if any of the overlap protection enabled.
@@ -3812,7 +4332,7 @@ limEnableHtProtectionFrom11g(tpAniSirGlobal pMac, tANI_U8 enable,
             }
         }
 
-        /* This part is common for station as well. */
+        //This part is common for staiton as well.
         if(false == psessionEntry->beaconParams.llgCoexist)
         {
             pBeaconParams->llgCoexist = psessionEntry->beaconParams.llgCoexist = true;
@@ -4157,10 +4677,10 @@ limEnableHT20Protection(tpAniSirGlobal pMac, tANI_U8 enable,
             }
         }
 
-        /* This part is common for station as well. */
+        //This part is common for staiton as well.
         if(false == psessionEntry->beaconParams.ht20Coexist)
         {
-            PELOG1(limLog(pMac, LOG1, FL("=> Protection from HT20 Enabled"));)
+            PELOG1(limLog(pMac, LOG1, FL("=> Prtection from HT20 Enabled"));)
             pBeaconParams->ht20MhzCoexist = psessionEntry->beaconParams.ht20Coexist = true;
             pBeaconParams->paramChangeBitmap |= PARAM_HT20MHZCOEXIST_CHANGED;
         }
@@ -4188,6 +4708,8 @@ limEnableHT20Protection(tpAniSirGlobal pMac, tANI_U8 enable,
                     {
                         if(psessionEntry->gLimHt20Params.protectionEnabled)
                         {
+                            //Commented beacuse of CR 258588 for WFA Cert
+                            //psessionEntry->htOperMode = eSIR_HT_OP_MODE_NO_LEGACY_20MHZ_HT;
                             psessionEntry->htOperMode = eSIR_HT_OP_MODE_PURE;
                             limEnableHtRifsProtection(pMac, false, overlap, pBeaconParams,psessionEntry);
                             limEnableHtOBSSProtection(pMac,  false, overlap, pBeaconParams,psessionEntry);
@@ -4316,7 +4838,7 @@ limEnableHTNonGfProtection(tpAniSirGlobal pMac, tANI_U8 enable,
     if(psessionEntry->limSystemRole == eLIM_AP_ROLE){
         if ((enable) && (false == psessionEntry->beaconParams.llnNonGFCoexist))
         {
-            PELOG1(limLog(pMac, LOG1, FL(" => Protection from non GF Enabled"));)
+            PELOG1(limLog(pMac, LOG1, FL(" => Prtection from non GF Enabled"));)
             pBeaconParams->llnNonGFCoexist = psessionEntry->beaconParams.llnNonGFCoexist = true;
             pBeaconParams->paramChangeBitmap |= PARAM_NON_GF_DEVICES_PRESENT_CHANGED;
         }
@@ -4330,7 +4852,7 @@ limEnableHTNonGfProtection(tpAniSirGlobal pMac, tANI_U8 enable,
     {
         if ((enable) && (false == psessionEntry->beaconParams.llnNonGFCoexist))
         {
-            PELOG1(limLog(pMac, LOG1, FL(" => Protection from non GF Enabled"));)
+            PELOG1(limLog(pMac, LOG1, FL(" => Prtection from non GF Enabled"));)
             pBeaconParams->llnNonGFCoexist = psessionEntry->beaconParams.llnNonGFCoexist = true;
             pBeaconParams->paramChangeBitmap |= PARAM_NON_GF_DEVICES_PRESENT_CHANGED;
         }
@@ -4389,7 +4911,7 @@ limEnableHTLsigTxopProtection(tpAniSirGlobal pMac, tANI_U8 enable,
     if(psessionEntry->limSystemRole == eLIM_AP_ROLE){
         if ((enable) && (false == psessionEntry->beaconParams.fLsigTXOPProtectionFullSupport))
         {
-            PELOG1(limLog(pMac, LOG1, FL(" => Protection from LsigTxop Enabled"));)
+            PELOG1(limLog(pMac, LOG1, FL(" => Prtection from LsigTxop Enabled"));)
             pBeaconParams->fLsigTXOPProtectionFullSupport = psessionEntry->beaconParams.fLsigTXOPProtectionFullSupport = true;
             pBeaconParams->paramChangeBitmap |= PARAM_LSIG_TXOP_FULL_SUPPORT_CHANGED;
         }
@@ -4403,7 +4925,7 @@ limEnableHTLsigTxopProtection(tpAniSirGlobal pMac, tANI_U8 enable,
     {
         if ((enable) && (false == psessionEntry->beaconParams.fLsigTXOPProtectionFullSupport))
         {
-            PELOG1(limLog(pMac, LOG1, FL(" => Protection from LsigTxop Enabled"));)
+            PELOG1(limLog(pMac, LOG1, FL(" => Prtection from LsigTxop Enabled"));)
             pBeaconParams->fLsigTXOPProtectionFullSupport = psessionEntry->beaconParams.fLsigTXOPProtectionFullSupport = true;
             pBeaconParams->paramChangeBitmap |= PARAM_LSIG_TXOP_FULL_SUPPORT_CHANGED;
         }
@@ -4628,7 +5150,7 @@ void limTxComplete( tHalHandle hHal, void *pData, v_BOOL_t free)
  *  have changed, and sends an indication to HAL also with the
  * updated HT Parameters.
  * This function does not detect the change in the primary channel, that is done as part
- * of channel Switch IE processing.
+ * of channel Swtich IE processing.
  * If STA is configured with '20Mhz only' mode, then this function does not do anything
  * This function changes the CB mode, only if the self capability is set to '20 as well as 40Mhz'
  *
@@ -4664,7 +5186,7 @@ void limUpdateStaRunTimeHTSwitchChnlParams( tpAniSirGlobal   pMac,
     }
 #endif
 
-    if (psessionEntry->ftPEContext.ftPreAuthSession) {
+    if (pMac->ft.ftPEContext.pFTPreAuthReq) {
          limLog( pMac, LOGE, FL( "FT PREAUTH channel change is in progress"));
          return;
     }
@@ -4908,6 +5430,14 @@ limValidateDeltsReq(tpAniSirGlobal pMac, tpSirDeltsReq pDeltsReq, tSirMacAddr pe
         pSta = dphGetHashEntry(pMac, DPH_STA_HASH_INDEX_PEER, &psessionEntry->dph.dphHashTable);
 
         val = sizeof(tSirMacAddr);
+        #if 0
+        if (wlan_cfgGetStr(pMac, WNI_CFG_BSSID, peerMacAddr, &val) != eSIR_SUCCESS)
+        {
+            /// Could not get BSSID from CFG. Log error.
+            limLog(pMac, LOGP, FL("could not retrieve BSSID"));
+            return eSIR_FAILURE;
+        }
+       #endif// TO SUPPORT BT-AMP
        sirCopyMacAddr(peerMacAddr,psessionEntry->bssId);
 
     }
@@ -4981,7 +5511,8 @@ limValidateDeltsReq(tpAniSirGlobal pMac, tpSirDeltsReq pDeltsReq, tSirMacAddr pe
     }
     else
     {
-      if(tsinfo->traffic.accessPolicy == SIR_MAC_ACCESSPOLICY_EDCA)
+      if((tsinfo->traffic.accessPolicy == SIR_MAC_ACCESSPOLICY_EDCA) &&
+           psessionEntry->gLimEdcaParams[upToAc(tsinfo->traffic.userPrio)].aci.acm)
       {
         //send message to HAL to delete TS
         if(eSIR_SUCCESS != limSendHalMsgDelTs(pMac,
@@ -5072,7 +5603,6 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
     {
         limLog(pMac, LOGE,FL("session does not exist for given BSSId"));
         vos_mem_free(limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
 
@@ -5084,7 +5614,6 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
 #endif
     {
         vos_mem_free(limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
 
@@ -5110,12 +5639,11 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
     if (!htCapable)
     {
         vos_mem_free(limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
 #endif
 
-    /* Delete the complete dialogue token linked list */
+    //delete the complete dialoguetoken linked list
     limDeleteDialogueTokenList(pMac);
     pBaCandidate =  (tpAddBaCandidate) (((tANI_U8*)pBaActivityInd) + sizeof(tBaActivityInd));
 
@@ -5137,14 +5665,13 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
         }
     }
     vos_mem_free(limMsg->bodyptr);
-    limMsg->bodyptr = NULL;
     return;
 }
 
 
 /** -------------------------------------------------------------
 \fn      limDeleteBASessions
-\brief   Deletes all the existing BA sessions for given session
+\brief   Deletes all the exisitng BA sessions for given session
          and BA direction.
 \param   tpAniSirGlobal pMac
 \param   tpPESession pSessionEntry
@@ -5225,7 +5752,7 @@ limDeleteBASessions(tpAniSirGlobal pMac, tpPESession pSessionEntry,
 
 /** -------------------------------------------------------------
 \fn     limDelAllBASessions
-\brief  Deletes all the existing BA sessions.
+\brief  Deletes all the exisitng BA sessions.
 \param  tpAniSirGlobal pMac
 \return None
 -------------------------------------------------------------*/
@@ -5247,7 +5774,7 @@ void limDelAllBASessions(tpAniSirGlobal pMac)
 
 /** -------------------------------------------------------------
 \fn     limDelAllBASessionsBtc
-\brief  Deletes all the existing BA recipient sessions in 2.4GHz
+\brief  Deletes all the exisitng BA receipent sessions in 2.4GHz
         band.
 \param  tpAniSirGlobal pMac
 \return None
@@ -5269,9 +5796,8 @@ void limDelPerBssBASessionsBtc(tpAniSirGlobal pMac)
 
 /** -------------------------------------------------------------
 \fn limProcessDelTsInd
-\brief Handles the DeleteTS indication coming from HAL or generated by
-       PE itself in some error cases. Validates the request, sends the
-       DelTs action frame to the Peer and sends DelTs indication to HDD.
+\brief handles the DeleteTS indication coming from HAL or generated by PE itself in some error cases.
+         Validates the request, sends the DelTs action frame to the Peer and sends DelTs indicatoin to HDD.
 \param   tpAniSirGlobal pMac
 \param  tSirMsgQ limMsg
 \return None
@@ -5292,7 +5818,6 @@ if((psessionEntry = peFindSessionByBssid(pMac,pDelTsParam->bssId,&sessionId))== 
     {
          limLog(pMac, LOGE,FL("session does not exist for given BssId"));
          vos_mem_free(limMsg->bodyptr);
-         limMsg->bodyptr = NULL;
          return;
     }
 
@@ -5361,7 +5886,6 @@ error2:
   vos_mem_free(pDelTsReq);
 error1:
   vos_mem_free(limMsg->bodyptr);
-  limMsg->bodyptr = NULL;
   return;
 }
 
@@ -5389,6 +5913,12 @@ tSirRetStatus limPostMlmAddBAReq( tpAniSirGlobal pMac,
     tpLimMlmAddBAReq pMlmAddBAReq = NULL;
     tpDialogueToken dialogueTokenNode;
     tANI_U32        val = 0;
+
+  // Check if the peer is a 11n capable STA
+  // FIXME - Need a 11n peer indication in DPH.
+  // For now, using the taurusPeer attribute
+  //if( 0 == pStaDs->taurusPeer == )
+    //return eSIR_SUCCESS;
 
   // Allocate for LIM_MLM_ADDBA_REQ
   pMlmAddBAReq = vos_mem_malloc(sizeof( tLimMlmAddBAReq ));
@@ -5418,17 +5948,7 @@ tSirRetStatus limPostMlmAddBAReq( tpAniSirGlobal pMac,
   // Requesting the ADDBA recipient to populate the size.
   // If ADDBA is accepted, a non-zero buffer size should
   // be returned in the ADDBA Rsp
-  if ((TRUE == psessionEntry->isCiscoVendorAP) &&
-        (eHT_CHANNEL_WIDTH_80MHZ != pStaDs->htSupportedChannelWidthSet))
-  {
-     /* Cisco AP has issues in receiving more than 25 "mpdu in ampdu"
-        causing very low throughput in HT40 case */
-     limLog( pMac, LOGW,
-         FL( "Requesting ADDBA with Cisco 1225 AP, window size 25"));
-     pMlmAddBAReq->baBufferSize = MAX_BA_WINDOW_SIZE_FOR_CISCO;
-  }
-  else
-     pMlmAddBAReq->baBufferSize = 0;
+  pMlmAddBAReq->baBufferSize = 0;
 
   limLog( pMac, LOGW,
       FL( "Requesting an ADDBA to setup a %s BA session with STA %d for TID %d" ),
@@ -5754,6 +6274,11 @@ tSirMsgQ msgQ;
 
   // Post WDA_ADDBA_REQ to HAL.
   msgQ.type = WDA_ADDBA_REQ;
+  //
+  // FIXME_AMPDU
+  // A global counter (dialog token) is required to keep track of
+  // all PE <-> HAL communication(s)
+  //
   msgQ.reserved = 0;
   msgQ.bodyptr = pAddBAParams;
   msgQ.bodyval = 0;
@@ -5834,8 +6359,19 @@ tSirMsgQ msgQ;
   pDelBAParams->baTID = baTID;
   pDelBAParams->baDirection = baDirection;
 
+  /* Update PE session ID */
+
+
+  //TBD-RAJESH Updating of the session ID is requird for SIR_HAL_DELBA_IND?????
+  //pDelBAParams->sessionId = psessionEntry->peSessionId;
+
   // Post WDA_DELBA_IND to HAL.
   msgQ.type = WDA_DELBA_IND;
+  //
+  // FIXME:
+  // A global counter (dialog token) is required to keep track of
+  // all PE <-> HAL communication(s)
+  //
   msgQ.reserved = 0;
   msgQ.bodyptr = pDelBAParams;
   msgQ.bodyval = 0;
@@ -5953,7 +6489,7 @@ void limPktFree (
  * limGetBDfromRxPacket()
  *
  *FUNCTION:
- * This function is called to get pointer to
+ * This function is called to get pointer to Polaris
  * Buffer Descriptor containing MAC header & other control
  * info from the body of the message posted to LIM.
  *
@@ -6071,6 +6607,8 @@ static eHalStatus
 __limFillTxControlParams(tpAniSirGlobal pMac, tpTxControlParams  pTxCtrlMsg,
                                         tLimQuietTxMode type, tLimControlTx mode)
 {
+
+    //TBD-RAJESH HOW TO GET sessionEntry?????
     tpPESession psessionEntry = &pMac->lim.gpSession[0];
 
     if (mode == eLIM_STOP_TX)
@@ -6413,11 +6951,9 @@ tSirNwType limGetNwType(tpAniSirGlobal pMac, tANI_U8 channelNum, tANI_U32 type, 
         if ((channelNum > 0) && (channelNum < 15))
         {
             int i;
-            /*
-             * 11b or 11g packet
-             * 11g if extended Rate IE is present or
-             * if there is an A rate in suppRate IE
-             */
+            // 11b or 11g packet
+            // 11g iff extended Rate IE is present or
+            // if there is an A rate in suppRate IE
             for (i = 0; i < pBeacon->supportedRates.numRates; i++)
             {
                 if (sirIsArate(pBeacon->supportedRates.rate[i] & 0x7f))
@@ -6475,7 +7011,7 @@ tANI_U8 limGetChannelFromBeacon(tpAniSirGlobal pMac, tpSchBeaconStruct pBeacon)
 \        in the TS Info Fields.
 \
 \        An AC is a trigger-enabled AC if the PSB subfield
-\        is set to 1 in the up link direction.
+\        is set to 1 in the uplink direction.
 \        An AC is a delivery-enabled AC if the PSB subfield
 \        is set to 1 in the down-link direction.
 \
@@ -6614,8 +7150,7 @@ void limHandleHeartBeatTimeout(tpAniSirGlobal pMac )
             {
                 if(pMac->lim.gpSession[i].LimHBFailureStatus == eANI_BOOLEAN_TRUE)
                 {
-                    /* Activate Probe After HeartBeat Timer in-case
-                       HB Failure detected */
+                    /* Activate Probe After HeartBeat Timer incase HB Failure detected */
                     PELOGW(limLog(pMac, LOGW,FL("Sending Probe for Session: %d"),
                             i);)
                     limDeactivateAndChangeTimer(pMac, eLIM_PROBE_AFTER_HB_TIMER);
@@ -6655,8 +7190,7 @@ void limHandleHeartBeatTimeoutForSession(tpAniSirGlobal pMac, tpPESession psessi
         {
             if(psessionEntry->LimHBFailureStatus == eANI_BOOLEAN_TRUE)
             {
-                /* Activate Probe After HeartBeat Timer in-case
-                   HB Failure detected */
+                /* Activate Probe After HeartBeat Timer incase HB Failure detected */
                 PELOGW(limLog(pMac, LOGW,FL("Sending Probe for Session: %d"),
                        psessionEntry->bssIdx);)
                 limDeactivateAndChangeTimer(pMac, eLIM_PROBE_AFTER_HB_TIMER);
@@ -6691,7 +7225,9 @@ tANI_U8 limGetCurrentOperatingChannel(tpAniSirGlobal pMac)
 
 void limProcessAddStaRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
 {
+
     tpPESession         psessionEntry;
+//    tANI_U8             sessionId;
     tpAddStaParams      pAddStaParams;
 
     pAddStaParams = (tpAddStaParams)limMsgQ->bodyptr;
@@ -6732,10 +7268,7 @@ void limUpdateBeacon(tpAniSirGlobal pMac)
                )
             {
                 schSetFixedBeaconFields(pMac,&pMac->lim.gpSession[i]);
-                if (VOS_FALSE == pMac->sap.SapDfsInfo.is_dfs_cac_timer_running)
-                {
-                    limSendBeaconInd(pMac, &pMac->lim.gpSession[i]);
-                }
+                limSendBeaconInd(pMac, &pMac->lim.gpSession[i]);
              }
             else
             {
@@ -6772,8 +7305,9 @@ void limHandleHeartBeatFailureTimeout(tpAniSirGlobal pMac)
 #endif
                 if (psessionEntry->limMlmState == eLIM_MLM_LINK_ESTABLISHED_STATE)
                 {
-                    if ((psessionEntry->limSmeState != eLIM_SME_WT_DISASSOC_STATE) &&
-                       (psessionEntry->limSmeState != eLIM_SME_WT_DEAUTH_STATE))
+                    if ((!LIM_IS_CONNECTION_ACTIVE(psessionEntry)) &&
+                        (psessionEntry->limSmeState != eLIM_SME_WT_DISASSOC_STATE) &&
+                        (psessionEntry->limSmeState != eLIM_SME_WT_DEAUTH_STATE))
                     {
                         limLog(pMac, LOGE, FL("Probe_hb_failure: for session:%d " ),psessionEntry->peSessionId);
                         /* AP did not respond to Probe Request. Tear down link with it.*/
@@ -6797,6 +7331,8 @@ void limHandleHeartBeatFailureTimeout(tpAniSirGlobal pMac)
             }
         }
     }
+    /* Deactivate Timer ProbeAfterHB Timer -> As its a oneshot timer, need not deactivate the timer */
+    // tx_timer_deactivate(&pMac->lim.limTimers.gLimProbeAfterHBTimer);
 }
 
 
@@ -6913,7 +7449,6 @@ void limProcessAddStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
       /// Buffer not available. Log error
       limLog(pMac, LOGP, FL("call to AllocateMemory failed for Add Sta self RSP"));
       vos_mem_free(pAddStaSelfParams);
-      limMsgQ->bodyptr = NULL;
       return;
    }
 
@@ -6926,7 +7461,6 @@ void limProcessAddStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
    vos_mem_copy( pRsp->selfMacAddr, pAddStaSelfParams->selfMacAddr, sizeof(tSirMacAddr) );
 
    vos_mem_free(pAddStaSelfParams);
-   limMsgQ->bodyptr = NULL;
 
    mmhMsg.type = eWNI_SME_ADD_STA_SELF_RSP;
    mmhMsg.bodyptr = pRsp;
@@ -6952,7 +7486,6 @@ void limProcessDelStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
       /// Buffer not available. Log error
       limLog(pMac, LOGP, FL("call to AllocateMemory failed for Add Sta self RSP"));
       vos_mem_free(pDelStaSelfParams);
-      limMsgQ->bodyptr = NULL;
       return;
    }
 
@@ -6965,7 +7498,6 @@ void limProcessDelStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
    vos_mem_copy( pRsp->selfMacAddr, pDelStaSelfParams->selfMacAddr, sizeof(tSirMacAddr) );
 
    vos_mem_free(pDelStaSelfParams);
-   limMsgQ->bodyptr = NULL;
 
    mmhMsg.type = eWNI_SME_DEL_STA_SELF_RSP;
    mmhMsg.bodyptr = pRsp;
@@ -7381,6 +7913,7 @@ void limGetShortSlotFromPhyMode(tpAniSirGlobal pMac, tpPESession psessionEntry,
         {
             val = true;
         }
+        // Program Polaris based on AP capability
         if (psessionEntry->limMlmState == eLIM_MLM_WT_JOIN_BEACON_STATE)
         {
             // Joining BSS.
@@ -7517,32 +8050,3 @@ limSetProtectedBit(tpAniSirGlobal  pMac,
 } /*** end limSetProtectedBit() ***/
 #endif
 
-tANI_U8* lim_get_ie_ptr(tANI_U8 *pIes, int length, tANI_U8 eid)
-{
-    int left = length;
-    tANI_U8 *ptr = pIes;
-    tANI_U8 elem_id, elem_len;
-
-    while(left >= 2)
-    {
-        elem_id  =  ptr[0];
-        elem_len =  ptr[1];
-        left -= 2;
-        if(elem_len > left)
-        {
-            VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
-                FL("****Invalid IEs eid = %d elem_len=%d left=%d*****"),
-                eid,elem_len, left);
-
-            return NULL;
-        }
-        if (elem_id == eid)
-        {
-            return ptr;
-        }
-
-        left -= elem_len;
-        ptr += (elem_len + 2);
-    }
-    return NULL;
-}

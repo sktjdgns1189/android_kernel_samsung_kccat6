@@ -129,11 +129,11 @@ typedef enum
    // some internal failure like memory allocation failure, etc, sync
    HDD_WLAN_WMM_STATUS_INTERNAL_FAILURE = 19,
 
-   /* U-APSD failed during setup but OTA setup (whether TSPEC exchange or
-      re-assoc) was done so app should release this QoS, async */
+   // U-APSD failed during setup but OTA setup (whether TSPEC exchnage or
+   // re-assoc) was done so app should release this QoS, async
    HDD_WLAN_WMM_STATUS_SETUP_UAPSD_SET_FAILED = 20,
-   /* U-APSD failed during modify, but OTA setup (whether TSPEC exchange or
-      re-assoc) was done so app should release this QoS, async */
+   // U-APSD failed during modify, but OTA setup (whether TSPEC exchnage or
+   // re-assoc) was done so app should release this QoS, async
    HDD_WLAN_WMM_STATUS_MODIFY_UAPSD_SET_FAILED = 21
 
 } hdd_wlan_wmm_status_e;
@@ -223,9 +223,6 @@ typedef enum
 
 #define HS20_OUI_TYPE   "\x50\x6f\x9a\x10"
 #define HS20_OUI_TYPE_SIZE  4
-
-#define OSEN_OUI_TYPE   "\x50\x6f\x9a\x12"
-#define OSEN_OUI_TYPE_SIZE  4
 
 #ifdef WLAN_FEATURE_WFD
 #define WFD_OUI_TYPE   "\x50\x6f\x9a\x0a"
@@ -335,9 +332,6 @@ extern int hdd_wlan_get_frag_threshold(hdd_adapter_t *pAdapter,
 extern void hdd_wlan_get_version(hdd_adapter_t *pAdapter,
                                  union iwreq_data *wrqu, char *extra);
 
-extern void hdd_wlan_get_stats(hdd_adapter_t *pAdapter, v_U16_t *length,
-                               char *buffer, v_U16_t buf_len);
-
 extern int iw_get_scan(struct net_device *dev,
                        struct iw_request_info *info,
                        union iwreq_data *wrqu, char *extra);
@@ -389,11 +383,6 @@ extern int iw_set_var_ints_getnone(struct net_device *dev, struct iw_request_inf
 extern int iw_set_three_ints_getnone(struct net_device *dev, struct iw_request_info *info,
                        union iwreq_data *wrqu, char *extra);
 
-extern int hdd_priv_get_data(struct iw_point *p_priv_data,
-                             union iwreq_data *wrqu);
-
-extern void *mem_alloc_copy_from_user_helper(const void *wrqu_data, size_t len);
-
 extern VOS_STATUS wlan_hdd_get_linkspeed_for_peermac(hdd_adapter_t *pAdapter,
                                                      tSirMacAddr macAddress);
 void hdd_clearRoamProfileIe( hdd_adapter_t *pAdapter);
@@ -438,14 +427,5 @@ VOS_STATUS  wlan_hdd_set_powersave(hdd_adapter_t *pAdapter, int mode);
 
 int hdd_setBand(struct net_device *dev, u8 ui_band);
 int hdd_setBand_helper(struct net_device *dev, const char *command);
-int wlan_hdd_update_phymode(struct net_device *net, tHalHandle hal,
-                                   int new_phymode,
-                                   hdd_context_t *phddctx);
 
-int process_wma_set_command_twoargs(int sessid, int paramid,
-                                    int sval, int ssecval, int vpdev);
-
-void hdd_GetTemperatureCB(int temperature, void *pContext);
-VOS_STATUS wlan_hdd_get_temperature(hdd_adapter_t *pAdapter,
-        union iwreq_data *wrqu, char *extra);
 #endif // __WEXT_IW_H__

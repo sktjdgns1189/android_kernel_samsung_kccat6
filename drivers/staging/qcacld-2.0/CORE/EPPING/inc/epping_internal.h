@@ -46,7 +46,7 @@
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
 #include <linux/semaphore.h>
-#if defined(WLAN_OPEN_SOURCE) && defined(CONFIG_HAS_WAKELOCK)
+#ifdef WLAN_OPEN_SOURCE
 #include <linux/wakelock.h>
 #endif
 #include <wlan_hdd_ftm.h>
@@ -57,7 +57,7 @@
 
 #define EPPING_LOG_MASK (1<<EPPING_CMD_CAPTURE_RECV_CNT)
 #define EPPING_STATS_LOG_COUNT 50000
-#define EPPING_KTID_KILL_WAIT_TIME_MS 50
+#define EPPING_KTID_KILL_WAIT_TIME_US 50000
 /*---------------------------------------------------------------------------
   Preprocessor definitions and constants
   -------------------------------------------------------------------------*/
@@ -139,11 +139,13 @@ typedef struct epping_adapter_s {
    struct net_device *dev;
    v_MACADDR_t macAddressCurrent;
    tANI_U8 sessionId;
+#if !defined(HIF_USB)
    /* for mboxping */
    adf_os_spinlock_t       data_lock;
    adf_nbuf_queue_t        nodrop_queue;
    adf_os_timer_t          epping_timer;
    epping_tx_timer_state_t epping_timer_state;
+#endif
    bool registered;
    bool started;
    struct net_device_stats stats;

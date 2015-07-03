@@ -46,6 +46,7 @@
 #include <linux/delay.h>
 #include <wcnss_api.h>
 #include <wlan_hdd_tx_rx.h>
+#include <palTimer.h>
 #include <wniApi.h>
 #include <wlan_nlink_srv.h>
 #include <wlan_btc_svc.h>
@@ -76,7 +77,9 @@ int epping_cookie_init(epping_context_t*pEpping_ctx)
          vos_mem_malloc(sizeof(struct epping_cookie)*MAX_COOKIE_SLOT_SIZE);
       if (pEpping_ctx->s_cookie_mem == NULL) {
          EPPING_LOG(VOS_TRACE_LEVEL_FATAL,
-            "%s: no mem for cookie (idx = %d)", __func__, i);
+            "%s: no mem for cookie (idx = %d, size = %d)",
+            __func__, i,
+            sizeof(struct epping_cookie)*MAX_COOKIE_SLOT_SIZE);
          goto error;
       }
       vos_mem_zero(pEpping_ctx->s_cookie_mem[i],
@@ -272,20 +275,12 @@ void epping_register_tx_copier(HTC_ENDPOINT_ID eid, epping_context_t *pEpping_ct
 }
 void epping_unregister_tx_copier(HTC_ENDPOINT_ID eid, epping_context_t *pEpping_ctx)
 {
-   epping_poll_t *epping_poll;
-
-   if (eid < 0 || eid >= EPPING_MAX_NUM_EPIDS ) {
-      EPPING_LOG(VOS_TRACE_LEVEL_FATAL, "%s: invalid eid = %d",
-         __func__, eid);
-      return;
-   }
-
-   epping_poll = &pEpping_ctx->epping_poll[eid];
+   epping_poll_t *epping_poll = &pEpping_ctx->epping_poll[eid];
 
    epping_poll->done = true;
    if (epping_poll->inited) {
       epping_tx_copier_schedule(pEpping_ctx, eid, NULL);
-      msleep(EPPING_KTID_KILL_WAIT_TIME_MS);
+      usleep(EPPING_KTID_KILL_WAIT_TIME_US);
    }
    if (epping_poll->skb)
       adf_nbuf_free(epping_poll->skb);

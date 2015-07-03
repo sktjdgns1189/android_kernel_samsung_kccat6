@@ -78,9 +78,7 @@ tSirRetStatus limSendSwitchChnlParams(tpAniSirGlobal pMac, tANI_U8 chnlNumber,
                                       ePhyChanBondState secondaryChnlOffset,
                                       tANI_U8 localPwrConstraint,tANI_U8 peSessionId);
 #endif
-tSirRetStatus limSendEdcaParams(tpAniSirGlobal pMac,
-                                tSirMacEdcaParamRecord *pUpdatedEdcaParams,
-                                tANI_U16 bssIdx);
+tSirRetStatus limSendEdcaParams(tpAniSirGlobal pMac, tSirMacEdcaParamRecord *pUpdatedEdcaParams, tANI_U16 bssIdx, tANI_BOOLEAN highPerformance);
 tSirRetStatus limSetLinkState(tpAniSirGlobal pMac, tSirLinkState state,  tSirMacAddr bssId,
                               tSirMacAddr selfMac, tpSetLinkStateCallback callback,
                               void *callbackArg);
@@ -103,6 +101,11 @@ void limSetActiveEdcaParams(tpAniSirGlobal pMac, tSirMacEdcaParamRecord *plocalE
 
 tSirRetStatus limSendBeaconFilterInfo(tpAniSirGlobal pMac, tpPESession psessionEntry);
 
+#ifdef FEATURE_WLAN_TDLS_INTERNAL
+tSirRetStatus limSendTdlsLinkEstablish(tpAniSirGlobal pMac, tANI_U8 bIsPeerResponder, tANI_U8 linkIdenOffset, \
+                tANI_U8 ptiBufStatusOffset, tANI_U8 ptiFrameLen, tANI_U8 *ptiFrame, tANI_U8 *extCapability);
+tSirRetStatus limSendTdlsLinkTeardown(tpAniSirGlobal pMac, tANI_U16 staId);
+#endif
 #ifdef WLAN_FEATURE_11W
 tSirRetStatus limSendExcludeUnencryptInd(tpAniSirGlobal pMac,
                                          tANI_BOOLEAN excludeUnenc,

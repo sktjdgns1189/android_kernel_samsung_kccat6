@@ -20,9 +20,10 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
 
 
@@ -69,9 +70,13 @@ when        who          what, where, why
 
 #include "aniGlobal.h"
 
+#ifdef QCA_WIFI_2_0
 #include "wma_api.h"
 #include "wma_stub.h"
 #include "i_vos_packet.h"
+#else
+#include "wlan_qct_wdi_ds.h"
+#endif
 
 /* Add Include */
 
@@ -129,6 +134,7 @@ typedef enum
   eWDA_AUTH_TYPE_UNKNOWN = eCSR_AUTH_TYPE_FAILED,
 }WDA_AuthType;
 
+#ifdef QCA_WIFI_2_0
 #ifdef FEATURE_WLAN_TDLS
 typedef enum
 {
@@ -136,13 +142,8 @@ typedef enum
   WDA_TDLS_PEER_STATE_CONNECTED,
   WDA_TDLS_PEER_STATE_TEARDOWN,
 } WDA_TdlsPeerState;
-/* WMI_TDLS_SET_OFFCHAN_MODE_CMDID */
-typedef enum
-{
-  WDA_TDLS_ENABLE_OFFCHANNEL,
-  WDA_TDLS_DISABLE_OFFCHANNEL
-}WDA_TdlsOffchanMode;
 #endif /* FEATURE_WLAN_TDLS */
+#endif /* QCA_WIFI_2_0 */
 
 /*--------------------------------------------------------------------------
   Utilities
@@ -150,6 +151,7 @@ typedef enum
 
 #define WDA_TLI_CEIL( _a, _b)  (( 0 != (_a)%(_b))? (_a)/(_b) + 1: (_a)/(_b))
 
+#ifdef QCA_WIFI_2_0
 
 #define IS_MCC_SUPPORTED 1
 #define IS_FEATURE_SUPPORTED_BY_FW(feat_enum_value) wma_getFwWlanFeatCaps(feat_enum_value)
@@ -172,6 +174,36 @@ typedef enum
 #define IS_ADVANCE_TDLS_ENABLE 0
 #endif
 
+#else	/* #ifdef QCA_WIFI_2_0 */
+
+/*
+ * Check the version number and find if MCC feature is supported or not
+ */
+#define IS_MCC_SUPPORTED (WDA_IsWcnssWlanReportedVersionGreaterThanOrEqual( 0, 1, 1, 0))
+#define IS_FEATURE_SUPPORTED_BY_FW(featEnumValue) (!!WDA_getFwWlanFeatCaps(featEnumValue))
+
+#ifdef WLAN_ACTIVEMODE_OFFLOAD_FEATURE
+#define IS_ACTIVEMODE_OFFLOAD_FEATURE_ENABLE ((WDA_getFwWlanFeatCaps(WLANACTIVE_OFFLOAD)) & (WDI_getHostWlanFeatCaps(WLANACTIVE_OFFLOAD)))
+#else
+#define IS_ACTIVEMODE_OFFLOAD_FEATURE_ENABLE 0
+#endif
+
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+#define IS_ROAM_SCAN_OFFLOAD_FEATURE_ENABLE ((WDI_getHostWlanFeatCaps(WLAN_ROAM_SCAN_OFFLOAD)) & (WDA_getFwWlanFeatCaps(WLAN_ROAM_SCAN_OFFLOAD)))
+#else
+#define IS_ROAM_SCAN_OFFLOAD_FEATURE_ENABLE 0
+#endif
+
+/* Check if heartbeat offload is enabled */
+#define IS_IBSS_HEARTBEAT_OFFLOAD_FEATURE_ENABLE ((WDI_getHostWlanFeatCaps(IBSS_HEARTBEAT_OFFLOAD)) & (WDA_getFwWlanFeatCaps(IBSS_HEARTBEAT_OFFLOAD)))
+
+#ifdef FEATURE_WLAN_TDLS
+#define IS_ADVANCE_TDLS_ENABLE ((WDI_getHostWlanFeatCaps(ADVANCE_TDLS)) & (WDA_getFwWlanFeatCaps(ADVANCE_TDLS)))
+#else
+#define IS_ADVANCE_TDLS_ENABLE 0
+#endif
+
+#endif	/* #ifdef QCA_WIFI_2_0 */
 
 /*--------------------------------------------------------------------------
   Definitions for Data path APIs
@@ -296,6 +328,22 @@ typedef enum
 /*--------------------------------------------------------------------------
   Functions
  --------------------------------------------------------------------------*/
+#ifndef QCA_WIFI_2_0
+/* For data client */
+typedef VOS_STATUS (*WDA_DS_TxCompleteCallback) ( v_PVOID_t pContext, vos_pkt_t *pFrameDataBuff, VOS_STATUS txStatus );
+typedef VOS_STATUS (*WDA_DS_RxPacketCallback)   ( v_PVOID_t pContext, vos_pkt_t *pFrameDataBuff );
+typedef v_U32_t   (*WDA_DS_TxPacketCallback)   ( v_PVOID_t pContext,
+                                                  vos_pkt_t **ppFrameDataBuff,
+                                                  v_U32_t uSize,
+                                                  v_U8_t uFlowMask,
+                                                  v_BOOL_t *pbUrgent );
+typedef VOS_STATUS (*WDA_DS_ResourceCB)      ( v_PVOID_t pContext, v_U32_t uCount );
+
+/* For management client */
+typedef VOS_STATUS (*WDA_DS_TxCompleteCb)( v_PVOID_t     pContext, wpt_packet *pFrame );
+typedef VOS_STATUS (*WDA_DS_RxCompleteCb)( v_PVOID_t pContext, wpt_packet *pFrame );
+typedef VOS_STATUS (*WDA_DS_TxFlowControlCb)( v_PVOID_t pContext, v_U8_t acMask );
+#endif
 typedef void (*pWDATxRxCompFunc)( v_PVOID_t pContext, void *pData,
                                   v_BOOL_t bFreeData );
 
@@ -362,11 +410,22 @@ typedef struct
    tSirMacAddr          macBSSID;             /*BSSID of the network */
    tSirMacAddr          macSTASelf;     /*Self STA MAC*/
 
+#ifndef QCA_WIFI_2_0
+   /* TX channel mask for flow control */
+   v_U8_t               uTxFlowMask;
+   /* TL's TX resource callback        */
+   WDA_DS_ResourceCB    pfnTxResourceCB;
+   /* TL's TX complete callback     */
+   WDA_DS_TxCompleteCallback pfnTxCompleteCallback;
+#endif
 
    tWdaStaInfo          wdaStaInfo[WDA_MAX_STA];
 
    tANI_U8              wdaMaxSta;
    tWdaTimers           wdaTimers;
+
+   /* STA, AP, IBSS, MULTI-BSS etc.*/
+   tBssSystemRole       wdaGlobalSystemRole;
 
    /* driver mode, PRODUCTION or FTM */
    tDriverType          driverMode;
@@ -410,13 +469,14 @@ typedef struct
    v_PVOID_t            wdaWdiApiMsgParam;      /* WDI API paramter tracking */
 } tWDA_ReqParams;
 
+#ifdef QCA_WIFI_2_0
 typedef struct {
    v_UINT_t param_id;
    v_UINT_t param_value;
-   v_UINT_t param_sec_value;
    v_UINT_t param_vdev_id;
    v_UINT_t param_vp_dev;
 } wda_cli_set_cmd_t;
+#endif
 
 /*
  * FUNCTION: WDA_MgmtDSTxPacket
@@ -433,23 +493,32 @@ VOS_STATUS WDA_TxPacket(void *pWDA,
                         void *pData,
                         pWDAAckFnTxComp pAckTxComp,
                         tANI_U8 txFlag,
-                        tANI_U8 sessionId,
-                        bool tdlsflag);
+                        tANI_U8 sessionId);
 
 /*
  * FUNCTION: WDA_open
  * open WDA context
  */
 
+#ifndef QCA_WIFI_ISOC
 VOS_STATUS WDA_open(v_PVOID_t pVosContext, v_PVOID_t pOSContext,
                           wda_tgt_cfg_cb pTgtUpdCB,
                           wda_dfs_radar_indication_cb radar_ind_cb,
                           tMacOpenParameters *pMacParams ) ;
+#else
+VOS_STATUS WDA_open(v_PVOID_t pVosContext, v_PVOID_t pOSContext,
+                    wda_tgt_cfg_cb pTgtUpdCB, tMacOpenParameters *pMacParams ) ;
+#endif
 
+#ifdef QCA_WIFI_2_0
 #define WDA_start wma_start
 #define WDA_MapChannel wma_map_channel
 
+#ifdef QCA_WIFI_ISOC
+#define WDA_NVDownload_Start wma_nv_download_start
+#else
 #define WDA_NVDownload_Start(x)    ({ VOS_STATUS_SUCCESS; })
+#endif
 
 #define WDA_preStart wma_pre_start
 #define WDA_stop wma_stop
@@ -458,9 +527,107 @@ VOS_STATUS WDA_open(v_PVOID_t pVosContext, v_PVOID_t pOSContext,
 #define WDA_setNeedShutdown wma_setneedshutdown
 #define WDA_needShutdown wma_needshutdown
 #define WDA_McProcessMsg wma_mc_process_msg
+#else	/* #ifdef QCA_WIFI_2_0 */
+
+/*
+ * FUNCTION: WDA_preStart
+ * Trigger DAL-AL to start CFG download
+ */
+VOS_STATUS WDA_start(v_PVOID_t pVosContext) ;
+
+VOS_STATUS WDA_NVDownload_Start(v_PVOID_t pVosContext);
+
+/*
+ * FUNCTION: WDA_preStart
+ * Trigger WDA to start CFG download
+ */
+VOS_STATUS WDA_preStart(v_PVOID_t pVosContext) ;
+/*
+ * FUNCTION: WDA_stop
+ * stop WDA
+ */
+VOS_STATUS WDA_stop(v_PVOID_t pVosContext,tANI_U8 reason);
+
+/*
+ * FUNCTION: WDA_close
+ * close WDA context
+ */
+VOS_STATUS WDA_close(v_PVOID_t pVosContext);
+/*
+ * FUNCTION: WDA_shutdown
+ * Shutdown will not close the control transport, added by SSR
+ */
+VOS_STATUS WDA_shutdown(v_PVOID_t pVosContext, wpt_boolean closeTransport);
+
+/*
+ * FUNCTION: WDA_setNeedShutdown
+ * WDA stop failed or WDA NV Download failed
+ */
+void WDA_setNeedShutdown(v_PVOID_t pVosContext);
+/*
+ * FUNCTION: WDA_needShutdown
+ * WDA requires a shutdown rather than a close
+ */
+v_BOOL_t WDA_needShutdown(v_PVOID_t pVosContext);
+
+/*
+ * FUNCTION: WDA_McProcessMsg
+ * DAL-AL message processing entry function
+ */
+
+VOS_STATUS WDA_McProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg ) ;
+
+/* -----------------------------------------------------------------
+ * WDA data path API's
+ * ----------------------------------------------------------------*/
+/*
+ * FUNCTION: WDA_MgmtDSRegister
+ * Send Message back to PE
+ */
+
+VOS_STATUS WDA_MgmtDSRegister(tWDA_CbContext *pWDA,
+                              WDA_DS_TxCompleteCb WDA_TxCompleteCallback,
+                              WDA_DS_RxCompleteCb WDA_RxCompleteCallback,
+                              WDA_DS_TxFlowControlCb WDA_TxFlowCtrlCallback
+                             ) ;
+
+/*
+ * FUNCTION: WDA_PostMsgApi
+ * API fpr PE to post Message to WDA
+ */
+VOS_STATUS WDA_PostMsgApi(tpAniSirGlobal pMac, tSirMsgQ *pMsg) ;
+
+/* ---------------------------------------------------------
+ * FUNCTION:  wdaGetGlobalSystemRole()
+ *
+ * Get the global HAL system role.
+ * ---------------------------------------------------------
+ */
+tBssSystemRole wdaGetGlobalSystemRole(tpAniSirGlobal pMac);
+
+tANI_U8 WDA_MapChannel(tANI_U8);
+
+/* maximum wait time for WDA complete event (correct value has to be derived)
+ * for now giving the value 1000 ms */
+#define WDA_WDI_COMPLETION_TIME_OUT 30000 /* in ms */
+
+#define WDA_TL_TX_FRAME_TIMEOUT  10000  /* in msec a very high upper limit of 5,000 msec */
+#define WDA_TL_SUSPEND_TIMEOUT   2000  /* in ms unit */
+
+/*Tag used by WDA to mark a timed out frame*/
+#define WDA_TL_TX_MGMT_TIMED_OUT   0xDEAD
+
+#define WDA_TL_TX_SUSPEND_SUCCESS   0
+#define WDA_TL_TX_SUSPEND_FAILURE   1
+
+// FIXME Temporary value for R33D integaration
+//#define WDA_TL_TX_FRAME_TIMEOUT  20000 /* in msec a very high upper limit */
+
+#endif	/* #ifdef QCA_WIFI_2_0 */
 
 #define DPU_FEEDBACK_UNPROTECTED_ERROR 0x0F
 
+#ifdef QCA_WIFI_2_0
 
 #define WDA_GET_RX_MAC_HEADER(pRxMeta) \
      (tpSirMacMgmtHdr)(((t_packetmeta *)pRxMeta)->mpdu_hdr_ptr)
@@ -511,15 +678,8 @@ VOS_STATUS WDA_open(v_PVOID_t pVosContext, v_PVOID_t pOSContext,
      (((t_packetmeta *)pRxMeta)->offloadScanLearn)
 #define WDA_GET_ROAMCANDIDATEIND(pRxMeta) \
      (((t_packetmeta *)pRxMeta)->roamCandidateInd)
-#define WDA_GET_SESSIONID(pRxMeta) \
-     (((t_packetmeta *)pRxMeta)->sessionId)
 
 #endif
-
-#ifdef FEATURE_WLAN_EXTSCAN
-#define WMA_IS_EXTSCAN_SCAN_SRC(pRxMeta) \
-     ((((t_packetmeta *)pRxMeta)->scan_src) == WMI_MGMT_RX_HDR_EXTSCAN)
-#endif /* FEATURE_WLAN_EXTSCAN */
 
 #define WDA_GET_RX_SNR(pRxMeta) \
      (((t_packetmeta *)pRxMeta)->snr)
@@ -531,6 +691,238 @@ VOS_STATUS WDA_open(v_PVOID_t pVosContext, v_PVOID_t pOSContext,
 
 #define WDA_GET_RX_RFBAND(pRxMeta) 0
 
+#else	/* #ifdef QCA_WIFI_2_0 */
+
+/* ---------------------------------------------------------------------------
+
+   RX Meta info access for Integrated SOC
+   RX BD header access for NON Integrated SOC
+
+      These MACRO are for RX frames that are on flat buffers
+
+  ---------------------------------------------------------------------------*/
+
+/* WDA_GET_RX_MAC_HEADER *****************************************************/
+#  define WDA_GET_RX_MAC_HEADER(pRxMeta)  \
+      (tpSirMacMgmtHdr)( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->mpduHeaderPtr )
+
+/* WDA_GET_RX_MPDUHEADER3A ****************************************************/
+#  define WDA_GET_RX_MPDUHEADER3A(pRxMeta) \
+   (tpSirMacDataHdr3a)( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->mpduHeaderPtr )
+
+/* WDA_GET_RX_MPDU_HEADER_LEN *************************************************/
+#  define WDA_GET_RX_MPDU_HEADER_LEN(pRxMeta)   \
+                    ( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->mpduHeaderLength )
+
+/* WDA_GET_RX_MPDU_LEN ********************************************************/
+#  define WDA_GET_RX_MPDU_LEN(pRxMeta)  \
+               ( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->mpduLength )
+
+/* WDA_GET_RX_PAYLOAD_LEN ****************************************************/
+#  define WDA_GET_RX_PAYLOAD_LEN(pRxMeta)   \
+       ( WDA_GET_RX_MPDU_LEN(pRxMeta) - WDA_GET_RX_MPDU_HEADER_LEN(pRxMeta) )
+
+/* WDA_GET_RX_MAC_RATE_IDX ***************************************************/
+#  define WDA_GET_RX_MAC_RATE_IDX(pRxMeta)  \
+                          ( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->rateIndex )
+
+/* WDA_GET_RX_MPDU_DATA ******************************************************/
+#  define WDA_GET_RX_MPDU_DATA(pRxMeta)  \
+                   ( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->mpduDataPtr )
+
+/* WDA_GET_RX_MPDU_DATA_OFFSET ***********************************************/
+// For Integrated SOC: When UMAC receive the packet. BD is already stripped off.
+//                     Data offset is the MPDU header length
+#  define WDA_GET_RX_MPDU_DATA_OFFSET(pRxMeta)  WDA_GET_RX_MPDU_HEADER_LEN(pRxMeta)
+
+/* WDA_GET_RX_MPDU_HEADER_OFFSET *********************************************/
+// For Integrated SOC: We UMAC receive the frame,
+//                     BD is gone and MAC header at offset 0
+#  define WDA_GET_RX_MPDU_HEADER_OFFSET(pRxMeta)   0
+
+/* WDA_GET_RX_UNKNOWN_UCAST **************************************************/
+#  define WDA_GET_RX_UNKNOWN_UCAST(pRxMeta)   \
+                     ( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->unknownUcastPkt )
+
+/* WDA_GET_RX_TID ************************************************************/
+#  define WDA_GET_RX_TID(pRxMeta) ( ((WDI_DS_RxMetaInfoType *)(pRxMeta))->tid )
+
+/* WDA_GET_RX_STAID **********************************************************/
+#  define WDA_GET_RX_STAID(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->staId)
+
+/* WDA_GET_RX_ADDR3_IDX ******************************************************/
+#  define WDA_GET_RX_ADDR3_IDX(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->addr3Idx)
+
+/* WDA_GET_RX_CH *************************************************************/
+#  define WDA_GET_RX_CH(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rxChannel)
+
+/* WDA_GET_RX_RFBAND *********************************************************/
+#  define WDA_GET_RX_RFBAND(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rfBand)
+
+/* WDA_GET_RX_DPUSIG *********************************************************/
+#  define WDA_GET_RX_DPUSIG(pRxMeta)  (((WDI_DS_RxMetaInfoType*)(pRxMeta))->dpuSig)
+
+/* WDA_IS_RX_BCAST ***********************************************************/
+#  define WDA_IS_RX_BCAST(pRxMeta)   \
+      ( (1 == ((WDI_DS_RxMetaInfoType*)(pRxMeta))->bcast) ? VOS_TRUE : VOS_FALSE )
+
+/* WDA_GET_RX_FT_DONE ********************************************************/
+#  define WDA_GET_RX_FT_DONE(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->ft)
+
+/* WDA_GET_RX_DPU_FEEDBACK **************************************************/
+#  define WDA_GET_RX_DPU_FEEDBACK(pRxMeta) \
+                      (((WDI_DS_RxMetaInfoType*)(pRxMeta))->dpuFeedback)
+
+/* WDA_GET_RX_ASF ************************************************************/
+#  define WDA_GET_RX_ASF(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->amsdu_asf)
+
+/* WDA_GET_RX_AEF ************************************************************/
+#  define WDA_GET_RX_AEF(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->amsdu_aef)
+
+/* WDA_GET_RX_ESF ************************************************************/
+#  define WDA_GET_RX_ESF(pRxMeta)  (((WDI_DS_RxMetaInfoType*)(pRxMeta))->amsdu_esf)
+
+/* WDA_GET_RX_BEACON_SENT ****************************************************/
+#  define WDA_GET_RX_BEACON_SENT(pRxMeta) \
+                     (((WDI_DS_RxMetaInfoType*)(pRxMeta))->bsf)
+
+/* WDA_GET_RX_TSF_LATER *****************************************************/
+#  define WDA_GET_RX_TSF_LATER(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rtsf)
+
+/* WDA_GET_RX_TYPE ***********************************************************/
+#  define WDA_GET_RX_TYPE(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->type)
+
+/* WDA_GET_RX_SUBTYPE ********************************************************/
+#  define WDA_GET_RX_SUBTYPE(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->subtype)
+
+/* WDA_GET_RX_TYPE_SUBTYPE ****************************************************/
+#  define WDA_GET_RX_TYPE_SUBTYPE(pRxMeta)  \
+                 ((WDA_GET_RX_TYPE(pRxMeta)<<4)|WDA_GET_RX_SUBTYPE(pRxMeta))
+
+/* WDA_GET_RX_REORDER_OPCODE : For MSDU reorder *******************************/
+#  define WDA_GET_RX_REORDER_OPCODE(pRxMeta) \
+           (((WDI_DS_RxMetaInfoType*)(pRxMeta))->ampdu_reorderOpcode)
+
+/* WDA_GET_RX_REORDER_SLOT_IDX : For MSDU reorder ****************************/
+#  define WDA_GET_RX_REORDER_SLOT_IDX(pRxMeta) \
+                (((WDI_DS_RxMetaInfoType*)(pRxMeta))->ampdu_reorderSlotIdx)
+
+/* WDA_GET_RX_REORDER_FWD_IDX : For MSDU reorder *****************************/
+#  define WDA_GET_RX_REORDER_FWD_IDX(pRxMeta)  \
+         (((WDI_DS_RxMetaInfoType*)(pRxMeta))->ampdu_reorderFwdIdx)
+
+/* WDA_GET_RX_REORDER_CUR_PKT_SEQ_NO : Fro MSDU reorder **********************/
+#  define WDA_GET_RX_REORDER_CUR_PKT_SEQ_NO(pRxMeta)  \
+         (((WDI_DS_RxMetaInfoType*)(pRxMeta))->currentPktSeqNo)
+
+/* WDA_IS_RX_LLC_PRESENT *****************************************************/
+#  define WDA_IS_RX_LLC_PRESENT(pRxMeta)    \
+      ( (0 == ((WDI_DS_RxMetaInfoType*)(pRxMeta))->llcr) ? VOS_TRUE : VOS_FALSE )
+
+#define WLANWDA_HO_IS_AN_AMPDU                    0x4000
+#define WLANWDA_HO_LAST_MPDU_OF_AMPDU             0x400
+
+/* WDA_IS_RX_AN_AMPDU ********************************************************/
+#  define WDA_IS_RX_AN_AMPDU(pRxMeta)       \
+   ( ((WDI_DS_RxMetaInfoType*)(pRxMeta))->rxpFlags & WLANWDA_HO_IS_AN_AMPDU )
+
+/* WDA_IS_RX_LAST_MPDU *******************************************************/
+#  define WDA_IS_RX_LAST_MPDU(pRxMeta)      \
+   ( ((WDI_DS_RxMetaInfoType*)(pRxMeta))->rxpFlags & WLANWDA_HO_LAST_MPDU_OF_AMPDU )
+
+/* WDA_GET_RX_TIMESTAMP *****************************************************/
+#  define WDA_GET_RX_TIMESTAMP(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->mclkRxTimestamp)
+
+/* WDA_IS_RX_IN_SCAN *********************************************************/
+#  define WDA_IS_RX_IN_SCAN(pRxMeta)  (((WDI_DS_RxMetaInfoType*)(pRxMeta))->scan)
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+/* WDA_GET_OFFLOADSCANLEARN **************************************************/
+#  define WDA_GET_OFFLOADSCANLEARN(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->offloadScanLearn)
+/* WDA_GET_ROAMCANDIDATEIND **************************************************/
+#  define WDA_GET_ROAMCANDIDATEIND(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->roamCandidateInd)
+#endif
+/* WDA_GET_RX_RSSI_DB ********************************************************/
+// Volans RF
+#  define WDA_RSSI_OFFSET             100
+#  define WDA_GET_RSSI0_DB(rssi0)     (rssi0 - WDA_RSSI_OFFSET)
+#  define WDA_GET_RSSI1_DB(rssi0)     (0 - WDA_RSSI_OFFSET)
+#  define WDA_MAX_OF_TWO(val1, val2)  ( ((val1) > (val2)) ? (val1) : (val2))
+#  define WDA_GET_RSSI_DB(rssi0)  \
+                WDA_MAX_OF_TWO(WDA_GET_RSSI0_DB(rssi0), WDA_GET_RSSI1_DB(rssi0))
+#  define WDA_GET_RX_RSSI_DB(pRxMeta) \
+                       WDA_GET_RSSI_DB((((WDI_DS_RxMetaInfoType*)(pRxMeta))->rssi0))
+
+/* WDA_GET_RX_SNR ************************************************************/
+#  define WDA_GET_RX_SNR(pRxMeta)  (((WDI_DS_RxMetaInfoType*)(pRxMeta))->snr)
+
+/* WDA_IS_RX_FC **************************************************************/
+// Flow control frames
+/* FIXME WDA should provide the meta info which indicates FC frame
+          In the meantime, use hardcoded FALSE, since we don't support FC yet */
+#  define WDA_IS_RX_FC(pRxMeta)    (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fc)
+
+/* WDA_GET_RX_FC_VALID_STA_MASK **********************************************/
+#  define WDA_GET_RX_FC_VALID_STA_MASK(pRxMeta) \
+                       (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fcSTAValidMask)
+
+/* WDA_GET_RX_FC_PWRSAVE_STA_MASK ********************************************/
+#  define WDA_GET_RX_FC_PWRSAVE_STA_MASK(pRxMeta) \
+                 (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fcSTAPwrSaveStateMask)
+
+/* WDA_GET_RX_FC_STA_THRD_IND_MASK ********************************************/
+#  define WDA_GET_RX_FC_STA_THRD_IND_MASK(pRxMeta) \
+                     (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fcSTAThreshIndMask)
+
+/* WDA_GET_RX_FC_FORCED_STA_TX_DISABLED_BITMAP ********************************************/
+#  define WDA_GET_RX_FC_STA_TX_DISABLED_BITMAP(pRxMeta) \
+                     (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fcStaTxDisabledBitmap)
+
+/* WDA_GET_RX_FC_STA_TXQ_LEN *************************************************/
+#  define WDA_GET_RX_FC_STA_TXQ_LEN(pRxMeta, staId) \
+                  (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fcSTATxQLen[(staId)])
+
+/* WDA_GET_RX_FC_STA_CUR_TXRATE **********************************************/
+#  define WDA_GET_RX_FC_STA_CUR_TXRATE(pRxMeta, staId) \
+                (((WDI_DS_RxMetaInfoType*)(pRxMeta))->fcSTACurTxRate[(staId)])
+
+/* WDA_GET_RX_REPLAY_COUNT ***************************************************/
+#  define WDA_GET_RX_REPLAY_COUNT(pRxMeta) \
+                            (((WDI_DS_RxMetaInfoType*)(pRxMeta))->replayCount)
+
+/* WDA_GETRSSI0 ***************************************************************/
+#  define WDA_GETRSSI0(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rssi0)
+
+/* WDA_GETRSSI1 ***************************************************************/
+#  define WDA_GETRSSI1(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rssi1)
+
+/* WDA_GET_RX_RMF *****************************************************/
+#ifdef WLAN_FEATURE_11W
+#  define WDA_GET_RX_RMF(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rmf)
+#endif
+
+/* --------------------------------------------------------------------*/
+
+uint8 WDA_IsWcnssWlanCompiledVersionGreaterThanOrEqual(uint8 major, uint8 minor, uint8 version, uint8 revision);
+uint8 WDA_IsWcnssWlanReportedVersionGreaterThanOrEqual(uint8 major, uint8 minor, uint8 version, uint8 revision);
+
+
+VOS_STATUS WDA_GetWcnssWlanCompiledVersion(v_PVOID_t pvosGCtx,
+                                           tSirVersionType *pVersion);
+VOS_STATUS WDA_GetWcnssWlanReportedVersion(v_PVOID_t pvosGCtx,
+                                           tSirVersionType *pVersion);
+VOS_STATUS WDA_GetWcnssSoftwareVersion(v_PVOID_t pvosGCtx,
+                                       tANI_U8 *pVersion,
+                                       tANI_U32 versionBufferSize);
+VOS_STATUS WDA_GetWcnssHardwareVersion(v_PVOID_t pvosGCtx,
+                                       tANI_U8 *pVersion,
+                                       tANI_U32 versionBufferSize);
+
+VOS_STATUS WDA_SetUapsdAcParamsReq(v_PVOID_t , v_U8_t , tUapsdInfo *);
+VOS_STATUS WDA_ClearUapsdAcParamsReq(v_PVOID_t , v_U8_t , wpt_uint8 );
+VOS_STATUS WDA_SetRSSIThresholdsReq(tpAniSirGlobal , tSirRSSIThresholds *);
+// Just declare the function extern here and save some time.
+extern tSirRetStatus halMmhForwardMBmsg(void*, tSirMbMsg*);
+#endif	/* #ifdef QCA_WIFI_2_0 */
 
 tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 
@@ -544,8 +936,13 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #  define WDA_MAX_OF_TWO(val1, val2)  ( ((val1) > (val2)) ? (val1) : (val2))
 #  define WDA_GET_RSSI_DB(rssi0)  \
                 WDA_MAX_OF_TWO(WDA_GET_RSSI0_DB(rssi0), WDA_GET_RSSI1_DB(rssi0))
+#ifdef QCA_WIFI_2_0
 #define WDA_GET_RX_RSSI_DB(pRxMeta) \
                        (((t_packetmeta *)pRxMeta)->rssi)
+#else
+#  define WDA_GET_RX_RSSI_DB(pRxMeta) \
+                       WDA_GET_RSSI_DB((((WDI_DS_RxMetaInfoType*)(pRxMeta))->rssi0))
+#endif
 
 //WDA Messages to HAL messages Mapping
 #if 0
@@ -590,6 +987,9 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_CCA_CHANGE_MODE            SIR_HAL_CCA_CHANGE_MODE
 #define WDA_TIMER_WRAP_AROUND_STATS_COLLECT_REQ   SIR_HAL_TIMER_WRAP_AROUND_STATS_COLLECT_REQ
 
+/*
+ * New Taurus related messages
+ */
 #define WDA_ADD_STA_REQ                SIR_HAL_ADD_STA_REQ
 #define WDA_ADD_STA_RSP                SIR_HAL_ADD_STA_RSP
 #define WDA_ADD_STA_SELF_RSP           SIR_HAL_ADD_STA_SELF_RSP
@@ -610,7 +1010,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_FINISH_SCAN_RSP            SIR_HAL_FINISH_SCAN_RSP
 #define WDA_SEND_BEACON_REQ            SIR_HAL_SEND_BEACON_REQ
 #define WDA_SEND_BEACON_RSP            SIR_HAL_SEND_BEACON_RSP
-#define WDA_SEND_PROBE_RSP_TMPL        SIR_HAL_SEND_PROBE_RSP_TMPL
 
 #define WDA_INIT_CFG_REQ               SIR_HAL_INIT_CFG_REQ
 #define WDA_INIT_CFG_RSP               SIR_HAL_INIT_CFG_RSP
@@ -724,7 +1123,9 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_SET_TX_POWER_REQ                    SIR_HAL_SET_TX_POWER_REQ
 #define WDA_SET_TX_POWER_RSP                    SIR_HAL_SET_TX_POWER_RSP
 #define WDA_GET_TX_POWER_REQ                    SIR_HAL_GET_TX_POWER_REQ
+#define WDA_GET_TX_POWER_RSP                    SIR_HAL_GET_TX_POWER_RSP
 #define WDA_GET_NOISE_REQ                       SIR_HAL_GET_NOISE_REQ
+#define WDA_GET_NOISE_RSP                       SIR_HAL_GET_NOISE_RSP
 #define WDA_SET_TX_PER_TRACKING_REQ    SIR_HAL_SET_TX_PER_TRACKING_REQ
 
 /* Messages to support transmit_halt and transmit_resume */
@@ -739,6 +1140,7 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_ENTER_UAPSD_RSP            SIR_HAL_ENTER_UAPSD_RSP
 #define WDA_EXIT_UAPSD_REQ             SIR_HAL_EXIT_UAPSD_REQ
 #define WDA_EXIT_UAPSD_RSP             SIR_HAL_EXIT_UAPSD_RSP
+#define WDA_LOW_RSSI_IND               SIR_HAL_LOW_RSSI_IND
 #define WDA_BEACON_FILTER_IND          SIR_HAL_BEACON_FILTER_IND
 /// PE <-> HAL WOWL messages
 #define WDA_WOWL_ADD_BCAST_PTRN        SIR_HAL_WOWL_ADD_BCAST_PTRN
@@ -758,6 +1160,7 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_BTC_SET_CFG                SIR_HAL_BTC_SET_CFG
 #define WDA_SIGNAL_BT_EVENT            SIR_HAL_SIGNAL_BT_EVENT
 #define WDA_HANDLE_FW_MBOX_RSP         SIR_HAL_HANDLE_FW_MBOX_RSP
+#define WDA_UPDATE_PROBE_RSP_TEMPLATE_IND     SIR_HAL_UPDATE_PROBE_RSP_TEMPLATE_IND
 #define WDA_SIGNAL_BTAMP_EVENT         SIR_HAL_SIGNAL_BTAMP_EVENT
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
@@ -833,11 +1236,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_START_ROAM_CANDIDATE_LOOKUP_REQ             SIR_HAL_START_ROAM_CANDIDATE_LOOKUP_REQ
 #endif
 
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
-#define WDA_ROAM_OFFLOAD_SYNCH_CNF  SIR_HAL_ROAM_OFFLOAD_SYNCH_CNF
-#define WDA_ROAM_OFFLOAD_SYNCH_IND  SIR_HAL_ROAM_OFFLOAD_SYNCH_IND
-#define WDA_ROAM_OFFLOAD_SYNCH_FAIL SIR_HAL_ROAM_OFFLOAD_SYNCH_FAIL
-#endif
 #ifdef WLAN_WAKEUP_EVENTS
 #define WDA_WAKE_REASON_IND    SIR_HAL_WAKE_REASON_IND
 #endif // WLAN_WAKEUP_EVENTS
@@ -854,7 +1252,9 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_DHCP_START_IND              SIR_HAL_DHCP_START_IND
 #define WDA_DHCP_STOP_IND               SIR_HAL_DHCP_STOP_IND
 
+#ifdef QCA_WIFI_2_0
 #define WDA_HIDDEN_SSID_VDEV_RESTART    SIR_HAL_HIDE_SSID_VDEV_RESTART
+#endif /* QCA_WIFI_2_0 */
 
 #ifdef WLAN_FEATURE_GTK_OFFLOAD
 #define WDA_GTK_OFFLOAD_REQ             SIR_HAL_GTK_OFFLOAD_REQ
@@ -874,10 +1274,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_GET_ROAM_RSSI_REQ      SIR_HAL_GET_ROAM_RSSI_REQ
 #define WDA_GET_ROAM_RSSI_RSP      SIR_HAL_GET_ROAM_RSSI_RSP
 
-#ifdef WLAN_FEATURE_NAN
-#define WDA_NAN_REQUEST            SIR_HAL_NAN_REQUEST
-#endif
-
 #define WDA_START_SCAN_OFFLOAD_REQ  SIR_HAL_START_SCAN_OFFLOAD_REQ
 #define WDA_START_SCAN_OFFLOAD_RSP  SIR_HAL_START_SCAN_OFFLOAD_RSP
 #define WDA_STOP_SCAN_OFFLOAD_REQ  SIR_HAL_STOP_SCAN_OFFLOAD_REQ
@@ -887,8 +1283,10 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_RX_SCAN_EVENT           SIR_HAL_RX_SCAN_EVENT
 #define WDA_IBSS_PEER_INACTIVITY_IND SIR_HAL_IBSS_PEER_INACTIVITY_IND
 
+#ifdef QCA_WIFI_2_0
 #define WDA_CLI_SET_CMD             SIR_HAL_CLI_SET_CMD
 #define WDA_CLI_GET_CMD             SIR_HAL_CLI_GET_CMD
+#endif
 #ifdef FEATURE_WLAN_SCAN_PNO
 #define WDA_SME_SCAN_CACHE_UPDATED  SIR_HAL_SME_SCAN_CACHE_UPDATED
 #endif
@@ -901,14 +1299,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_LPHB_CONF_REQ          SIR_HAL_LPHB_CONF_IND
 #define WDA_LPHB_WAIT_EXPIRE_IND   SIR_HAL_LPHB_WAIT_EXPIRE_IND
 #endif /* FEATURE_WLAN_LPHB */
-
-#ifdef FEATURE_WLAN_CH_AVOID
-#define WDA_CH_AVOID_UPDATE_REQ    SIR_HAL_CH_AVOID_UPDATE_REQ
-#endif /* FEATURE_WLAN_CH_AVOID */
-
-#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
-#define WDA_SET_AUTO_SHUTDOWN_TIMER_REQ SIR_HAL_SET_AUTO_SHUTDOWN_TIMER_REQ
-#endif
 
 #define WDA_ADD_PERIODIC_TX_PTRN_IND    SIR_HAL_ADD_PERIODIC_TX_PTRN_IND
 #define WDA_DEL_PERIODIC_TX_PTRN_IND    SIR_HAL_DEL_PERIODIC_TX_PTRN_IND
@@ -926,13 +1316,14 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_TRIGGER_BATCH_SCAN_RESULT_IND SIR_HAL_TRIGGER_BATCH_SCAN_RESULT_IND
 #endif
 
+#ifdef QCA_WIFI_2_0
 #ifdef FEATURE_WLAN_TDLS
 #define WDA_UPDATE_FW_TDLS_STATE      SIR_HAL_UPDATE_FW_TDLS_STATE
 #define WDA_UPDATE_TDLS_PEER_STATE    SIR_HAL_UPDATE_TDLS_PEER_STATE
 #define WDA_TDLS_SHOULD_DISCOVER      SIR_HAL_TDLS_SHOULD_DISCOVER
 #define WDA_TDLS_SHOULD_TEARDOWN      SIR_HAL_TDLS_SHOULD_TEARDOWN
 #define WDA_TDLS_PEER_DISCONNECTED    SIR_HAL_TDLS_PEER_DISCONNECTED
-#define WDA_TDLS_SET_OFFCHAN_MODE     SIR_HAL_TDLS_SET_OFFCHAN_MODE
+#endif
 #endif
 #define WDA_SET_SAP_INTRABSS_DIS      SIR_HAL_SET_SAP_INTRABSS_DIS
 
@@ -961,47 +1352,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_ROAM_PREAUTH_IND        SIR_HAL_ROAM_PREAUTH_IND
 
 #define WDA_TBTT_UPDATE_IND         SIR_HAL_TBTT_UPDATE_IND
-
-#define WDA_GET_TEMPERATURE_REQ     SIR_HAL_GET_TEMPERATURE_REQ
-
-#ifdef FEATURE_WLAN_EXTSCAN
-#define WDA_EXTSCAN_GET_CAPABILITIES_REQ    SIR_HAL_EXTSCAN_GET_CAPABILITIES_REQ
-#define WDA_EXTSCAN_START_REQ               SIR_HAL_EXTSCAN_START_REQ
-#define WDA_EXTSCAN_STOP_REQ                SIR_HAL_EXTSCAN_STOP_REQ
-#define WDA_EXTSCAN_SET_BSSID_HOTLIST_REQ   SIR_HAL_EXTSCAN_SET_BSS_HOTLIST_REQ
-#define WDA_EXTSCAN_RESET_BSSID_HOTLIST_REQ SIR_HAL_EXTSCAN_RESET_BSS_HOTLIST_REQ
-#define WDA_EXTSCAN_SET_SIGNF_CHANGE_REQ    SIR_HAL_EXTSCAN_SET_SIGNF_CHANGE_REQ
-#define WDA_EXTSCAN_RESET_SIGNF_CHANGE_REQ  SIR_HAL_EXTSCAN_RESET_SIGNF_CHANGE_REQ
-#define WDA_EXTSCAN_GET_CACHED_RESULTS_REQ  SIR_HAL_EXTSCAN_GET_CACHED_RESULTS_REQ
-
-#endif /* FEATURE_WLAN_EXTSCAN */
-
-#ifdef WLAN_FEATURE_LINK_LAYER_STATS
-#define WDA_LINK_LAYER_STATS_CLEAR_REQ        SIR_HAL_LL_STATS_CLEAR_REQ
-#define WDA_LINK_LAYER_STATS_SET_REQ          SIR_HAL_LL_STATS_SET_REQ
-#define WDA_LINK_LAYER_STATS_GET_REQ          SIR_HAL_LL_STATS_GET_REQ
-#define WDA_LINK_LAYER_STATS_RESULTS_RSP      SIR_HAL_LL_STATS_RESULTS_RSP
-#endif /* WLAN_FEATURE_LINK_LAYER_STATS */
-
-#define WDA_LINK_STATUS_GET_REQ SIR_HAL_LINK_STATUS_GET_REQ
-#define WDA_GET_LINK_STATUS_RSP_IND SIR_HAL_GET_LINK_STATUS_RSP_IND
-
-#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
-#define WDA_WLAN_EXT_WOW                      SIR_HAL_CONFIG_EXT_WOW
-#define WDA_WLAN_SET_APP_TYPE1_PARAMS         SIR_HAL_CONFIG_APP_TYPE1_PARAMS
-#define WDA_WLAN_SET_APP_TYPE2_PARAMS         SIR_HAL_CONFIG_APP_TYPE2_PARAMS
-#endif
-
-#define WDA_SET_SCAN_MAC_OUI_REQ              SIR_HAL_SET_SCAN_MAC_OUI_REQ
-
-#ifdef DHCP_SERVER_OFFLOAD
-#define WDA_SET_DHCP_SERVER_OFFLOAD_CMD       SIR_HAL_SET_DHCP_SERVER_OFFLOAD
-#endif /* DHCP_SERVER_OFFLOAD */
-
-#ifdef WLAN_FEATURE_GPIO_LED_FLASHING
-#define WDA_LED_FLASHING_REQ   SIR_HAL_LED_FLASHING_REQ
-#endif
-
 tSirRetStatus wdaPostCtrlMsg(tpAniSirGlobal pMac, tSirMsgQ *pMsg);
 
 #define HAL_USE_BD_RATE2_FOR_MANAGEMENT_FRAME 0x40 // Bit 6 will be used to control BD rate for Management frames
@@ -1020,11 +1370,10 @@ tSirRetStatus wdaPostCtrlMsg(tpAniSirGlobal pMac, tSirMsgQ *pMsg);
          (pData),\
          (NULL), \
          (txFlag),\
-         (sessionid),\
-         (false)) )
+         (sessionid)) )
 
 #define halTxFrameWithTxComplete(hHal, pFrmBuf, frmLen, frmType, txDir, tid,\
-                         pCompFunc, pData, pCBackFnTxComp, txFlag, sessionid, tdlsflag) \
+                         pCompFunc, pData, pCBackFnTxComp, txFlag, sessionid) \
    (eHalStatus)( WDA_TxPacket(\
          vos_get_context(VOS_MODULE_ID_WDA,\
                          vos_get_global_context(VOS_MODULE_ID_WDA, (hHal))),\
@@ -1037,9 +1386,9 @@ tSirRetStatus wdaPostCtrlMsg(tpAniSirGlobal pMac, tSirMsgQ *pMsg);
          (pData),\
          (pCBackFnTxComp), \
          (txFlag),\
-         (sessionid),\
-         (tdlsflag)) )
+         (sessionid)) )
 
+#ifdef QCA_WIFI_2_0
 
 #define WDA_SetRegDomain WMA_SetRegDomain
 #define WDA_SetHTConfig wma_set_htconfig
@@ -1047,11 +1396,15 @@ tSirRetStatus wdaPostCtrlMsg(tpAniSirGlobal pMac, tSirMsgQ *pMsg);
 
 VOS_STATUS WDA_SetIdlePsConfig(void *wda_handle, tANI_U32 idle_ps);
 VOS_STATUS WDA_notify_modem_power_state(void *wda_handle, tANI_U32 value);
-VOS_STATUS WDA_GetSnr(tAniGetSnrReq *psnr_req);
 static inline void WDA_UpdateSnrBmps(v_PVOID_t pvosGCtx, v_U8_t staId,
             v_S7_t snr)
 {
 
+}
+
+static inline int WDA_GetSnr(tANI_U8 ucSTAId, tANI_S8* pSnr)
+{
+     return VOS_STATUS_SUCCESS;
 }
 
 static inline void WDA_UpdateLinkCapacity(v_PVOID_t pvosGCtx, v_U8_t staId,
@@ -1060,6 +1413,55 @@ static inline void WDA_UpdateLinkCapacity(v_PVOID_t pvosGCtx, v_U8_t staId,
 
 }
 
+#else
+
+eHalStatus WDA_SetRegDomain(void * clientCtxt, v_REGDOMAIN_t regId,
+		tAniBool sendRegHint);
+
+static inline int WDA_SetHTConfig(tANI_U8 sessionId, tANI_U16 htCapab,
+                                  int value)
+{
+   return 0;
+}
+
+static inline VOS_STATUS WDA_SetIdlePsConfig(void *wda_handle, tANI_U32 idle_ps)
+{
+   return VOS_STATUS_SUCCESS;
+}
+
+static inline VOS_STATUS WDA_notify_modem_power_state(void *wda_handle, tANI_U32 value)
+{
+   return VOS_STATUS_SUCCESS;
+}
+/* -----------------------------------------------------------------
+  WDA data path API's for TL
+ -------------------------------------------------------------------*/
+
+v_BOOL_t WDA_IsHwFrameTxTranslationCapable(v_PVOID_t pVosGCtx,
+                                                      tANI_U8 staIdx);
+
+#  define WDA_EnableUapsdAcParams(vosGCtx, staId, uapsdInfo) \
+         WDA_SetUapsdAcParamsReq(vosGCtx, staId, uapsdInfo)
+
+#  define WDA_DisableUapsdAcParams(vosGCtx, staId, ac) \
+          WDA_ClearUapsdAcParamsReq(vosGCtx, staId, ac)
+
+#  define WDA_SetRSSIThresholds(pMac, pThresholds) \
+         WDA_SetRSSIThresholdsReq(pMac, pThresholds)
+
+#define WDA_UpdateRssiBmps(pvosGCtx,  staId, rssi) \
+        WLANTL_UpdateRssiBmps(pvosGCtx, staId, rssi)
+
+#define WDA_UpdateSnrBmps(pvosGCtx,  staId, rssi) \
+        WLANTL_UpdateSnrBmps(pvosGCtx, staId, snr)
+
+#define WDA_GetSnr(staId, snr) \
+        WLANTL_GetSnr(staId, snr)
+
+#define WDA_UpdateLinkCapacity(pvosGCtx,  staId, linkCapacity) \
+        WLANTL_UpdateLinkCapacity(pvosGCtx, staId, linkCapacity)
+
+#endif	/* #ifdef QCA_WIFI_2_0 */
 /*==========================================================================
    FUNCTION    WDA_DS_PeekRxPacketInfo
 
@@ -1096,6 +1498,7 @@ WDA_DS_PeekRxPacketInfo
   v_BOOL_t  bSwap
 );
 
+#ifdef QCA_WIFI_2_0
 
 #define WDA_HALDumpCmdReq WMA_HALDumpCmdReq
 
@@ -1114,6 +1517,710 @@ WDA_DS_PeekRxPacketInfo
 #define WDA_SetEnableSSR(enable_ssr) (void)enable_ssr
 void WDA_TxAbort(v_U8_t vdev_id);
 
+#else	/* #ifdef QCA_WIFI_2_0 */
+
+#ifdef WLAN_PERF
+/*==========================================================================
+  FUNCTION    WDA_TLI_FastHwFwdDataFrame
+
+  DESCRIPTION
+    For NON integrated SOC, this function is called by TL.
+
+    Fast path function to quickly forward a data frame if HAL determines BD
+    signature computed here matches the signature inside current VOSS packet.
+    If there is a match, HAL and TL fills in the swapped packet length into
+    BD header and DxE header, respectively. Otherwise, packet goes back to
+    normal (slow) path and a new BD signature would be tagged into BD in this
+    VOSS packet later by the WLANHAL_FillTxBd() function.
+
+  TODO  For integrated SOC, this function does nothing yet. Pima SLM/HAL
+        should provide the equivelant functionality.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+        pvosGCtx    VOS context
+        vosDataBuff Ptr to VOSS packet
+        pMetaInfo   For getting frame's TID
+        pStaInfo    For checking STA type
+
+   OUT
+        pvosStatus  returned status
+        puFastFwdOK Flag to indicate whether frame could be fast forwarded
+
+  RETURN VALUE
+    No return.
+
+  SIDE EFFECTS
+
+============================================================================*/
+void WDA_TLI_FastHwFwdDataFrame
+(
+  v_PVOID_t     pvosGCtx,
+  vos_pkt_t*    vosDataBuff,
+  VOS_STATUS*   pvosStatus,
+  v_U32_t*       puFastFwdOK,
+  WLANTL_MetaInfoType*  pMetaInfo,
+  WLAN_STADescType*  pStaInfo
+);
+#endif /* WLAN_PERF */
+
+/*==========================================================================
+  FUNCTION    WDA_DS_Register
+
+  DESCRIPTION
+    Register TL client to WDA. This function registers TL RX/TX functions
+    to WDI by calling WDI_DS_Register.
+
+
+    For NON integrated SOC, this function calls WLANBAL_RegTlCbFunctions
+    to register TL's RX/TX functions to BAL
+
+  TODO
+    For Prima, pfnResourceCB gets called in WDTS_OOResourceNotification.
+    The uCount parameter is AC mask. It should be redefined to use the
+    same resource callback function.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+        pvosGCtx    VOS context
+        pfnTxCompleteCallback       TX complete callback upon TX completion
+        pfnRxPacketCallback         RX callback
+        pfnResourceCB               gets called when updating TX PDU number
+        uResTheshold                minimum TX PDU size for a packet
+        pCallbackContext            WDI calls callback function with it
+                                    VOS global context pointer
+   OUT
+        uAvailableTxBuf       available TX PDU numbder.
+                              BAL returns it for NON integrated SOC
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_Register
+(
+  v_PVOID_t                 pvosGCtx,
+  WDA_DS_TxCompleteCallback pfnTxCompleteCallback,
+  WDA_DS_RxPacketCallback   pfnRxPacketCallback,
+  WDA_DS_TxPacketCallback   pfnTxPacketCallback,
+  WDA_DS_ResourceCB         pfnResourceCB,
+  v_U32_t                   uResTheshold,
+  v_PVOID_t                 pCallbackContext,
+  v_U32_t                   *uAvailableTxBuf
+);
+
+/*==========================================================================
+  FUNCTION    WDA_DS_StartXmit
+
+  DESCRIPTION
+    Serialize TX transmit reques to TX thread.
+
+  TODO This sends TX transmit request to TL. It should send to WDI for
+         abstraction.
+
+    For NON integrated SOC, this function calls WLANBAL_StartXmit
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+        pvosGCtx    VOS context
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_StartXmit
+(
+  v_PVOID_t pvosGCtx
+);
+
+/*==========================================================================
+  FUNCTION    WDA_DS_FinishULA
+
+  DESCRIPTION
+    Serialize Finish Upper Level Authentication reques to TX thread.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+        callbackRoutine    routine to be called in TX thread
+        callbackContext    user data for the above routine
+
+  RETURN VALUE
+    please see vos_tx_mq_serialize
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_FinishULA
+(
+ void (*callbackRoutine) (void *callbackContext),
+ void  *callbackContext
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_BuildTxPacketInfo
+
+  DESCRIPTION
+    Build TX meta info for integrated SOC.
+
+    Same function calls HAL for reserve BD header space into VOS packet and
+    HAL function to fill it.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pvosGCtx         VOS context
+    vosDataBuff      vos data buffer
+    pvDestMacAddr   destination MAC address ponter
+    ucDisableFrmXtl  Is frame xtl disabled?
+    ucQosEnabled     Is QoS enabled?
+    ucWDSEnabled     Is WDS enabled?
+    extraHeadSpace   Extra head bytes. If it's not 0 due to 4 bytes align
+                     of BD header.
+    typeSubtype      typeSubtype from MAC header or TX metainfo/BD
+    pAddr2           address 2
+    uTid             tid
+    txFlag
+    timeStamp
+    ucIsEapol
+    ucUP
+
+   OUT
+    *pusPktLen       Packet length
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_BuildTxPacketInfo
+(
+  v_PVOID_t       pvosGCtx,
+  vos_pkt_t*      vosDataBuff,
+  v_MACADDR_t*    pvDestMacAddr,
+  v_U8_t          ucDisableFrmXtl,
+  v_U16_t*        pusPktLen,
+  v_U8_t          ucQosEnabled,
+  v_U8_t          ucWDSEnabled,
+  v_U8_t          extraHeadSpace,
+  v_U8_t          typeSubtype,
+  v_PVOID_t       pAddr2,
+  v_U8_t          uTid,
+  v_U8_t          txFlag,
+  v_U32_t         timeStamp,
+  v_U8_t          ucIsEapol,
+  v_U8_t          ucUP
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_TrimRxPacketInfo
+
+  DESCRIPTION
+    Trim/Remove RX BD header for NON integrated SOC.
+    It does nothing for integrated SOC.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    vosDataBuff      vos data buffer
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_TrimRxPacketInfo
+(
+  vos_pkt_t *vosDataBuff
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_GetTxResources
+
+  DESCRIPTION
+    It does return hardcoded value for Prima. It should bigger number than 0.
+    Returning 0 will put TL in out-of-resource condition for TX.
+
+    Return current PDU resources from BAL for NON integrated SOC.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    vosDataBuff      vos data buffer
+
+   OUT
+    puResCount        available PDU number for TX
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_GetTxResources
+(
+  v_PVOID_t pvosGCtx,
+  v_U32_t*  puResCount
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_GetRssi
+
+  DESCRIPTION
+    Get RSSI
+
+  TODO It returns hardcoded value in the meantime since WDA/WDI does nothing
+       support it yet for Prima.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    vosDataBuff      vos data buffer
+
+   OUT
+    puRssi           RSSI
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_GetRssi
+(
+  v_PVOID_t pvosGCtx,
+  v_S7_t*   puRssi
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_RxAmsduBdFix
+
+  DESCRIPTION
+    For backward compatability with Libra/Volans. Need to call HAL function
+    for HW BD bug fix
+
+    It does nothing for integrated SOC.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pvosGCtx         VOS context
+    pvBDHeader       BD header pointer
+
+   OUT
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_RxAmsduBdFix
+(
+  v_PVOID_t pvosGCtx,
+  v_PVOID_t pvBDHeader
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_GetFrameTypeSubType
+
+  DESCRIPTION
+    Get typeSubtype from the packet. The BD header should have this.
+    But some reason, Libra/Volans read it from 802.11 header and save it
+    back to BD header. So for NON integrated SOC, this function does
+    the same.
+
+    For integrated SOC, WDI does the same, not TL.
+    It does return typeSubtype from RX meta info for integrated SOC.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pvosGCtx         VOS context
+    vosDataBuff      vos data buffer
+    pRxHeader        RX meta info or BD header pointer
+
+   OUT
+    ucTypeSubtype    typeSubtype
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_GetFrameTypeSubType
+(
+  v_PVOID_t pvosGCtx,
+  vos_pkt_t *vosDataBuff,
+  v_PVOID_t pRxHeader,
+  v_U8_t    *ucTypeSubtype
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_GetReplayCounter
+
+  DESCRIPTION
+    Return replay counter from BD header or RX meta info
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pRxHeader        RX meta info or BD header pointer
+
+   OUT
+
+  RETURN VALUE
+    Replay Counter
+
+  SIDE EFFECTS
+
+============================================================================*/
+v_U64_t
+WDA_DS_GetReplayCounter
+(
+  v_PVOID_t pRxHeader
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_GetReplayCounter
+
+  DESCRIPTION
+    HO support. Set RSSI threshold via HAL function for NON integrated SOC
+
+  TODO
+    Same function should be provided by WDA/WDI for Prima.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pMac             MAC global pointer
+    pThresholds      pointer of threshold structure to set.
+
+   OUT
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_SetRSSIThresholds
+(
+  tpAniSirGlobal      pMac,
+  tpSirRSSIThresholds pThresholds
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_TxFrames
+
+  DESCRIPTION
+    Pull packets from TL and push them to WDI. It gets invoked upon
+    WDA_DS_TX_START_XMIT.
+
+    This function is equivelant of WLANSSC_Transmit in Libra/Volans.
+
+  TODO
+    This function should be implemented and moved in WDI.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pvosGCtx         VOS context
+
+   OUT
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_TxFrames
+(
+  v_PVOID_t pvosGCtx
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_TxFlowControlCallback
+
+  DESCRIPTION
+    Invoked by WDI to control TX flow.
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pvosGCtx         VOS context
+    uFlowMask        TX channel mask for flow control
+                     Defined in WDA_TXFlowEnumType
+
+   OUT
+
+  RETURN VALUE
+
+  SIDE EFFECTS
+
+============================================================================*/
+v_VOID_t
+WDA_DS_TxFlowControlCallback
+(
+ v_PVOID_t pvosGCtx,
+ v_U8_t    uFlowMask
+);
+
+/*==========================================================================
+   FUNCTION    WDA_DS_GetTxFlowMask
+
+  DESCRIPTION
+    return TX flow mask control value
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pvosGCtx         VOS context
+
+   OUT
+    uFlowMask        TX channel mask for flow control
+                     Defined in WDA_TXFlowEnumType
+
+  RETURN VALUE
+    VOS_STATUS_E_INVAL:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS
+WDA_DS_GetTxFlowMask
+(
+ v_PVOID_t pvosGCtx,
+ v_U8_t*   puFlowMask
+);
+
+/*==========================================================================
+   FUNCTION    WDA_HALDumpCmdReq
+
+  DESCRIPTION
+    Send Dump commandsto WDI
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pMac             MAC global pointer
+    cmd               Hal dump command
+    arg1              Dump command argument 1
+    arg2              Dump command argument 2
+    arg3              Dump command argument 3
+    arg4              Dump command argument 4
+
+   OUT
+       pBuffer          Dump command Response buffer
+
+  RETURN VALUE
+    VOS_STATUS_E_FAULT:  pointer is NULL and other errors
+    VOS_STATUS_SUCCESS:  Everything is good :)
+
+  SIDE EFFECTS
+
+============================================================================*/
+VOS_STATUS WDA_HALDumpCmdReq(tpAniSirGlobal   pMac,tANI_U32 cmd,
+                 tANI_U32   arg1, tANI_U32   arg2, tANI_U32   arg3,
+                 tANI_U32   arg4, tANI_U8   *pBuffer);
+
+/*==========================================================================
+   FUNCTION    WDA_featureCapsExchange
+
+  DESCRIPTION
+    WDA API to invoke capability exchange between host and FW
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    pVosContext         VOS context
+
+   OUT
+    NONE
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+============================================================================*/
+void WDA_featureCapsExchange(v_PVOID_t pVosContext);
+
+void WDA_disableCapablityFeature(tANI_U8 feature_index);
+/*==========================================================================
+   FUNCTION    WDA_getHostWlanFeatCaps
+
+  DESCRIPTION
+    Wrapper for WDI API, that will return if the feature (enum value).passed
+    to this API is supported or not in Host
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    featEnumValue     enum value for the feature as in placeHolderInCapBitmap in wlan_hal_msg.h.
+
+   OUT
+    NONE
+
+  RETURN VALUE
+    0 - implies feature is NOT Supported
+    any non zero value - implies feature is SUPPORTED
+
+  SIDE EFFECTS
+============================================================================*/
+tANI_U8 WDA_getHostWlanFeatCaps(tANI_U8 featEnumValue);
+
+/*==========================================================================
+   FUNCTION    WDA_getFwWlanFeatCaps
+
+  DESCRIPTION
+    Wrapper for WDI API, that will return if the feature (enum value).passed
+    to this API is supported or not in FW
+
+  DEPENDENCIES
+
+  PARAMETERS
+
+   IN
+    featEnumValue     enum value for the feature as in placeHolderInCapBitmap in wlan_hal_msg.h.
+
+   OUT
+    NONE
+
+  RETURN VALUE
+    0 - implies feature is NOT Supported
+    any non zero value - implies feature is SUPPORTED
+
+  SIDE EFFECTS
+============================================================================*/
+tANI_U8 WDA_getFwWlanFeatCaps(tANI_U8 featEnumValue);
+
+/*==========================================================================
+  FUNCTION   WDA_TransportChannelDebug
+
+  DESCRIPTION
+    Display Transport Channel debugging information
+    User may request to display DXE channel snapshot
+    Or if host driver detects any abnormal stcuk may display
+
+  PARAMETERS
+    pMac : upper MAC context pointer
+    displaySnapshot : Display DXE snapshot option
+    enableStallDetect : Enable stall detect feature
+                        This feature will take effect to data performance
+                        Not integrate till fully verification
+
+  RETURN VALUE
+    NONE
+
+===========================================================================*/
+void WDA_TransportChannelDebug
+(
+  tpAniSirGlobal pMac,
+  v_BOOL_t       displaySnapshot,
+  v_BOOL_t       toggleStallDetect
+);
+
+/*==========================================================================
+  FUNCTION   WDA_TrafficStatsTimerActivate
+
+  DESCRIPTION
+    API to activate/deactivate Traffic Stats timer. Traffic stats timer is only needed during MCC
+  PARAMETERS
+    activate : Activate or not
+
+  RETURN VALUE
+    NONE
+
+===========================================================================*/
+void WDA_TrafficStatsTimerActivate(wpt_boolean activate);
+
+/*==========================================================================
+  FUNCTION   WDA_SetEnableSSR
+
+  DESCRIPTION
+    API to enable/disable SSR on WDI timeout
+
+  PARAMETERS
+    enableSSR : enable/disable SSR
+
+  RETURN VALUE
+    NONE
+
+===========================================================================*/
+void WDA_SetEnableSSR(v_BOOL_t enableSSR);
+static inline void WDA_TxAbort(v_U8_t vdev_id)
+{
+}
+#endif	/* #ifdef QCA_WIFI_2_0 */
 
 /* Powersave Offload Changes */
 typedef struct sUapsd_Params

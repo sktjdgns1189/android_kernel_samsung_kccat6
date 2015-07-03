@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -262,8 +262,13 @@ extern a_uint16_t
  * @param mpdu_desc - the abstract descriptor for the MPDU in question
  * @return the rx reorder array index the MPDU goes into
  */
+#ifdef QCA_WIFI_ISOC
+int
+htt_rx_mpdu_desc_reorder_idx(htt_pdev_handle pdev, void *mpdu_desc);
+#else
 /* use sequence number (or LSBs thereof) as rx reorder array index */
 #define htt_rx_mpdu_desc_reorder_idx htt_rx_mpdu_desc_seq_num
+#endif
 
 union htt_rx_pn_t {
     /* WEP: 24-bit PN */
@@ -592,13 +597,6 @@ extern int
     adf_nbuf_t *head_msdu,
     adf_nbuf_t *tail_msdu);
 
-extern int
-(*htt_rx_frag_pop)(
-    htt_pdev_handle pdev,
-    adf_nbuf_t rx_ind_msg,
-    adf_nbuf_t *head_msdu,
-    adf_nbuf_t *tail_msdu);
-
 /**
  * @brief Return a linked list of buffers holding one MSDU
  *  In some systems the buffers are delivered along with offload delivery
@@ -789,27 +787,4 @@ htt_rx_msdu_rx_desc_size_hl(
  */
 void htt_rx_get_vowext_stats(adf_nbuf_t msdu,struct vow_extstats *vowstats);
 
-/**
- * @brief parses the offload message passed by the target.
- * @param pdev - pdev handle
- * @param paddr - physical address of the rx buffer
- * @param vdev_id - reference to vdev id to be filled
- * @param peer_id - reference to the peer id to be filled
- * @param tid - reference to the tid to be filled
- * @param fw_desc - reference to the fw descriptor to be filled
- * @param peer_id - reference to the peer id to be filled
- * @param head_buf - reference to the head buffer
- * @param tail_buf - reference to the tail buffer
- */
-int
-htt_rx_offload_paddr_msdu_pop_ll(
-    htt_pdev_handle pdev,
-    u_int32_t * msg_word,
-    int msdu_iter,
-    int *vdev_id,
-    int *peer_id,
-    int *tid,
-    u_int8_t *fw_desc,
-    adf_nbuf_t *head_buf,
-    adf_nbuf_t *tail_buf);
 #endif /* _OL_HTT_RX_API__H_ */

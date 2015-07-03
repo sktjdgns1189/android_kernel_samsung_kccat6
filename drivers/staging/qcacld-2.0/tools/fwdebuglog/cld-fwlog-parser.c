@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -120,18 +120,6 @@ const char *dbglog_get_module_str(A_UINT32 module_id)
         return "TDLS";
     case WLAN_MODULE_P2P:
         return "P2P";
-    case WLAN_MODULE_WOW:
-        return "WoW";
-    case WLAN_MODULE_IBSS_PWRSAVE:
-        return "IBSS PS";
-    case WLAN_MODULE_EXTSCAN:
-        return "ExtScan";
-    case WLAN_MODULE_UNIT_TEST:
-        return "UNIT_TEST";
-    case WLAN_MODULE_MLME:
-        return "MLME";
-    case WLAN_MODULE_SUPPL:
-        return "SUPPLICANT";
     default:
         return "UNKNOWN";
     }
@@ -542,22 +530,6 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "ROAM_CANCEL_LOW_PRIO_SCAN",
         "ROAM_FINAL_BMISS_RECVD",
         "ROAM_CONFIG_SCAN_MODE",
-        "ROAM_BMISS_FINAL_SCAN_ENABLE",
-        "ROAM_SUITABLE_AP_EVENT",
-        "ROAM_RSN_IE_PARSE_ERROR",
-        "ROAM_WPA_IE_PARSE_ERROR",
-        "ROAM_SCAN_CMD_FROM_HOST",
-        "ROAM_HO_SORT_CANDIDATE",
-        "ROAM_HO_SAVE_CANDIDATE",
-        "ROAM_HO_GET_CANDIDATE",
-        "ROAM_HO_OFFLOAD_SET_PARAM",
-        "ROAM_HO_SM",
-        "ROAM_HO_HTT_SAVED",
-        "ROAM_HO_SYNC_START",
-        "ROAM_HO_START",
-        "ROAM_HO_COMPLETE",
-        "ROAM_HO_STOP",
-        "ROAM_HO_HTT_FORWARD",
         "ROAM_DBGID_DEFINITION_END"
     },
     {
@@ -1021,16 +993,6 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "TDLS_DBGID_PEER_EVT_DRP_RSSI",
         "TDLS_DBGID_PEER_EVT_DISCOVER",
         "TDLS_DBGID_PEER_EVT_DELETE",
-        "TDLS_DBGID_PEER_CAP_UPDATE",
-        "TDLS_DBGID_UAPSD_SEND_PTI_FRAME",
-        "TDLS_DBGID_UAPSD_SEND_PTI_FRAME2PEER",
-        "TDLS_DBGID_UAPSD_START_PTR_TIMER",
-        "TDLS_DBGID_UAPSD_CANCEL_PTR_TIMER",
-        "TDLS_DBGID_UAPSD_PTR_TIMER_TIMEOUT",
-        "TDLS_DBGID_UAPSD_STA_PS_EVENT_HANDLER",
-        "TDLS_DBGID_UAPSD_PEER_EVENT_HANDLER",
-        "TDLS_DBGID_UAPSD_PS_DEFAULT_SETTINGS",
-        "TDLS_DBGID_UAPSD_GENERIC",
     },
     {   /* HB */
         "WLAN_HB_DBGID_DEFINITION_START",
@@ -1070,156 +1032,6 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "TXBFEE_DBGID_PACKET_IS_STEERED",
         "TXBFEE_UPLOADH_EVENT_ALLOC_MEM_FAIL",
         "TXBFEE_DBGID_END",
-    },
-    { /*BATCH SCAN*/
-    },
-    { /*THERMAL MGR*/
-        "THERMAL_MGR_DBGID_DEFINITION_START",
-        "THERMAL_MGR_NEW_THRESH",
-        "THERMAL_MGR_THRESH_CROSSED",
-        "THERMAL_MGR_DBGID_DEFINITION END",
-    },
-    {   /* WLAN_MODULE_PHYERR_DFS */
-        ""
-    },
-    {
-        /* WLAN_MODULE_RMC */
-        "RMC_DBGID_DEFINITION_START",
-        "RMC_CREATE_INSTANCE",
-        "RMC_DELETE_INSTANCE",
-        "RMC_LDR_SEL",
-        "RMC_NO_LDR",
-        "RMC_LDR_NOT_SEL",
-        "RMC_LDR_INF_SENT",
-        "RMC_PEER_ADD",
-        "RMC_PEER_DELETE",
-        "RMC_PEER_UNKNOWN",
-        "RMC_SET_MODE",
-        "RMC_SET_ACTION_PERIOD",
-        "RMC_ACRION_FRAME_RX",
-        "RMC_DBGID_DEFINITION_END",
-    },
-    {
-        /* WLAN_MODULE_STATS */
-        "WLAN_STATS_DBGID_DEFINITION_START",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_VDEV_EN_DIS",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_CHAN_TIME_START",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_CHAN_TIME_END",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_CALC",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_UPDATE_HOME_CHAN",
-        "WLAN_STATS_DBGID_DEFINITION_END",
-    },
-    {
-        /* WLAN_MODULE_NAN */
-    },
-    {
-        /* WLAN_MODULE_IBSS_PWRSAVE */
-        "IBSS_PS_DBGID_DEFINITION_START",
-        "IBSS_PS_DBGID_PEER_CREATE",
-        "IBSS_PS_DBGID_PEER_DELETE",
-        "IBSS_PS_DBGID_VDEV_CREATE",
-        "IBSS_PS_DBGID_VDEV_DELETE",
-        "IBSS_PS_DBGID_VDEV_EVENT",
-        "IBSS_PS_DBGID_PEER_EVENT",
-        "IBSS_PS_DBGID_DELIVER_CAB",
-        "IBSS_PS_DBGID_DELIVER_UC_DATA",
-        "IBSS_PS_DBGID_DELIVER_UC_DATA_ERROR",
-        "IBSS_PS_DBGID_UC_INACTIVITY_TMR_RESTART",
-        "IBSS_PS_DBGID_MC_INACTIVITY_TMR_RESTART",
-        "IBSS_PS_DBGID_NULL_TX_COMPLETION",
-        "IBSS_PS_DBGID_ATIM_TIMER_START",
-        "IBSS_PS_DBGID_UC_ATIM_SEND",
-        "IBSS_PS_DBGID_BC_ATIM_SEND",
-        "IBSS_PS_DBGID_UC_TIMEOUT",
-        "IBSS_PS_DBGID_PWR_COLLAPSE_ALLOWED",
-        "IBSS_PS_DBGID_PWR_COLLAPSE_NOT_ALLOWED",
-        "IBSS_PS_DBGID_SET_PARAM",
-        "IBSS_PS_DBGID_HOST_TX_PAUSE",
-        "IBSS_PS_DBGID_HOST_TX_UNPAUSE",
-        "IBSS_PS_DBGID_PS_DESC_BIN_HWM",
-        "IBSS_PS_DBGID_PS_DESC_BIN_LWM",
-        "IBSS_PS_DBGID_PS_KICKOUT_PEER",
-        "IBSS_PS_DBGID_SET_PEER_PARAM",
-        "IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH",
-    },
-    {
-       /* HIF UART Interface DBGIDs */
-       "HIF_UART_DBGID_START",
-       "HIF_UART_DBGID_POWER_STATE",
-       "HIF_UART_DBGID_TXRX_FLOW",
-       "HIF_UART_DBGID_TXRX_CTRL_CHAR",
-       "HIF_UART_DBGID_TXRX_BUF_DUMP",
-    },
-    {
-       /* LPI */
-       ""
-    },
-    {
-       /* EXTSCAN DBGIDs */
-       "EXTSCAN_START",
-       "EXTSCAN_STOP",
-       "EXTSCAN_CLEAR_ENTRY_CONTENT",
-       "EXTSCAN_GET_FREE_ENTRY_SUCCESS",
-       "EXTSCAN_GET_FREE_ENTRY_INCONSISTENT",
-       "EXTSCAN_GET_FREE_ENTRY_NO_MORE_ENTRIES",
-       "EXTSCAN_CREATE_ENTRY_SUCCESS",
-       "EXTSCAN_CREATE_ENTRY_ERROR",
-       "EXTSCAN_SEARCH_SCAN_ENTRY_QUEUE",
-       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_FOUND",
-       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_NOT_FOUND",
-       "EXTSCAN_ADD_ENTRY",
-       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT",
-       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT_FAILED",
-       "EXTSCAN_BUCKET_START_SCAN_CYCLE",
-       "EXTSCAN_BUCKET_PERIODIC_TIMER",
-       "EXTSCAN_SEND_START_STOP_EVENT",
-       "EXTSCAN_NOTIFY_WLAN_CHANGE",
-       "EXTSCAN_NOTIFY_WLAN_HOTLIST_MATCH",
-       "EXTSCAN_MAIN_RECEIVED_FRAME",
-       "EXTSCAN_MAIN_NO_SSID_IE",
-       "EXTSCAN_MAIN_MALFORMED_FRAME",
-       "EXTSCAN_FIND_BSSID_BY_REFERENCE",
-       "EXTSCAN_FIND_BSSID_BY_REFERENCE_ERROR",
-       "EXTSCAN_NOTIFY_TABLE_USAGE",
-       "EXTSCAN_FOUND_RSSI_ENTRY",
-       "EXTSCAN_BSSID_FOUND_RSSI_SAMPLE",
-       "EXTSCAN_BSSID_ADDED_RSSI_SAMPLE",
-       "EXTSCAN_BSSID_REPLACED_RSSI_SAMPLE",
-       "EXTSCAN_BSSID_TRANSFER_CURRENT_SAMPLES",
-       "EXTSCAN_BUCKET_PROCESS_SCAN_EVENT",
-       "EXTSCAN_BUCKET_CANNOT_FIND_BUCKET",
-       "EXTSCAN_START_SCAN_REQUEST_FAILED",
-       "EXTSCAN_BUCKET_STOP_CURRENT_SCANS",
-       "EXTSCAN_BUCKET_SCAN_STOP_REQUEST",
-       "EXTSCAN_BUCKET_PERIODIC_TIMER_ERROR",
-       "EXTSCAN_BUCKET_START_OPERATION",
-       "EXTSCAN_START_INTERNAL_ERROR",
-       "EXTSCAN_NOTIFY_HOTLIST_MATCH",
-       "EXTSCAN_CONFIG_HOTLIST_TABLE",
-       "EXTSCAN_CONFIG_WLAN_CHANGE_TABLE",
-    },
-    {  /* UNIT_TEST */
-       "UNIT_TEST_GEN",
-    },
-    {  /* MLME */
-       "MLME_DEBUG_CMN",
-       "MLME_IF",
-       "MLME_AUTH",
-       "MLME_REASSOC",
-       "MLME_DEAUTH",
-       "MLME_DISASSOC",
-       "MLME_ROAM",
-       "MLME_RETRY",
-       "MLME_TIMER",
-       "MLME_FRMPARSE",
-    },
-    {  /*SUPPLICANT */
-       "SUPPL_INIT",
-       "SUPPL_RECV_EAPOL",
-       "SUPPL_RECV_EAPOL_TIMEOUT",
-       "SUPPL_SEND_EAPOL",
-       "SUPPL_MIC_MISMATCH",
-       "SUPPL_FINISH",
     },
 };
 
@@ -1313,6 +1125,72 @@ dbglog_default_print_handler(A_UINT32 mod_id, A_UINT16 vap_id, A_UINT32 dbg_id,
     printf(" )\n");
 
     return TRUE;
+}
+
+#define DBGLOG_PARSE_ARGS_STRING_LENGTH    (DBGLOG_NUM_ARGS_MAX * 11 + 10)
+static int
+dbglog_print_raw_data(A_UINT32 *buffer, A_UINT32 length)
+{
+    A_UINT32 timestamp;
+    A_UINT32 debugid;
+    A_UINT32 moduleid;
+    A_UINT16 numargs, curArgs;
+    A_UINT32 count = 0, totalWriteLen, writeLen;
+    char parseArgsString[DBGLOG_PARSE_ARGS_STRING_LENGTH];
+    char *dbgidString;
+
+    buffer = (A_UINT32 *)buf;
+
+    while (count < length) {
+
+        debugid = DBGLOG_GET_DBGID(buffer[count + 1]);
+        moduleid = DBGLOG_GET_MODULEID(buffer[count + 1]);
+        numargs = DBGLOG_GET_NUMARGS(buffer[count + 1]);
+        timestamp = DBGLOG_GET_TIME_STAMP(buffer[count]);
+
+        if (moduleid < WLAN_MODULE_ID_MAX && debugid < MAX_DBG_MSGS && numargs <= DBGLOG_NUM_ARGS_MAX) {
+
+            memset(parseArgsString, 0, sizeof(parseArgsString));
+            totalWriteLen = 0;
+
+            for (curArgs = 0; curArgs < numargs; curArgs++){
+                writeLen = snprintf(parseArgsString + totalWriteLen, sizeof(parseArgsString), "%x ", buffer[count + 2 + curArgs]);
+                totalWriteLen += writeLen;
+            }
+
+            if (debugid < MAX_DBG_MSGS){
+                dbgidString = DBG_MSG_ARR[moduleid][debugid];
+                if (dbgidString != NULL) {
+                    printf("fw:%s(%x %x):%s\n",
+                           dbgidString,
+                           timestamp, buffer[count+1],
+                           parseArgsString);
+                } else {
+                    /* host need sync with FW id */
+                    printf("fw:%s:m:%x,id:%x(%x %x):%s\n",
+                           "UNKNOWN", moduleid, debugid,
+                           timestamp, buffer[count+1],
+                           parseArgsString);
+                }
+            } else if (debugid == DBGLOG_DBGID_SM_FRAMEWORK_PROXY_DBGLOG_MSG) {
+                /* specific debugid */
+                printf("fw:%s:m:%x,id:%x(%x %x):%s\n",
+                       "DBGLOG_SM_MSG", moduleid, debugid,
+                       timestamp, buffer[count+1],
+                       parseArgsString);
+            } else {
+                printf("fw:%s:m:%x,id:%x(%x %x):%s\n",
+                       "UNKNOWN", moduleid, debugid,
+                       timestamp, buffer[count+1],
+                       parseArgsString);
+            }
+        }
+
+        count += numargs + 2; /* 32 bit Time stamp + 32 bit Dbg header*/
+    }
+
+    return 0;
+
 }
 
 static int
@@ -1989,28 +1867,28 @@ dbglog_wal_print_handler(
         dbglog_printf(timestamp, vap_id, "WAL Tx enqueue discard msdu_id=0x%x", args[0]);
         break;
     case WAL_DBGID_SET_HW_CHAINMASK:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SET_HW_CHAINMASK "
+        dbglog_printf(timestamp, vap_id, "WAL set hw chainmask "
                                          "pdev=%d, txchain=0x%x, rxchain=0x%x",
                 args[0], args[1], args[2]);
         break;
     case WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL rxstop=%d, txstop=%d",
+        dbglog_printf(timestamp, vap_id, "WAL hw chainmask tx stop fail rxstop=%d, txstop=%d",
                 args[0], args[1]);
         break;
     case WAL_DBGID_GET_HW_CHAINMASK:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_GET_HW_CHAINMASK "
+        dbglog_printf(timestamp, vap_id, "WAL get hw chainmask "
                                          "txchain=0x%x, rxchain=0x%x",
                 args[0], args[1]);
         break;
     case WAL_DBGID_SMPS_DISABLE:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SMPS_DISABLE");
+        dbglog_printf(timestamp, vap_id, "WAL smps disable");
         break;
     case WAL_DBGID_SMPS_ENABLE_HW_CNTRL:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SMPS_ENABLE_HW_CNTRL low_pwr_mask=0x%x, high_pwr_mask=0x%x",
+        dbglog_printf(timestamp, vap_id, "WAL enable hw ctrl low_pwr_mask=0x%x, high_pwr_mask=0x%x",
                 args[0], args[1]);
         break;
     case WAL_DBGID_SMPS_SWSEL_CHAINMASK:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SMPS_SWSEL_CHAINMASK low_pwr=0x%x, chain_mask=0x%x",
+        dbglog_printf(timestamp, vap_id, "WAL smps swsel chainmask low_pwr=0x%x, chain_mask=0x%x",
                 args[0], args[1]);
         break;
     default:
@@ -2608,18 +2486,18 @@ A_BOOL dbglog_smps_print_handler(A_UINT32 mod_id,
                 args[2]);
         break;
     case STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE");
+        dbglog_printf(timestamp, vap_id, "STA_SMPS ebt event chmask update");
         break;
     case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE "
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update "
                                          "tx_mask %#x rx_mask %#x arb_dtim_mask %#x",
                 args[0], args[1], args[2]);
         break;
     case STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE");
+        dbglog_printf(timestamp, vap_id, "STA_SMPS beacon event chmask update");
         break;
     case STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE cur_pwr_state %s new_pwr_state %s",
+        dbglog_printf(timestamp, vap_id, "STA_SMPS cur_pwr_state %s new_pwr_state %d",
                 (args[0] == 0x1 ? "SLEEP":
                  (args[0] == 0x2 ? "AWAKE":
                   (args[0] == 0x3 ? "FULL_SLEEP" : "UNKNOWN"))),
@@ -2628,12 +2506,12 @@ A_BOOL dbglog_smps_print_handler(A_UINT32 mod_id,
                   (args[1] == 0x3 ? "FULL_SLEEP" : "UNKNOWN"))));
         break;
     case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP "
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update sleep "
                                          "tx_mask %#x rx_mask %#x orig_rx %#x dtim_rx %#x",
                 args[0], args[1], args[2], args[3]);
         break;
     case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE "
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update awake "
                                          "tx_mask %#x rx_mask %#x orig_rx %#x",
                 args[0], args[1], args[2]);
     break;

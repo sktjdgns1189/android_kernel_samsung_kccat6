@@ -60,7 +60,6 @@
   ------------------------------------------------------------------------*/
 #include <vos_trace.h>
 #include <aniGlobal.h>
-#include <wlan_logging_sock_svc.h>
 #include "adf_os_time.h"
 /*--------------------------------------------------------------------------
   Preprocessor definitions and constants
@@ -96,8 +95,9 @@ typedef struct
 // the 3 character 'name' of the module for marking the trace logs.
 moduleTraceInfo gVosTraceInfo[ VOS_MODULE_ID_MAX ] =
 {
+   [VOS_MODULE_ID_BAP]        = { VOS_DEFAULT_TRACE_LEVEL, "BAP" },
    [VOS_MODULE_ID_TL]         = { VOS_DEFAULT_TRACE_LEVEL, "TL " },
-   [VOS_MODULE_ID_WDI]        = { VOS_DEFAULT_TRACE_LEVEL, "WDI" },
+   [VOS_MODULE_ID_WDI]        = { VOS_DEFAULT_TRACE_LEVEL, "WDI"},
    [VOS_MODULE_ID_HDD]        = { VOS_DEFAULT_TRACE_LEVEL, "HDD" },
    [VOS_MODULE_ID_SME]        = { VOS_DEFAULT_TRACE_LEVEL, "SME" },
    [VOS_MODULE_ID_PE]         = { VOS_DEFAULT_TRACE_LEVEL, "PE " },
@@ -109,6 +109,11 @@ moduleTraceInfo gVosTraceInfo[ VOS_MODULE_ID_MAX ] =
    [VOS_MODULE_ID_PMC]        = { VOS_DEFAULT_TRACE_LEVEL, "PMC" },
    [VOS_MODULE_ID_HDD_DATA]   = { VOS_DEFAULT_TRACE_LEVEL, "HDP" },
    [VOS_MODULE_ID_HDD_SAP_DATA] = { VOS_DEFAULT_TRACE_LEVEL, "SDP" },
+#if defined (QCA_WIFI_2_0) && \
+    defined (QCA_WIFI_ISOC)
+   /* Message Queue ID for messages bound for HTC*/
+   [VOS_MODULE_ID_HTC]        = { VOS_DEFAULT_TRACE_LEVEL, "HTC" },
+#endif
 };
 /*-------------------------------------------------------------------------
   Static and Global variables
@@ -221,6 +226,72 @@ void vos_snprintf(char *strBuffer, unsigned  int size, char *strFormat, ...)
     va_end( val );
 }
 
+#ifdef WCONN_TRACE_KMSG_LOG_BUFF
+
+/* 64k::  size should be power of 2 to
+   get serial 'wconnstrContBuffIdx'  index */
+#define KMSG_WCONN_TRACE_LOG_MAX    65536
+
+static char wconnStrLogBuff[KMSG_WCONN_TRACE_LOG_MAX];
+static unsigned int wconnstrContBuffIdx;
+static void kmsgwconnstrlogchar(char c)
+{
+   wconnStrLogBuff[wconnstrContBuffIdx & (KMSG_WCONN_TRACE_LOG_MAX-1)] = c;
+   wconnstrContBuffIdx++;
+}
+
+/******************************************************************************
+ * function:: kmsgwconnBuffWrite()
+ * wconnlogstrRead -> Recieved the string(log msg) from vos_trace_msg()
+ * 1) Get the timetick, convert into HEX and store in wconnStrLogBuff[]
+ * 2) And 'pwconnlogstr' would be copied into wconnStrLogBuff[] character by
+      character
+ * 3) wconnStrLogBuff[] is been treated as circular buffer.
+ *
+ * Note:: In T32 simulator the content of wconnStrLogBuff[] will appear as
+          continuous string please use logparse.cmm file to extract into
+          readable format
+ *******************************************************************************/
+
+void kmsgwconnBuffWrite(const char *wconnlogstrRead)
+{
+   const char *pwconnlogstr = wconnlogstrRead;
+   static const char num[16] = {'0','1','2','3','4','5','6','7','8','9','A',
+                                'B','C','D','E','F'};
+   v_TIME_t timetick;
+   int bits; /*timetick for now returns 32 bit number*/
+
+   timetick = vos_timer_get_system_time();
+   bits = sizeof(timetick) * 8/*number of bits in a byte*/;
+
+   kmsgwconnstrlogchar('[');
+
+   for ( ; bits > 0; bits -= 4 )
+      kmsgwconnstrlogchar( num[((timetick & (0xF << (bits-4)))>>(bits-4))] );
+
+   kmsgwconnstrlogchar(']');
+
+   for ( ; *pwconnlogstr; pwconnlogstr++)
+   {
+      kmsgwconnstrlogchar(*pwconnlogstr);
+   }
+   kmsgwconnstrlogchar('\n');/*log \n*/
+}
+
+spinlock_t gVosSpinLock;
+
+void vos_wconn_trace_init(void)
+{
+    spin_lock_init(&gVosSpinLock);
+}
+
+void vos_wconn_trace_exit(void)
+{
+    /* does nothing */
+}
+
+#endif
+
 #ifdef VOS_ENABLE_TRACING
 
 /*----------------------------------------------------------------------------
@@ -250,6 +321,7 @@ void vos_trace_msg( VOS_MODULE_ID module, VOS_TRACE_LEVEL level, char *strFormat
 {
    char strBuffer[VOS_TRACE_BUFFER_SIZE];
    int n;
+   unsigned long irq_flag;
 
    // Print the trace message when the desired level bit is set in the module
    // tracel level mask.
@@ -275,13 +347,14 @@ void vos_trace_msg( VOS_MODULE_ID module, VOS_TRACE_LEVEL level, char *strFormat
       {
          vsnprintf(strBuffer + n, VOS_TRACE_BUFFER_SIZE - n, strFormat, val );
 
-#ifdef WLAN_LOGGING_SOCK_SVC_ENABLE
-         wlan_log_to_user(level, (char *)strBuffer, strlen(strBuffer));
-#else
-         pr_err("%s\n", strBuffer);
+#ifdef WCONN_TRACE_KMSG_LOG_BUFF
+         spin_lock_irqsave (&gVosSpinLock, irq_flag);
+         kmsgwconnBuffWrite(strBuffer);
+         spin_unlock_irqrestore (&gVosSpinLock, irq_flag);
 #endif
+         pr_err("%s\n", strBuffer);
       }
-      va_end(val);
+     va_end(val);
    }
 }
 
@@ -339,10 +412,10 @@ void vos_trace_hex_dump( VOS_MODULE_ID module, VOS_TRACE_LEVEL level,
                 VOS_TRACE_LEVEL_TO_MODULE_BITMASK(level)))
         return;
 
-    for (i=0; (i+15)< buf_len; i+=16)
+    for (i=0; (i+7)<buf_len; i+=8)
     {
         vos_trace_msg( module, level,
-                 "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+                 "%02x %02x %02x %02x %02x %02x %02x %02x",
                  buf[i],
                  buf[i+1],
                  buf[i+2],
@@ -350,15 +423,7 @@ void vos_trace_hex_dump( VOS_MODULE_ID module, VOS_TRACE_LEVEL level,
                  buf[i+4],
                  buf[i+5],
                  buf[i+6],
-                 buf[i+7],
-                 buf[i+8],
-                 buf[i+9],
-                 buf[i+10],
-                 buf[i+11],
-                 buf[i+12],
-                 buf[i+13],
-                 buf[i+14],
-                 buf[i+15]);
+                 buf[i+7]);
     }
 
     // Dump the bytes in the last line
@@ -474,7 +539,7 @@ void vosTraceInit()
 void vos_trace(v_U8_t module, v_U8_t code, v_U8_t session, v_U32_t data)
 {
     tpvosTraceRecord rec = NULL;
-    unsigned long flags;
+
 
     if (!gvosTraceData.enable)
     {
@@ -487,7 +552,7 @@ void vos_trace(v_U8_t module, v_U8_t code, v_U8_t session, v_U32_t data)
     }
 
     /* Aquire the lock so that only one thread at a time can fill the ring buffer */
-    spin_lock_irqsave(&ltraceLock, flags);
+    spin_lock(&ltraceLock);
 
     gvosTraceData.num++;
 
@@ -531,7 +596,7 @@ void vos_trace(v_U8_t module, v_U8_t code, v_U8_t session, v_U32_t data)
     rec->time = adf_get_boottime();
     rec->module =  module;
     gvosTraceData.numSinceLastDump ++;
-    spin_unlock_irqrestore(&ltraceLock, flags);
+    spin_unlock(&ltraceLock);
 }
 
 

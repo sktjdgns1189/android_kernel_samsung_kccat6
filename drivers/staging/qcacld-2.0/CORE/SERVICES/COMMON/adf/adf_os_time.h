@@ -143,7 +143,11 @@ static inline a_uint64_t adf_get_boottime(void)
 #ifdef CONFIG_CNSS
    struct timespec ts;
 
-   cnss_get_boottime(&ts);
+#ifdef WLAN_OPEN_SOURCE
+   ktime_get_ts(&ts);
+#else
+   cnss_get_monotonic_boottime(&ts);
+#endif /* WLAN_OPEN_SOURCE */
 
    return (((a_uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000));
 #else

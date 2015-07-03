@@ -275,12 +275,9 @@ static void __schBeaconProcessNoSession(tpAniSirGlobal pMac, tpSchBeaconStruct p
         limHandleIBSScoalescing(pMac, pBeacon, pRxPacketInfo, psessionEntry);
     }
 
-    /*
-     * If station(STA/BT-STA/BT-AP/IBSS) mode, Always save the beacon in the
-     * scan results, if at-least one session is active schBeaconProcessNoSession
-     * will be called only when there is at-least one session active,
-     * so not checking it again here.
-     */
+    //If station(STA/BT-STA/BT-AP/IBSS) mode, Always save the beacon in the scan results, if atleast one session is active
+    //schBeaconProcessNoSession will be called only when there is atleast one session active, so not checking
+    //it again here.
     limCheckAndAddBssDescription(pMac, pBeacon, pRxPacketInfo, eANI_BOOLEAN_FALSE, eANI_BOOLEAN_FALSE);
     return;
 }
@@ -297,11 +294,11 @@ static void __schBeaconProcessNoSession(tpAniSirGlobal pMac, tpSchBeaconStruct p
  *
  * LOGIC:
  *        Following scenarios exist when Session exists
- *             * IBSS STA receiving beacons from IBSS Peers, who are part of IBSS.
+ *             * IBSS STA receving beacons from IBSS Peers, who are part of IBSS.
  *                 - call limHandleIBSScoalescing with that session context.
- *             * Infra STA receiving beacons from AP to which it is connected
+ *             * Infra STA receving beacons from AP to which it is connected
  *                 - call schBeaconProcessFromAP with that session's context.
- *             * BTAMP STA receiving beacons from BTAMP AP
+ *             * BTAMP STA receving beacons from BTAMP AP
  *                 - call schBeaconProcessFromAP with that session's context.
  *             * BTAMP AP receiving beacons from BTAMP STA
  *               (here need to make sure BTAP creates session entry for BT STA)
@@ -347,7 +344,6 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
      tPowerdBm regMax = 0,maxTxPower = 0;
 #endif
 
-    vos_mem_zero(&beaconParams, sizeof(tUpdateBeaconParams));
     beaconParams.paramChangeBitmap = 0;
 
     if(eLIM_STA_IN_IBSS_ROLE == psessionEntry->limSystemRole )
@@ -359,8 +355,8 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
     {
         /*
         *  This handles two cases:
-        *  -- Infra STA receiving beacons from AP
-        *  -- BTAMP_STA receiving beacons from BTAMP_AP
+        *  -- Infra STA receving beacons from AP
+        *  -- BTAMP_STA receving beacons from BTAMP_AP
         */
         //Always save the beacon into LIM's cached scan results
         limCheckAndAddBssDescription(pMac, pBeacon, pRxPacketInfo, eANI_BOOLEAN_FALSE, eANI_BOOLEAN_FALSE);
@@ -442,8 +438,10 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
                     // If needed, downgrade the EDCA parameters
                     limSetActiveEdcaParams(pMac, psessionEntry->gLimEdcaParams, psessionEntry);
 
-                    limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive,
-                                      pStaDs->bssId);
+                    if (pStaDs->aniPeer == eANI_BOOLEAN_TRUE)
+                        limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive, pStaDs->bssId, eANI_BOOLEAN_TRUE);
+                    else
+                        limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive, pStaDs->bssId, eANI_BOOLEAN_FALSE);
                 }
                 else
                     PELOGE(schLog(pMac, LOGE, FL("Self Entry missing in Hash Table"));)
@@ -463,10 +461,13 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
           (psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE) )
     {
         /* Channel Switch information element updated */
-        if (pBeacon->channelSwitchPresent) {
+        if(pBeacon->channelSwitchPresent ||
+            pBeacon->propIEinfo.propChannelSwitchPresent)
+        {
             limUpdateChannelSwitch(pMac, pBeacon, psessionEntry);
-        } else if (psessionEntry->gLimSpecMgmt.dot11hChanSwState ==
-                                       eLIM_11H_CHANSW_RUNNING) {
+        }
+        else if (psessionEntry->gLimSpecMgmt.dot11hChanSwState == eLIM_11H_CHANSW_RUNNING)
+        {
             limCancelDot11hChannelSwitch(pMac, psessionEntry);
         }
     }
@@ -649,8 +650,7 @@ static void __schBeaconProcessForSession( tpAniSirGlobal      pMac,
             psessionEntry->bssId, psessionEntry->currentOperChannel,psessionEntry->selfMacAddr,
             psessionEntry->dot11mode, 0, NULL);
 
-    if ((VOS_FALSE == pMac->sap.SapDfsInfo.is_dfs_cac_timer_running)
-        && beaconParams.paramChangeBitmap)
+    if(beaconParams.paramChangeBitmap)
     {
         PELOGW(schLog(pMac, LOGW, FL("Beacon for session[%d] got changed. "), psessionEntry->peSessionId);)
         PELOGW(schLog(pMac, LOGW, FL("sending beacon param change bitmap: 0x%x "), beaconParams.paramChangeBitmap);)
@@ -685,11 +685,6 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
     static tSchBeaconStruct beaconStruct;
     tUpdateBeaconParams beaconParams;
     tpPESession pAPSession = NULL;
-#ifdef WLAN_FEATURE_MBSSID
-    tANI_U8 i;
-#endif
-
-    vos_mem_zero(&beaconParams, sizeof(tUpdateBeaconParams));
     beaconParams.paramChangeBitmap = 0;
 
     pMac->sch.gSchBcnRcvCnt++;
@@ -719,45 +714,6 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
     *
     */
 
-#ifdef WLAN_FEATURE_MBSSID
-
-    for (i =0; i < pMac->lim.maxBssId; i++)
-    {
-        if (((pAPSession = peFindSessionBySessionId(pMac, i)) != NULL)
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-              && (!(WDA_GET_OFFLOADSCANLEARN(pRxPacketInfo)))
-#endif
-    )
-        {
-            if (eLIM_AP_ROLE != pAPSession->limSystemRole)
-            {
-                continue;
-            }
-
-            beaconParams.bssIdx = pAPSession->bssIdx;
-            if (pAPSession->gLimProtectionControl !=
-                    WNI_CFG_FORCE_POLICY_PROTECTION_DISABLE)
-                ap_beacon_process(pMac,  pRxPacketInfo, &beaconStruct,
-                        &beaconParams, pAPSession);
-
-            if ((VOS_FALSE == pMac->sap.SapDfsInfo.is_dfs_cac_timer_running)
-                && beaconParams.paramChangeBitmap)
-            {
-                //Update the beacons and apply the new settings to HAL
-                schSetFixedBeaconFields(pMac, pAPSession);
-                PELOG1(schLog(pMac, LOG1,
-                        FL("Beacon for PE session[%d] got changed."),
-                        pAPSession->peSessionId);)
-                PELOG1(schLog(pMac, LOG1,
-                        FL("sending beacon param change bitmap: 0x%x"),
-                        beaconParams.paramChangeBitmap);)
-                limSendBeaconParams(pMac, &beaconParams, pAPSession);
-            }
-        }
-    }
-
-#else
-
     if (((pAPSession = limIsApSessionActive(pMac)) != NULL)
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
           && (!(WDA_GET_OFFLOADSCANLEARN(pRxPacketInfo)))
@@ -768,8 +724,7 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
         if (pAPSession->gLimProtectionControl != WNI_CFG_FORCE_POLICY_PROTECTION_DISABLE)
             ap_beacon_process(pMac,  pRxPacketInfo, &beaconStruct, &beaconParams, pAPSession);
 
-        if ((VOS_FALSE == pMac->sap.SapDfsInfo.is_dfs_cac_timer_running)
-            && beaconParams.paramChangeBitmap)
+        if (beaconParams.paramChangeBitmap)
         {
             //Update the beacons and apply the new settings to HAL
             schSetFixedBeaconFields(pMac, pAPSession);
@@ -778,8 +733,6 @@ void schBeaconProcess(tpAniSirGlobal pMac, tANI_U8* pRxPacketInfo, tpPESession p
             limSendBeaconParams(pMac, &beaconParams, pAPSession);
         }
     }
-
-#endif
 
     /*
     * Now process the beacon in the context of the BSS which is transmitting the beacons, if one is found
@@ -831,6 +784,7 @@ tSirRetStatus schBeaconEdcaProcess(tpAniSirGlobal pMac, tSirMacEdcaParamSetIE *e
     psessionEntry->gLimEdcaParams[EDCA_AC_BK] = edca->acbk;
     psessionEntry->gLimEdcaParams[EDCA_AC_VI] = edca->acvi;
     psessionEntry->gLimEdcaParams[EDCA_AC_VO] = edca->acvo;
+//log: LOG_WLAN_QOS_EDCA_C
 #ifdef FEATURE_WLAN_DIAG_SUPPORT
     WLAN_VOS_DIAG_LOG_ALLOC(log_ptr, vos_log_qos_edca_pkt_type, LOG_WLAN_QOS_EDCA_C);
     if(log_ptr)

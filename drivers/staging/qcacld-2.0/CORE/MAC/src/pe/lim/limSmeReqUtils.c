@@ -301,6 +301,9 @@ limSetRSNieWPAiefromSmeStartBSSReqMessage(tpAniSirGlobal pMac,
 
         // Check validity of RSN IE
         if ((pRSNie->rsnIEdata[0] == SIR_MAC_RSN_EID) &&
+#if 0 // Comparison always false
+            (pRSNie->rsnIEdata[1] > SIR_MAC_RSN_IE_MAX_LENGTH) ||
+#endif
              (pRSNie->rsnIEdata[1] < SIR_MAC_RSN_IE_MIN_LENGTH))
         {
             limLog(pMac, LOGE, FL("RSN IE len %d not [%d,%d]"),
@@ -351,6 +354,9 @@ limSetRSNieWPAiefromSmeStartBSSReqMessage(tpAniSirGlobal pMac,
             val = sirReadU32((tANI_U8 *) &pRSNie->rsnIEdata[wpaIndex + 2]);
 
             if ((pRSNie->rsnIEdata[wpaIndex] == SIR_MAC_WPA_EID) &&
+#if 0 // Comparison always false
+                (pRSNie->rsnIEdata[wpaIndex + 1] > SIR_MAC_WPA_IE_MAX_LENGTH) ||
+#endif
                 ((pRSNie->rsnIEdata[wpaIndex + 1] < SIR_MAC_WPA_IE_MIN_LENGTH) ||
                 (SIR_MAC_WPA_OUI != val)))
             {
@@ -393,14 +399,14 @@ limSetRSNieWPAiefromSmeStartBSSReqMessage(tpAniSirGlobal pMac,
  * received in various SME_REQ messages is valid or not
  *
  *LOGIC:
- * BSS Description validity checks are performed in this function
+ * BSS Descritipion validity checks are performed in this function
  *
  *ASSUMPTIONS:
  *
  *NOTE:
  *
  * @param  pMac      Pointer to Global MAC structure
- * @param  pBssDescr Pointer to received Bss Description
+ * @param  pBssDescr Pointer to received Bss Descritipion
  * @return true when BSS description is valid, false otherwise
  */
 
@@ -595,7 +601,7 @@ limIsSmeStartBssReqValid(tpAniSirGlobal pMac,
             goto end;
         }
     }
-    /* Check if all the rates in the operational rate set are legal 11G rates */
+    // check if all the rates in the operatioal rate set are legal 11G rates
     else if (pStartBssReq->nwType == eSIR_11G_NW_TYPE)
     {
         for (i = 0; i < pStartBssReq->operationalRateSet.numRates; i++)
@@ -847,24 +853,17 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
     tANI_U8 valid = true;
     tANI_U8 i = 0;
 
-    if (pScanReq->numSsid > SIR_SCAN_MAX_NUM_SSID)
-    {
-        valid = false;
-        limLog(pMac, LOGE, FL("Number of SSIDs > SIR_SCAN_MAX_NUM_SSID"));
-        goto end;
-    }
-
     for (i = 0; i < pScanReq->numSsid; i++)
     {
         if (pScanReq->ssId[i].length > SIR_MAC_MAX_SSID_LENGTH)
         {
-            limLog(pMac, LOGE,
+           limLog(pMac, LOGE,
                   FL("Requested SSID length > SIR_MAC_MAX_SSID_LENGTH"));
             valid = false;
             goto end;
         }
     }
-    if ((pScanReq->bssType < 0) || (pScanReq->bssType > eSIR_AUTO_MODE))
+    if (pScanReq->bssType > eSIR_AUTO_MODE)
     {
        limLog(pMac, LOGE, FL("Invalid BSS Type"));
        valid = false;
@@ -881,8 +880,8 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
     }
     if (pScanReq->channelList.numChannels > SIR_MAX_NUM_CHANNELS)
     {
-        valid = false;
-        limLog(pMac, LOGE, FL("Number of Channels > SIR_MAX_NUM_CHANNELS"));
+       valid = false;
+       limLog(pMac, LOGE, FL("Number of Channels > SIR_MAX_NUM_CHANNELS"));
     }
 
     /*
@@ -890,18 +889,55 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
     **/
     if (valid)
     {
-        if ((pScanReq->scanType == eSIR_ACTIVE_SCAN) &&
-            (pScanReq->maxChannelTime < pScanReq->minChannelTime))
-        {
-            limLog(pMac, LOGE, FL("Max Channel Time < Min Channel Time"));
-            valid = false;
-            goto end;
+       if ((pScanReq->scanType == eSIR_ACTIVE_SCAN) &&
+          (pScanReq->maxChannelTime < pScanReq->minChannelTime))
+       {
+           limLog(pMac, LOGE, FL("Max Channel Time < Min Channel Time"));
+           valid = false;
         }
+     }
+end:
+    return valid;
+} /*** end limIsSmeScanReqValid() ***/
+
+
+
+/**
+ * limIsSmeAuthReqValid()
+ *
+ *FUNCTION:
+ * This function is called by limProcessSmeReqMessages() upon
+ * receiving SME_AUTH_REQ message from application.
+ *
+ *LOGIC:
+ * Message validity checks are performed in this function
+ *
+ *ASSUMPTIONS:
+ *
+ *NOTE:
+ *
+ * @param  pAuthReq Pointer to received SME_AUTH_REQ message
+ * @return true  when received SME_AUTH_REQ is formatted correctly
+ *         false otherwise
+ */
+
+tANI_U8
+limIsSmeAuthReqValid(tpSirSmeAuthReq pAuthReq)
+{
+    tANI_U8 valid = true;
+
+    if (limIsGroupAddr(pAuthReq->peerMacAddr) ||
+        (pAuthReq->authType > eSIR_AUTO_SWITCH) ||
+        !pAuthReq->channelNumber)
+    {
+        valid = false;
+        goto end;
     }
 
 end:
     return valid;
-} /*** end limIsSmeScanReqValid() ***/
+} /*** end limIsSmeAuthReqValid() ***/
+
 
 
 /**

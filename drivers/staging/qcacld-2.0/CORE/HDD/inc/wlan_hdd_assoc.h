@@ -20,22 +20,25 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2013-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
 
-#if !defined(WLAN_HDD_ASSOC_H__)
-#define WLAN_HDD_ASSOC_H__
+#if !defined( HDD_CONNECTION_H__ )
+#define HDD_CONNECTION_H__
 #include <wlan_hdd_mib.h>
-#include <sme_Api.h>
-
-#define HDD_MAX_NUM_IBSS_STA          ( 32 )
+#define HDD_MAX_NUM_IBSS_STA ( 32 )
 #ifdef FEATURE_WLAN_TDLS
-#define HDD_MAX_NUM_TDLS_STA          ( 8 )
-#define HDD_MAX_NUM_TDLS_STA_P_UAPSD  ( 1 )
+#define HDD_MAX_NUM_TDLS_STA ( 8 )
+#ifdef QCA_WIFI_2_0
 #define TDLS_STA_INDEX_VALID(staId) \
                           (((staId) >= 1) && ((staId) < 0xFF))
+#else
+#define TDLS_STA_INDEX_VALID(staId) \
+                          (((staId) >= 4) && ((staId) < 0xFF))
+#endif
 #endif
 #define TKIP_COUNTER_MEASURE_STARTED 1
 #define TKIP_COUNTER_MEASURE_STOPED  0
@@ -44,7 +47,11 @@
 
 /* In pronto case, IBSS owns the first peer for bss peer.
    In Rome case, IBSS uses the 2nd peer as bss peer */
+#ifdef CONFIG_QCA_WIFI_ISOC
+#define IBSS_BROADCAST_STAID 0
+#else
 #define IBSS_BROADCAST_STAID 1
+#endif
 
 typedef enum
 {
@@ -120,14 +127,15 @@ typedef struct hdd_station_ctx hdd_station_ctx_t;
 typedef struct hdd_ap_ctx_s  hdd_ap_ctx_t;
 typedef struct hdd_mon_ctx_s  hdd_mon_ctx_t;
 
+#ifdef QCA_WIFI_2_0
 typedef enum
 {
    ePeerConnected = 1,
    ePeerDisconnected
 }ePeerStatus;
+#endif /* QCA_WIFI_2_0 */
 
 extern v_BOOL_t hdd_connIsConnected( hdd_station_ctx_t *pHddStaCtx );
-eCsrBand hdd_connGetConnectedBand( hdd_station_ctx_t *pHddStaCtx );
 extern eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, v_U32_t roamId,
                                 eRoamCmdStatus roamStatus, eCsrRoamResult roamResult );
 
@@ -143,12 +151,13 @@ VOS_STATUS hdd_roamRegisterTDLSSTA( hdd_adapter_t *pAdapter,
                                     tANI_U8 *peerMac, tANI_U16 staId, tANI_U8 ucastSig);
 void hdd_PerformRoamSetKeyComplete(hdd_adapter_t *pAdapter);
 
+#ifdef QCA_WIFI_2_0
 void hdd_SendPeerStatusIndToOemApp(v_MACADDR_t *peerMac,
                                    tANI_U8 peerStatus,
                                    tANI_U8 peerTimingMeasCap,
                                    tANI_U8 sessionId,
-                                   tSirSmeChanInfo *chan_info);
-
+                                   tANI_U8 chanId);
+#endif /* QCA_WIFI_2_0 */
 #if defined(FEATURE_WLAN_ESE) && defined(FEATURE_WLAN_ESE_UPLOAD)
 void hdd_indicateEseBcnReportNoResults(const hdd_adapter_t *pAdapter,
                                        const tANI_U16 measurementToken,

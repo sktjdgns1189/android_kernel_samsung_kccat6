@@ -93,8 +93,7 @@ void schSetBeaconInterval(tpAniSirGlobal pMac,tpPESession psessionEntry);
 
 tSirRetStatus schSendBeaconReq( tpAniSirGlobal, tANI_U8 *, tANI_U16, tpPESession psessionEntry );
 
-tSirRetStatus limUpdateProbeRspTemplateIeBitmapBeacon1(tpAniSirGlobal,
-        tDot11fBeacon1*, tpPESession psessionEntry);
+void limUpdateProbeRspTemplateIeBitmapBeacon1(tpAniSirGlobal,tDot11fBeacon1*,tANI_U32*,tDot11fProbeResponse*);
 void limUpdateProbeRspTemplateIeBitmapBeacon2(tpAniSirGlobal,tDot11fBeacon2*,tANI_U32*,tDot11fProbeResponse*);
 void SetProbeRspIeBitmap(tANI_U32*,tANI_U32);
 tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal,tpPESession,

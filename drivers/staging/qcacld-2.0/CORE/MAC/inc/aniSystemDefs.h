@@ -47,6 +47,10 @@
 /// Max WDS info length.
 #define ANI_WDS_INFO_MAX_LENGTH        64
 
+
+/// Max number of SSIDs to support Multiple SSID feature
+#define ANI_MAX_NUM_OF_SSIDS           16
+
 //This is to force compiler to use the maximum of an int for enum
 #define SIR_MAX_ENUM_SIZE    0x7FFFFFFF
 
@@ -123,6 +127,12 @@ typedef enum eAniKeyDirection
     eSIR_DONOT_USE_KEY_DIRECTION = SIR_MAX_ENUM_SIZE
 } tAniKeyDirection;
 
+/// Enum for rate
+typedef enum eAniRate
+{
+    eSIR_ANY_RATE
+} tAniRate;
+
 typedef struct sAniSSID
 {
     tANI_U8        length;
@@ -141,13 +151,6 @@ typedef struct sSirRSNie
     tANI_U16       length;
     tANI_U8        rsnIEdata[SIR_MAC_MAX_IE_LENGTH+2];
 } tSirRSNie, *tpSirRSNie;
-
-/// WAPI IE information
-typedef struct sSirWAPIie
-{
-    tANI_U16       length;
-    tANI_U8        wapiIEdata[SIR_MAC_MAX_IE_LENGTH+2];
-} tSirWAPIie, *tpSirWAPIie;
 
 /// Additional IE information :
 /// This can include WSC IE, P2P IE, and/or FTIE from upper layer.
@@ -170,6 +173,16 @@ typedef struct sSirCCKMie
 } tSirCCKMie, *tpSirCCKMie;
 
 #endif
+
+/// Need to refine structure definitions for Keying material,
+/// QoS policy, etc
+
+/// Definition Quality of Service
+typedef struct sSirQos
+{
+    tANI_U16                temp1;  // Need to define later
+    tANI_U16                temp2;  // Need to define later
+} tSirQos, *tpSirQos;
 
 /// Definition for Encryption Keys
 typedef struct sSirKeys
@@ -208,6 +221,13 @@ typedef struct sSirMicFailureInfo
     tSirMacAddr            rxMacAddr; // receive address
 
 } tSirMicFailureInfo, *tpSirMicFailureInfo;
+
+// Boa command. Used mainly for radar info persistance
+typedef struct sBoaCommand
+{
+    tANI_U8     length;
+    tANI_U8     cmd[64];
+}tBoaCommand;
 
 typedef __ani_attr_pre_packed struct sTrafStrmMetrics
 {

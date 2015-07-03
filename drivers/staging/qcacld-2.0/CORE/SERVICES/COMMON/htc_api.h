@@ -434,8 +434,7 @@ A_STATUS    HTCSendPkt(HTC_HANDLE HTCHandle, HTC_PACKET *pPacket);
 A_STATUS     HTCSendDataPkt(HTC_HANDLE HTCHandle, adf_nbuf_t       netbuf,
                             int Epid, int ActualLength);
 #else  /*ATH_11AC_TXCOMPACT*/
-A_STATUS   HTCSendDataPkt(HTC_HANDLE HTCHandle, HTC_PACKET *pPacket,
-                          A_UINT8 more_data);
+A_STATUS    HTCSendDataPkt(HTC_HANDLE HTCHandle, HTC_PACKET *pPacket);
 #endif /*ATH_11AC_TXCOMPACT*/
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   @desc: Flush HTC when target is removed surprisely service communications
@@ -670,6 +669,20 @@ struct ol_ath_htc_stats *ieee80211_ioctl_get_htc_stats(HTC_HANDLE HTCHandle);
 }
 #endif
 
+#ifdef QCA_WIFI_ISOC
+typedef struct s_htc_msg t_htc_msg;
+
+typedef void (*htc_msg_callback)(t_htc_msg *pMsg);
+
+struct s_htc_msg{
+	u16 type;
+	u16 reserved;
+	void *ptr;
+	u32 val;
+	htc_msg_callback callback;
+	void *pContext;
+};
+#endif
 void HTCGetControlEndpointTxHostCredits(HTC_HANDLE HTCHandle, int *credit);
 void HTC_dump_counter_info(HTC_HANDLE HTCHandle);
 void *htc_get_targetdef(HTC_HANDLE htc_handle);
@@ -679,10 +692,4 @@ void HTCCancelDeferredTargetSleep(void *context);
 /* Disable ASPM : Disable PCIe low power */
 void htc_disable_aspm(void);
 
-#ifdef IPA_UC_OFFLOAD
-void HTCIpaGetCEResource(HTC_HANDLE htc_handle,
-                      a_uint32_t *ce_sr_base_paddr,
-                      a_uint32_t *ce_sr_ring_size,
-                      a_uint32_t *ce_reg_paddr);
-#endif/* IPA_UC_OFFLOAD */
 #endif /* _HTC_API_H_ */

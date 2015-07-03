@@ -45,13 +45,19 @@
 #include "vos_sched.h"
 #include "wma_api.h"
 #include "adf_os_atomic.h"
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 #include "wlan_hdd_power.h"
+#endif
 #include "wlan_hdd_main.h"
 #ifdef CONFIG_CNSS
 #include <net/cnss.h>
 #endif
 #include "epping_main.h"
 
+#ifdef WLAN_BTAMP_FEATURE
+#include "wlan_btc_svc.h"
+#include "wlan_nlink_common.h"
+#endif
 
 #ifndef REMOVE_PKT_LOG
 #include "ol_txrx_types.h"
@@ -65,7 +71,6 @@
 #define AR6320_FW_1_3  (0x13)
 #define AR6320_FW_2_0  (0x20)
 #define AR6320_FW_3_0  (0x30)
-#define AR6320_FW_3_2  (0x32)
 
 #ifdef CONFIG_SLUB_DEBUG_ON
 #define MAX_NUM_OF_RECEIVES 400 /* Maximum number of Rx buf to process before*
@@ -159,16 +164,6 @@ hif_pci_interrupt_handler(int irq, void *arg)
                 A_PCI_READ32(sc->mem + PCIE_LOCAL_BASE_ADDRESS
                     + PCIE_SOC_WAKE_ADDRESS));
 
-            pr_err("%s: 0x80008 = 0x%08x, 0x8000c = 0x%08x, "
-                "0x80010 = 0x%08x,\n0x80014 = 0x%08x, 0x80018 = 0x%08x, "
-                "0x8001c = 0x%08x\n", __func__,
-                A_PCI_READ32(sc->mem + 0x80008),
-                A_PCI_READ32(sc->mem + 0x8000c),
-                A_PCI_READ32(sc->mem + 0x80010),
-                A_PCI_READ32(sc->mem + 0x80014),
-                A_PCI_READ32(sc->mem + 0x80018),
-                A_PCI_READ32(sc->mem + 0x8001c));
-
             VOS_BUG(0);
         }
 
@@ -205,10 +200,6 @@ bool
 hif_pci_targ_is_awake(struct hif_pci_softc *sc, void *__iomem *mem)
 {
     A_UINT32 val;
-
-    if(sc->recovery)
-        return false;
-
     val = A_PCI_READ32(mem + PCIE_LOCAL_BASE_ADDRESS + RTC_STATE_ADDRESS);
     return (RTC_STATE_V_GET(val) == RTC_STATE_V_ON);
 }
@@ -255,9 +246,6 @@ hif_pci_device_reset(struct hif_pci_softc *sc)
     void __iomem *mem = sc->mem;
     int i;
     u_int32_t val;
-
-    if (!sc->hostdef)
-        return;
 
     /* NB: Don't check resetok here.  This form of reset is integral to correct operation. */
 
@@ -833,13 +821,12 @@ again:
 
         case AR6320_FW_2_0:
         case AR6320_FW_3_0:
-        case AR6320_FW_3_2:
             hif_type = HIF_TYPE_AR6320V2;
             target_type = TARGET_TYPE_AR6320V2;
             break;
 
         default:
-            printk(KERN_ERR "unsupported revision id %x\n", id->device);
+            printk(KERN_ERR "unsupported revision id\n");
             ret = -ENODEV;
             goto err_tgtstate;
         }
@@ -978,6 +965,10 @@ again:
     }
 #endif
 
+#ifdef WLAN_BTAMP_FEATURE
+    /* Send WLAN UP indication to Nlink Service */
+    send_btc_nlink_msg(WLAN_MODULE_UP_IND, 0);
+#endif
 
     return 0;
 
@@ -1024,7 +1015,7 @@ err_region:
  * power up WLAN host driver when SSR happens. Most of this
  * function is duplicated from hif_pci_probe().
  */
-#if  defined(CONFIG_CNSS)
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 int hif_pci_reinit(struct pci_dev *pdev, const struct pci_device_id *id)
 {
     void __iomem *mem;
@@ -1174,13 +1165,12 @@ again:
 
         case AR6320_FW_2_0:
         case AR6320_FW_3_0:
-        case AR6320_FW_3_2:
             hif_type = HIF_TYPE_AR6320V2;
             target_type = TARGET_TYPE_AR6320V2;
             break;
 
         default:
-            printk(KERN_ERR "unsupported revision id %x\n", id->device);
+            printk(KERN_ERR "unsupported revision id\n");
             ret = -ENODEV;
             goto err_tgtstate;
         }
@@ -1320,6 +1310,10 @@ again:
     }
 #endif
 
+#ifdef WLAN_BTAMP_FEATURE
+    /* Send WLAN UP indication to Nlink Service */
+    send_btc_nlink_msg(WLAN_MODULE_UP_IND, 0);
+#endif
 
     printk("%s: WLAN host driver reinitiation completed!\n", __func__);
     return 0;
@@ -1654,7 +1648,7 @@ hif_pci_remove(struct pci_dev *pdev)
  * shutdown WLAN host driver when SSR happens. Most of this
  * function is duplicated from hif_pci_remove().
  */
-#if  defined(CONFIG_CNSS)
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 void hif_pci_shutdown(struct pci_dev *pdev)
 {
     void __iomem *mem;
@@ -1699,7 +1693,6 @@ void hif_pci_shutdown(struct pci_dev *pdev)
 #endif
 
     A_FREE(scn);
-    A_FREE(sc->hif_device);
     A_FREE(sc);
     pci_set_drvdata(pdev, NULL);
     pci_iounmap(pdev, mem);
@@ -1782,13 +1775,9 @@ __hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
     if (vos_is_logp_in_progress(VOS_MODULE_ID_HIF, NULL))
         return ret;
 
-    if (HIFTargetSleepStateAdjust(targid, FALSE, TRUE) < 0)
-        goto out;
-
+    A_TARGET_ACCESS_BEGIN_RET(targid);
     A_PCI_WRITE32(sc->mem + FW_INDICATOR_ADDRESS, (state.event << 16));
-
-    if (HIFTargetSleepStateAdjust(targid, TRUE, FALSE) < 0)
-        goto out;
+    A_TARGET_ACCESS_END_RET(targid);
 
     if (!txrx_pdev) {
         printk("%s: txrx_pdev is NULL\n", __func__);
@@ -1831,11 +1820,9 @@ __hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
             printk("%s: CE still not done with access: \n", __func__);
             adf_os_atomic_set(&sc->wow_done, 0);
 
-            if (HIFTargetSleepStateAdjust(targid, FALSE, TRUE) < 0)
-                goto out;
+            A_TARGET_ACCESS_BEGIN_RET(targid);
             val = A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) >> 16;
-            if (HIFTargetSleepStateAdjust(targid, TRUE, FALSE) < 0)
-                goto out;
+            A_TARGET_ACCESS_END_RET(targid);
 
             if (!wma_is_wow_mode_selected(temp_module) &&
                (val == PM_EVENT_HIBERNATE || val == PM_EVENT_SUSPEND)) {
@@ -1851,27 +1838,14 @@ __hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
         msleep(10);
     }
 
-#ifdef FEATURE_WLAN_D0WOW
-    if (wma_get_client_count(temp_module)) {
-        if (enable_irq_wake(pdev->irq)) {
-            pr_err("%s: Fail to enable wake IRQ!\n", __func__);
-            ret = -1;
-            goto out;
-        }
-
-        pr_info("%s: Suspend completes (D0WOW)\n", __func__);
-        ret = 0;
-        goto out;
-    }
-#endif
-
     adf_os_spin_lock_irqsave(&hif_state->suspend_lock);
 
     /*Disable PCIe interrupts*/
-    if (HIFTargetSleepStateAdjust(targid, FALSE, TRUE) < 0) {
-        adf_os_spin_unlock_irqrestore(&hif_state->suspend_lock);
-        goto out;
+    if (Q_TARGET_ACCESS_BEGIN(targid) < 0) {
+        adf_os_spin_unlock_irqrestore( &hif_state->suspend_lock);
+        return -1;
     }
+
     A_PCI_WRITE32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS), 0);
     A_PCI_WRITE32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_CLR_ADDRESS),
                   PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
@@ -1882,9 +1856,9 @@ __hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
          VOS_ASSERT(0);
     }
 
-    if (HIFTargetSleepStateAdjust(targid, TRUE, FALSE) < 0) {
-        adf_os_spin_unlock_irqrestore(&hif_state->suspend_lock);
-        goto out;
+    if (Q_TARGET_ACCESS_END(targid) < 0) {
+        adf_os_spin_unlock_irqrestore( &hif_state->suspend_lock);
+        return -1;
     }
 
     /* Stop the HIF Sleep Timer */
@@ -1944,8 +1918,7 @@ __hif_pci_resume(struct pci_dev *pdev)
     adf_os_atomic_set(&sc->pci_link_suspended, 0);
 
     /* Enable Legacy PCI line interrupts */
-    if (HIFTargetSleepStateAdjust(targid, FALSE, TRUE) < 0)
-        goto out;
+    A_TARGET_ACCESS_BEGIN_RET(targid);
     A_PCI_WRITE32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS),
                               PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
     /* IMPORTANT: this extra read transaction is required to flush the posted write buffer */
@@ -1954,8 +1927,7 @@ __hif_pci_resume(struct pci_dev *pdev)
         printk(KERN_ERR "%s: PCIe link is down\n", __func__);
         VOS_ASSERT(0);
     }
-    if (HIFTargetSleepStateAdjust(targid, TRUE, FALSE) < 0)
-        goto out;
+    A_TARGET_ACCESS_END_RET(targid);
 
 
     err = pci_enable_device(pdev);
@@ -1995,11 +1967,9 @@ __hif_pci_resume(struct pci_dev *pdev)
     pci_write_config_dword(pdev, 0x188, (val & ~0x0000000f));
 #endif
 
-    if (HIFTargetSleepStateAdjust(targid, FALSE, TRUE) < 0)
-        goto out;
+    A_TARGET_ACCESS_BEGIN_RET(targid);
     val = A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) >> 16;
-    if (HIFTargetSleepStateAdjust(targid, TRUE, FALSE) < 0)
-        goto out;
+    A_TARGET_ACCESS_END_RET(targid);
 
     /* No need to send WMI_PDEV_RESUME_CMDID to FW if WOW is enabled */
     temp_module = vos_get_context(VOS_MODULE_ID_WDA, vos_context);
@@ -2019,15 +1989,6 @@ __hif_pci_resume(struct pci_dev *pdev)
     else
         err = wma_disable_wow_in_fw(temp_module);
 
-#ifdef FEATURE_WLAN_D0WOW
-    if (wma_get_client_count(temp_module)) {
-        if (disable_irq_wake(pdev->irq)) {
-            pr_err("%s: Fail to disable wake IRQ!\n", __func__);
-            err = -1;
-            goto out;
-        }
-    }
-#endif
 
 out:
     printk("%s: Resume completes %d\n", __func__, err);
@@ -2107,7 +2068,6 @@ void hif_unregister_driver(void)
 #endif
 }
 
-/* Function to set the TXRX handle in the ol_sc context */
 void hif_init_pdev_txrx_handle(void *ol_sc, void *txrx_handle)
 {
 	struct ol_softc *sc = (struct ol_softc *)ol_sc;
@@ -2132,7 +2092,6 @@ void hif_disable_isr(void *ol_sc)
 	tasklet_kill(&hif_sc->intr_tq);
 }
 
-/* Function to reset SoC */
 void hif_reset_soc(void *ol_sc)
 {
 	struct ol_softc *scn = (struct ol_softc *)ol_sc;
@@ -2192,33 +2151,3 @@ void hif_get_hw_info(void *ol_sc, u32 *version, u32 *revision)
     *version = ((struct ol_softc *)ol_sc)->target_version;
     *revision = ((struct ol_softc *)ol_sc)->target_revision;
 }
-
-void hif_set_fw_info(void *ol_sc, u32 target_fw_version)
-{
-    ((struct ol_softc *)ol_sc)->target_fw_version = target_fw_version;
-}
-
-#ifdef IPA_UC_OFFLOAD
-/* Micro controller needs PCI BAR address to access CE register */
-void hif_read_bar(struct hif_pci_softc *sc, u32 *bar_value)
-{
-    pci_read_config_dword(sc->pdev, 0x10, bar_value);
-    *bar_value = pci_resource_start(sc->pdev, 0);
-}
-#endif /* IPA_UC_OFFLOAD */
-
-#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
-void wlan_hif_pci_suspend(void)
-{
-    void *vos_context = vos_get_global_context(VOS_MODULE_ID_HIF, NULL);
-    struct ol_softc *scn =  vos_get_context(VOS_MODULE_ID_HIF, vos_context);
-    pm_message_t state;
-
-    if (!scn || !scn->hif_sc) {
-        printk(KERN_ERR "%s: error: scn or scn->hif_sc is NULL!\n", __func__);
-        return;
-    }
-    state.event = PM_EVENT_SUSPEND;
-    hif_pci_suspend(scn->hif_sc->pdev, state);
-}
-#endif

@@ -151,9 +151,6 @@ struct ol_tx_desc_t {
 	/* used by tx encap, to restore the os buf start offset after tx complete*/
 	u_int8_t orig_l2_hdr_bytes;
 #endif
-#if defined(CONFIG_PER_VDEV_TX_DESC_POOL)
-	struct ol_txrx_vdev_t* vdev;
-#endif
 };
 
 typedef TAILQ_HEAD(, ol_tx_desc_t) ol_tx_desc_list;
@@ -321,10 +318,6 @@ typedef enum _throttle_phase {
 
 #define THROTTLE_TX_THRESHOLD (100)
 
-#ifdef IPA_UC_OFFLOAD
-typedef void (*ipa_uc_op_cb_type)(u_int8_t *op_msg, void *osif_ctxt);
-#endif /* IPA_UC_OFFLOAD */
-
 /*
  * As depicted in the diagram below, the pdev contains an array of
  * NUM_EXT_TID ol_tx_active_queues_in_tid_t elements.
@@ -391,7 +384,6 @@ struct ol_txrx_pdev_t {
 		int is_high_latency;
 		int host_addba;
 		int ll_pause_txq_limit;
-                int default_tx_comp_req;
 	} cfg;
 
 	/* WDI subscriber's event list */
@@ -683,14 +675,7 @@ struct ol_txrx_pdev_t {
 		u_int32_t tx_threshold;
 		/* stores time in ms of on and off phase for each throttle level*/
 		int throttle_time_ms[THROTTLE_LEVEL_MAX][THROTTLE_PHASE_MAX];
-		/* mark as true if traffic is paused due to thermal throttling */
-		a_bool_t is_paused;
-	} tx_throttle;
-
-#ifdef IPA_UC_OFFLOAD
-    ipa_uc_op_cb_type ipa_uc_op_cb;
-    void *osif_dev;
-#endif /* IPA_UC_OFFLOAD */
+	} tx_throttle_ll;
 };
 
 struct ol_txrx_vdev_t {
@@ -746,10 +731,12 @@ struct ol_txrx_vdev_t {
 
 	enum wlan_op_mode opmode;
 
+#ifndef CONFIG_QCA_WIFI_ISOC
 #ifdef  QCA_IBSS_SUPPORT
         /* ibss mode related */
         int16_t ibss_peer_num;              /* the number of active peers */
         int16_t ibss_peer_heart_beat_timer; /* for detecting peer departure */
+#endif
 #endif
 
 #if defined(CONFIG_HL_SUPPORT)
@@ -772,14 +759,6 @@ struct ol_txrx_vdev_t {
 	u_int16_t tx_fl_lwm;
 	u_int16_t tx_fl_hwm;
 	ol_txrx_tx_flow_control_fp osif_flow_control_cb;
-
-#if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
-        union ol_txrx_align_mac_addr_t hl_tdls_ap_mac_addr;
-        bool hlTdlsFlag;
-#endif
-#if defined(CONFIG_PER_VDEV_TX_DESC_POOL)
-	adf_os_atomic_t tx_desc_count;
-#endif
 };
 
 struct ol_rx_reorder_array_elem_t {

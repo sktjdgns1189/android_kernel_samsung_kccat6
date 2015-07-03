@@ -3,11 +3,12 @@
 # Assume no targets will be supported
 WLAN_CHIPSET :=
 
-ifeq ($(BOARD_HAS_QCOM_WLAN), true)
-# Build/Package options for 8084/8092/8960/8994 target
-ifeq ($(call is-board-platform-in-list, apq8084 mpq8092 msm8960 msm8994),true)
+# Build/Package options for 8084/8092 target
+ifeq ($(call is-board-platform-in-list, apq8084 mpq8092),true)
 	WLAN_CHIPSET     := qca_cld
 	WLAN_SELECT      := CONFIG_QCA_CLD_WLAN=m
+	WLAN_ISOC_SELECT := CONFIG_QCA_WIFI_ISOC=0
+	WLAN_ISOC_SELECT += CONFIG_QCA_WIFI_2_0=1
 endif
 
 # Build/Package only in case of supported target
@@ -40,14 +41,8 @@ else
        DLKM_DIR := build/dlkm
 endif
 
-# Copy WCNSS_cfg.dat and WCNSS_qcom_cfg.ini file from firmware_bin/ folder to target out directory.
-ifeq ($(call is-board-platform-in-list, msm8960),true)
-$(shell rm -f $(TARGET_OUT_ETC)/firmware/wlan/qca_cld/WCNSS_cfg.dat)
-$(shell rm -f $(TARGET_OUT_ETC)/firmware/wlan/qca_cld/WCNSS_qcom_cfg.ini)
-$(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_cfg.dat $(TARGET_OUT_ETC)/firmware/wlan/qca_cld)
-$(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_qcom_cfg.ini $(TARGET_OUT_ETC)/firmware/wlan/qca_cld)
-endif
 
+# Build wlan.ko as either prima_wlan.ko or pronto_wlan.ko or qca_cld_wlan.ko
 ###########################################################
 # This is set once per LOCAL_PATH, not per (kernel) module
 KBUILD_OPTIONS := WLAN_ROOT=../$(WLAN_BLD_DIR)/qcacld-2.0
@@ -58,6 +53,7 @@ KBUILD_OPTIONS := WLAN_ROOT=../$(WLAN_BLD_DIR)/qcacld-2.0
 KBUILD_OPTIONS += MODNAME=wlan
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(WLAN_SELECT)
+KBUILD_OPTIONS += $(WLAN_ISOC_SELECT)
 KBUILD_OPTIONS += WLAN_OPEN_SOURCE=$(WLAN_OPEN_SOURCE)
 
 include $(CLEAR_VARS)
@@ -78,36 +74,6 @@ $(shell mkdir -p $(TARGET_OUT)/lib/modules; \
            $(TARGET_OUT)/lib/modules/wlan.ko)
 $(shell ln -sf /persist/wlan_mac.bin $(TARGET_OUT_ETC)/firmware/wlan/qca_cld/wlan_mac.bin)
 
-ifeq ($(call is-board-platform-in-list, msm8960),true)
-$(shell ln -sf /firmware/image/bdwlan20.bin $(TARGET_OUT_ETC)/firmware/fakeboar.bin)
-$(shell ln -sf /firmware/image/otp20.bin $(TARGET_OUT_ETC)/firmware/otp.bin)
-$(shell ln -sf /firmware/image/utf20.bin $(TARGET_OUT_ETC)/firmware/utf.bin)
-$(shell ln -sf /firmware/image/qwlan20.bin $(TARGET_OUT_ETC)/firmware/athwlan.bin)
-
-$(shell ln -sf /firmware/image/bdwlan20.bin $(TARGET_OUT_ETC)/firmware/bdwlan20.bin)
-$(shell ln -sf /firmware/image/otp20.bin $(TARGET_OUT_ETC)/firmware/otp20.bin)
-$(shell ln -sf /firmware/image/utf20.bin $(TARGET_OUT_ETC)/firmware/utf20.bin)
-$(shell ln -sf /firmware/image/qwlan20.bin $(TARGET_OUT_ETC)/firmware/qwlan20.bin)
-
-$(shell ln -sf /firmware/image/bdwlan30.bin $(TARGET_OUT_ETC)/firmware/bdwlan30.bin)
-$(shell ln -sf /firmware/image/otp30.bin $(TARGET_OUT_ETC)/firmware/otp30.bin)
-$(shell ln -sf /firmware/image/utf30.bin $(TARGET_OUT_ETC)/firmware/utf30.bin)
-$(shell ln -sf /firmware/image/qwlan30.bin $(TARGET_OUT_ETC)/firmware/qwlan30.bin)
-endif
-
-# Copy config ini files to target
-ifeq ($(call is-board-platform-in-list, msm8994),false)
-ifeq ($(WLAN_PROPRIETARY),1)
-$(shell mkdir -p $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_CHIPSET))
-$(shell mkdir -p $(TARGET_OUT)/etc/wifi)
-$(shell rm -f $(TARGET_OUT)/etc/wifi/WCNSS_qcom_cfg.ini)
-$(shell rm -f $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_SHIPSET)/WCNSS_cfg.dat)
-$(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_qcom_cfg.ini $(TARGET_OUT)/etc/wifi)
-$(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_cfg.dat $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_CHIPSET))
-endif
-endif
-
 endif # DLKM check
 
 endif # supported target check
-endif # WLAN enabled check

@@ -128,7 +128,6 @@ WLANSAP_ScanCallback
 (
   tHalHandle halHandle,
   void *pContext,           /* Opaque SAP handle */
-  v_U8_t sessionId,
   v_U32_t scanID,
   eCsrScanStatus scanStatus
 )
@@ -154,7 +153,7 @@ WLANSAP_ScanCallback
             VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, CSR scanStatus = %s (%d)", __func__, "eCSR_SCAN_SUCCESS", scanStatus);
 
             // Get scan results, Run channel selection algorithm, select channel and keep in pSapContext->Channel
-            scanGetResultStatus = sme_ScanGetResult(halHandle, psapContext->sessionId, NULL, &pResult);
+            scanGetResultStatus = sme_ScanGetResult(halHandle, 0, NULL, &pResult);
 
             if ((scanGetResultStatus != eHAL_STATUS_SUCCESS)&& (scanGetResultStatus != eHAL_STATUS_E_NULL_VALUE))
             {
@@ -163,17 +162,7 @@ WLANSAP_ScanCallback
                                 __func__, scanGetResultStatus);
                 break;
             }
-#ifdef FEATURE_WLAN_AP_AP_ACS_OPTIMIZE
-            if (scanID != 0) {
-                VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
-                    "%s: Sending ACS Scan skip event", __func__);
-                sapSignalHDDevent(psapContext, NULL,
-                                  eSAP_ACS_SCAN_SUCCESS_EVENT,
-                                  (v_PVOID_t) eSAP_STATUS_SUCCESS);
-            } else
-                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
-                          "%s: ACS scan id: %d (skipped ACS SCAN)", __func__, scanID);
-#endif
+
             operChannel = sapSelectChannel(halHandle, psapContext, pResult);
 
             sme_ScanResultPurge(halHandle, pResult);
@@ -303,32 +292,30 @@ WLANSAP_RoamCallback
     tWLAN_SAPEvent sapEvent; /* State machine event */
     VOS_STATUS  vosStatus = VOS_STATUS_SUCCESS;
     eHalStatus halStatus = eHAL_STATUS_SUCCESS;
-    tHalHandle hHal = VOS_GET_HAL_CB(sapContext->pvosGCtx);
-    tpAniSirGlobal pMac = NULL;
-
-    if (NULL == hHal)
-    {
-        VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
-                  "In %s invalid hHal", __func__);
-        halStatus = eHAL_STATUS_FAILED_ALLOC;
-        return halStatus;
-    }
-    else
-    {
-        pMac = PMAC_STRUCT( hHal );
-    }
 
     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, before switch on roamStatus = %d\n", __func__, roamStatus);
     switch(roamStatus)
     {
         case eCSR_ROAM_SESSION_OPENED:
         {
-            VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
-                      "In %s calling sme_RoamConnect with eCSR_BSS_TYPE_INFRA_AP", __func__);
-            sapContext->isSapSessionOpen = eSAP_TRUE;
-            halStatus = sme_RoamConnect(hHal, sapContext->sessionId,
-                                        &sapContext->csrRoamProfile,
-                                        &sapContext->csrRoamId);
+            /* tHalHandle */
+            tHalHandle hHal = VOS_GET_HAL_CB(sapContext->pvosGCtx);
+
+            if (NULL == hHal)
+            {
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                          "In %s invalid hHal", __func__);
+               halStatus = eHAL_STATUS_FAILED_ALLOC;
+            }
+            else
+            {
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                          "In %s calling sme_RoamConnect with eCSR_BSS_TYPE_INFRA_AP", __func__);
+               sapContext->isSapSessionOpen = eSAP_TRUE;
+               halStatus = sme_RoamConnect(hHal, sapContext->sessionId,
+                                           &sapContext->csrRoamProfile,
+                                           &sapContext->csrRoamId);
+            }
             break;
         }
 
@@ -435,63 +422,13 @@ WLANSAP_RoamCallback
            sapSignalHDDevent(sapContext, pCsrRoamInfo,
                             eSAP_MAC_TRIG_STOP_BSS_EVENT,
                             (v_PVOID_t) eSAP_STATUS_SUCCESS );
-           break;
+        break;
 
        case eCSR_ROAM_DFS_RADAR_IND:
            VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
-                   FL("Received Radar Indication"));
-
-           VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-               "sapdfs:  Indicate eSAP_DFS_RADAR_DETECT to HDD");
-           sapSignalHDDevent(sapContext, NULL, eSAP_DFS_RADAR_DETECT,
-               (v_PVOID_t) eSAP_STATUS_SUCCESS);
-
-           /* sync to latest DFS-NOL */
-           sapSignalHDDevent(sapContext, NULL, eSAP_DFS_NOL_GET,
-                   (v_PVOID_t) eSAP_STATUS_SUCCESS);
-
-           pMac->sap.SapDfsInfo.target_channel =
+                     "In %s, Received Radar Indication", __func__);
+           sapContext->SapDfsInfo.target_channel =
                      sapIndicateRadar(sapContext, &pCsrRoamInfo->dfs_event);
-
-           /* if there is an assigned next channel hopping */
-           if (0 < pMac->sap.SapDfsInfo.user_provided_target_channel)
-           {
-               pMac->sap.SapDfsInfo.target_channel =
-                   pMac->sap.SapDfsInfo.user_provided_target_channel;
-               pMac->sap.SapDfsInfo.user_provided_target_channel = 0;
-           }
-
-           if (pMac->sap.SapDfsInfo.target_channel == 0) {
-               /* No available channel found */
-               v_U8_t  intf;
-               /* Issue stopbss for each sapctx */
-               for (intf = 0; intf < SAP_MAX_NUM_SESSION; intf++)
-               {
-                    ptSapContext pSapContext;
-
-                    if (VOS_STA_SAP_MODE ==
-                         pMac->sap.sapCtxList[intf].sapPersona &&
-                         pMac->sap.sapCtxList[intf].pSapContext != NULL )
-                    {
-                        pSapContext = pMac->sap.sapCtxList[intf].pSapContext;
-                        VOS_TRACE(VOS_MODULE_ID_SAP,
-                                  VOS_TRACE_LEVEL_ERROR,
-                        "sapdfs: no available channel for sapctx[%p], StopBss",
-                                  pSapContext);
-
-                        WLANSAP_StopBss(pSapContext);
-                     }
-               }
-               break;
-           }
-
-           pMac->sap.SapDfsInfo.cac_state = eSAP_DFS_DO_NOT_SKIP_CAC;
-           sap_CacResetNotify(hHal);
-
-           /* set DFS-NOL back to keep it update-to-date in CNSS */
-           sapSignalHDDevent(sapContext, NULL, eSAP_DFS_NOL_SET,
-                   (v_PVOID_t) eSAP_STATUS_SUCCESS);
-
            break;
 
        case eCSR_ROAM_DFS_CHAN_SW_NOTIFY:
@@ -525,13 +462,6 @@ WLANSAP_RoamCallback
                 vos_mem_copy( sapContext->pStaWpaRsnReqIE,
                               pCsrRoamInfo->prsnIE, sapContext->nStaWPARSnReqIeLength);
 
-#ifdef FEATURE_WLAN_WAPI
-            sapContext->nStaWAPIReqIeLength = pCsrRoamInfo->wapiIELen;
-
-            if(sapContext->nStaWAPIReqIeLength)
-                vos_mem_copy( sapContext->pStaWapiReqIE,
-                              pCsrRoamInfo->pwapiIE, sapContext->nStaWAPIReqIeLength);
-#endif
             sapContext->nStaAddIeLength = pCsrRoamInfo->addIELen;
 
             if(sapContext->nStaAddIeLength)
@@ -667,6 +597,19 @@ WLANSAP_RoamCallback
             sapEvent.u1 = roamStatus;
             sapEvent.u2 = roamResult;
 
+            /*
+             * If the Channel on which BSS started is a DFS channel
+             * then initialize the NOL list in the sapDfsInfo to
+             * a manitain a list of radar found DFS channels and
+             * to make sure that SAP does not use these channels
+             * for the next 30 mins.
+             */
+            if (vos_nv_getChannelEnabledState(sapContext->channel) ==
+                                                            NV_CHANNEL_DFS)
+            {
+                sapInitDfsChannelNolList(sapContext);
+            }
+
             vosStatus = sapFsm(sapContext, &sapEvent);
             if(!VOS_IS_STATUS_SUCCESS(vosStatus))
             {
@@ -741,24 +684,20 @@ WLANSAP_RoamCallback
         case eCSR_ROAM_RESULT_DFS_RADAR_FOUND_IND:
             if (sapContext->csrRoamProfile.disableDFSChSwitch)
             {
-                VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-                          "sapdfs: DFS channel switch disabled");
                 break;
             }
             if (eSAP_DFS_CAC_WAIT == sapContext->sapsMachine)
             {
-                if (VOS_TRUE == pMac->sap.SapDfsInfo.sap_radar_found_status)
+                if (VOS_TRUE == sapContext->SapDfsInfo.sap_radar_found_status)
                 {
-                    VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                    "sapdfs:Posting event eSAP_DFS_CHANNEL_CAC_RADAR_FOUND");
                     /*
                      * If Radar is found, while in DFS CAC WAIT State then
                      * post stop and destroy the CAC timer and post a
                      * eSAP_DFS_CHANNEL_CAC_RADAR_FOUND  to sapFsm.
                      */
-                    vos_timer_stop(&pMac->sap.SapDfsInfo.sap_dfs_cac_timer);
-                    vos_timer_destroy(&pMac->sap.SapDfsInfo.sap_dfs_cac_timer);
-                    pMac->sap.SapDfsInfo.is_dfs_cac_timer_running = 0;
+                    vos_timer_stop(&sapContext->SapDfsInfo.sap_dfs_cac_timer);
+                    vos_timer_destroy(&sapContext->SapDfsInfo.sap_dfs_cac_timer);
+                    sapContext->SapDfsInfo.is_dfs_cac_timer_running = 0;
 
                     sapEvent.event = eSAP_DFS_CHANNEL_CAC_RADAR_FOUND;
                     sapEvent.params = 0;
@@ -773,9 +712,6 @@ WLANSAP_RoamCallback
             }
             else if(eSAP_STARTED == sapContext->sapsMachine)
             {
-                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                "sapdfs:Posting event eSAP_DFS_CHNL_SWITCH_ANNOUNCEMENT_START");
-
                 /* Radar found on the operating channel in STARTED state,
                  * new operating channel has already been selected. Send
                  * request to SME-->PE for sending CSA IE
@@ -793,7 +729,7 @@ WLANSAP_RoamCallback
             else
             {
                 /* Further actions to be taken here */
-                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_WARN,
                          "In %s, eCSR_ROAM_RESULT_DFS_RADAR_FOUND_IND received in"
                          "(%d) state\n", __func__, sapContext->sapsMachine);
             }
@@ -804,6 +740,17 @@ WLANSAP_RoamCallback
         {
             eCsrPhyMode phyMode =
                sapConvertSapPhyModeToCsrPhyMode(sapContext->csrRoamProfile.phyMode);
+            tHalHandle hHal =
+               (tHalHandle)vos_get_context( VOS_MODULE_ID_SME, sapContext->pvosGCtx);
+
+            if (NULL == hHal)
+            {
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                         "In %s invalid hHal roamStatus = %d "
+                         "roamResult = %d", __func__, roamStatus, roamResult);
+               halStatus = eHAL_STATUS_FAILED_ALLOC;
+               break;
+            }
 
             /* Both success and failure cases are handled intentionally handled
              * together. Irrespective of whether the channel switch IE was
@@ -812,9 +759,9 @@ WLANSAP_RoamCallback
              */
             if (eSAP_STARTED == sapContext->sapsMachine)
             {
-               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                          "sapdfs: from state %s => %s",
-                          "eSAP_STARTED", "eSAP_DISCONNECTING");
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                          "In %s, from state %s => %s",
+                          __func__, "eSAP_STARTED", "eSAP_DISCONNECTING");
 
                /* SAP to be moved to DISCONNECTING state */
                sapContext->sapsMachine = eSAP_DISCONNECTING;
@@ -831,104 +778,23 @@ WLANSAP_RoamCallback
                 * operate in the same mode as it is operating currently.
                 * For e.g. 20/40/80 MHz operation
                 */
-                if (pMac->sap.SapDfsInfo.target_channel)
+                if (sapContext->SapDfsInfo.target_channel)
                 {
                    sme_SelectCBMode(hHal, phyMode,
-                                    pMac->sap.SapDfsInfo.target_channel);
+                                    sapContext->SapDfsInfo.target_channel);
                 }
 
-                /*
-                 * Fetch the number of SAP interfaces.
-                 * If the number of sap Interface more than
-                 * one then we will make is_sap_ready_for_chnl_chng to true
-                 * for that sapctx
-                 *
-                 * If there is only one SAP interface then process immediately
-                 */
+                /* Send channel switch request */
+                sapEvent.event = eWNI_SME_CHANNEL_CHANGE_REQ;
+                sapEvent.params = 0;
+                sapEvent.u1 = 0;
+                sapEvent.u2 = 0;
 
-                if (sap_get_total_number_sap_intf(hHal) > 1)
+                /* Handle event */
+                vosStatus = sapFsm(sapContext, &sapEvent);
+                if(!VOS_IS_STATUS_SUCCESS(vosStatus))
                 {
-                    v_U8_t  intf;
-                    sapContext->is_sap_ready_for_chnl_chng = VOS_TRUE;
-                    /*
-                     * now check if the con-current sap interface is ready
-                     * for channel change.
-                     * If yes then we issue channel change for both the
-                     * SAPs.
-                     * If no then simply return success & we will issue channel
-                     * change when second AP's 5 CSA beacon Tx is completed.
-                     */
-                     if (VOS_TRUE ==
-                         is_concurrent_sap_ready_for_channel_change(hHal,
-                                                                    sapContext))
-                     {
-                         /* Issue channel change req for each sapctx */
-                         for (intf = 0; intf < SAP_MAX_NUM_SESSION; intf++)
-                         {
-                              ptSapContext pSapContext;
-                              if ((VOS_STA_SAP_MODE ==
-                                  pMac->sap.sapCtxList[intf].sapPersona) &&
-                                  (pMac->sap.sapCtxList[intf].pSapContext !=
-                                   NULL))
-                              {
-                                   pSapContext =
-                                      pMac->sap.sapCtxList[intf].pSapContext;
-                                      VOS_TRACE(VOS_MODULE_ID_SAP,
-                                                VOS_TRACE_LEVEL_INFO_MED,
-                                    "sapdfs:issue chnl change for sapctx[%p]",
-                                                pSapContext);
-                                   /* Send channel switch request */
-                                   sapEvent.event = eWNI_SME_CHANNEL_CHANGE_REQ;
-                                   sapEvent.params = 0;
-                                   sapEvent.u1 = 0;
-                                   sapEvent.u2 = 0;
-
-
-                                   /* Handle event */
-                                   vosStatus = sapFsm(pSapContext, &sapEvent);
-                                   if(!VOS_IS_STATUS_SUCCESS(vosStatus))
-                                   {
-                                       halStatus = eHAL_STATUS_FAILURE;
-                                       VOS_TRACE(VOS_MODULE_ID_SAP,
-                                                 VOS_TRACE_LEVEL_ERROR,
-                                       FL("post chnl chng req failed, sap[%p]"),
-                                       sapContext);
-                                   }
-                                   else
-                                   {
-                                       pSapContext->is_sap_ready_for_chnl_chng =
-                                        VOS_FALSE;
-                                   }
-
-                               }
-                         }
-                     }
-                     else
-                     {
-                         VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                         FL("sapdfs: sapctx[%p] ready but not concurrent sap"),
-                         sapContext);
-
-                         halStatus = eHAL_STATUS_SUCCESS;
-                     }
-                }
-                else
-                {
-                    /* Send channel switch request */
-                    sapEvent.event = eWNI_SME_CHANNEL_CHANGE_REQ;
-                    sapEvent.params = 0;
-                    sapEvent.u1 = 0;
-                    sapEvent.u2 = 0;
-
-                    VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                    "sapdfs: Posting event eWNI_SME_CHANNEL_CHANGE_REQ to sapFSM");
-
-                    /* Handle event */
-                    vosStatus = sapFsm(sapContext, &sapEvent);
-                    if(!VOS_IS_STATUS_SUCCESS(vosStatus))
-                    {
-                       halStatus = eHAL_STATUS_FAILURE;
-                    }
+                   halStatus = eHAL_STATUS_FAILURE;
                 }
             }
             else
@@ -946,61 +812,39 @@ WLANSAP_RoamCallback
              * channel, then we will to perform channel availability check
              * for 60 seconds
              */
-            VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                      "sapdfs: changing target channel to [%d]",
-                      pMac->sap.SapDfsInfo.target_channel);
-
             sapContext->channel =
-                  pMac->sap.SapDfsInfo.target_channel;
+                  sapContext->SapDfsInfo.target_channel;
 
             /* Identify if this is channel change in radar detected state */
-            if (eSAP_DISCONNECTING == sapContext->sapsMachine)
+            if (VOS_TRUE == sapContext->SapDfsInfo.sap_radar_found_status &&
+                eSAP_DISCONNECTING == sapContext->sapsMachine)
             {
                /* check if currently selected channel is a DFS channel */
                if (NV_CHANNEL_DFS ==
                      vos_nv_getChannelEnabledState(sapContext->channel))
                {
-                   if ((VOS_FALSE == pMac->sap.SapDfsInfo.ignore_cac) &&
-                        (eSAP_DFS_DO_NOT_SKIP_CAC ==
-                         pMac->sap.SapDfsInfo.cac_state))
-                   {
-                      sapContext->sapsMachine = eSAP_DISCONNECTED;
+                  sapContext->sapsMachine = eSAP_DISCONNECTED;
 
-                      VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                      "sapdfs: from state %s => %s with ignore cac FALSE on sapctx[%p]",
-                      "eSAP_DISCONNECTING", "DISCONNECTED", sapContext);
+                  VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                            "In %s, from state %s => %s", __func__,
+                            "eSAP_DISCONNECTING", "DISCONNECTED");
 
-                      /* DFS Channel */
-                      sapEvent.event = eSAP_DFS_CHANNEL_CAC_START;
-                      sapEvent.params = pCsrRoamInfo;
-                      sapEvent.u1 = 0;
-                      sapEvent.u2 = 0;
-                   }
-                   else
-                   {
-                      VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                      "sapdfs: from state %s => %s with ignore cac TRUE on sapctx[%p]",
-                      "eSAP_DISCONNECTING", "eSAP_STARTING", sapContext);
-
-                      /* Start beaconing on the new channel */
-                      WLANSAP_StartBeaconReq((v_PVOID_t)sapContext);
-                      sapContext->sapsMachine = eSAP_STARTING;
-                      pMac->sap.SapDfsInfo.sap_radar_found_status = VOS_FALSE;
-                      sapEvent.event = eSAP_MAC_START_BSS_SUCCESS;
-                      sapEvent.params = pCsrRoamInfo;
-                      sapEvent.u1 = eCSR_ROAM_INFRA_IND;
-                      sapEvent.u2 = eCSR_ROAM_RESULT_INFRA_STARTED;
-                   }
+                  /* DFS Channel */
+                  sapEvent.event = eSAP_DFS_CHANNEL_CAC_START;
+                  sapEvent.params = pCsrRoamInfo;
+                  sapEvent.u1 = 0;
+                  sapEvent.u2 = 0;
                }
                else
                {
-                  VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_MED,
-                  "sapdfs: from state %s => %s on sapctx[%p]",
-                  "eSAP_DISCONNECTING", "eSAP_STARTING", sapContext);
-
                   /* non-DFS channel */
                   sapContext->sapsMachine = eSAP_STARTING;
-                  pMac->sap.SapDfsInfo.sap_radar_found_status = VOS_FALSE;
+
+                  VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                            "In %s, from state %s => %s", __func__,
+                            "eSAP_DISCONNECTING", "eSAP_STARTING");
+
+                  sapContext->SapDfsInfo.sap_radar_found_status = VOS_FALSE;
                   sapEvent.event = eSAP_MAC_START_BSS_SUCCESS;
                   sapEvent.params = pCsrRoamInfo;
                   sapEvent.u1 = eCSR_ROAM_INFRA_IND;

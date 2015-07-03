@@ -50,12 +50,18 @@
 #define HDD_SOFTAP_TX_VI_QUEUE_MAX_LEN (74*2)
 #define HDD_SOFTAP_TX_VO_QUEUE_MAX_LEN (70*2)
 
+/* SoftAP specific AC Weights */
+#define HDD_SOFTAP_BK_WEIGHT_DEFAULT                        1
+#define HDD_SOFTAP_BE_WEIGHT_DEFAULT                        3
+#define HDD_SOFTAP_VI_WEIGHT_DEFAULT                        8
+#define HDD_SOFTAP_VO_WEIGHT_DEFAULT                        18
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------
-  Function declarations and documentation
+  Function declarations and documenation
   -------------------------------------------------------------------------*/
 
 /**============================================================================
@@ -66,7 +72,7 @@
   @param dev      : [in] pointer to Libra softap network device
 
   @return         : NET_XMIT_DROP if packets are dropped
-                  : NET_XMIT_SUCCESS if packet is enqueued successfully
+                  : NET_XMIT_SUCCESS if packet is enqueued succesfully
   ===========================================================================*/
 extern int hdd_softap_hard_start_xmit(struct sk_buff *skb, struct net_device *dev);
 
@@ -123,8 +129,8 @@ extern VOS_STATUS hdd_softap_deinit_tx_rx( hdd_adapter_t *pAdapter );
 extern VOS_STATUS hdd_softap_init_tx_rx_sta( hdd_adapter_t *pAdapter, v_U8_t STAId, v_MACADDR_t *pmacAddrSTA);
 
 /**============================================================================
-  @brief hdd_softap_deinit_tx_rx_sta() - Deinit function to clean up a station
-                                         in Tx/RX modules in HDD
+  @brief hdd_softap_deinit_tx_rx_sta() - Deinit function to clean up a statioin in Tx/RX
+  modules in HDD
 
   @param pAdapter : [in] pointer to adapter context
   @param STAId    : [in] Station ID to deinit
@@ -146,7 +152,7 @@ extern VOS_STATUS hdd_softap_disconnect_tx_rx( hdd_adapter_t *pAdapter );
 /**============================================================================
   @brief hdd_tx_complete_cbk() - Callback function invoked by TL
   to indicate that a packet has been transmitted across the SDIO bus
-  successfully. OS packet resources can be released after this cbk.
+  succesfully. OS packet resources can be released after this cbk.
 
   @param vosContext   : [in] pointer to VOS context
   @param pVosPacket   : [in] pointer to VOS packet (containing skb)
@@ -194,6 +200,26 @@ extern VOS_STATUS hdd_softap_tx_fetch_packet_cbk( v_VOID_t *vosContext,
 extern VOS_STATUS hdd_softap_tx_low_resource_cbk( vos_pkt_t *pVosPacket,
                                            v_VOID_t *userData );
 
+#ifndef QCA_WIFI_2_0
+/**============================================================================
+  @brief hdd_softap_rx_packet_cbk() - Receive callback registered with TL.
+  TL will call this to notify the HDD when a packet was received
+  for a registered STA.
+
+  @param vosContext   : [in] pointer to VOS context
+  @param pVosPacket   : [in] pointer to VOS packet (conatining sk_buff)
+  @param staId        : [in] Station Id
+  @param pRxMetaInfo  : [in] pointer to meta info for the received pkt(s)
+
+  @return             : VOS_STATUS_E_FAILURE if any errors encountered,
+                      : VOS_STATUS_SUCCESS otherwise
+  ===========================================================================*/
+extern VOS_STATUS hdd_softap_rx_packet_cbk( v_VOID_t *vosContext,
+                                     vos_pkt_t *pVosPacket,
+                                     v_U8_t staId,
+                                     WLANTL_RxMetaInfoType* pRxMetaInfo );
+
+#else
 /**============================================================================
   @brief hdd_softap_rx_packet_cbk() - Receive callback registered with TL.
   TL will call this to notify the HDD when a packet was received
@@ -217,7 +243,7 @@ extern VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
 
   @param vosContext      : [in] pointer to VOS context
   @param rx_buf_list     : [in] pointer to rx adf_nbuf linked list
-  @param staId           : [in] Station Id (Address 1 Index)
+  @param staId           : [in] Station Id (Adress 1 Index)
 
   @return                : VOS_STATUS_E_FAILURE if any errors encountered,
                          : VOS_STATUS_SUCCESS otherwise
@@ -225,6 +251,7 @@ extern VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
 VOS_STATUS hdd_softap_rx_mul_packet_cbk(v_VOID_t *vosContext,
                                     adf_nbuf_t rx_buf_list, v_U8_t staId);
 #endif /* IPA_OFFLOAD */
+#endif
 
 /**============================================================================
   @brief hdd_softap_DeregisterSTA - Deregister a station from TL block
@@ -319,6 +346,30 @@ extern VOS_STATUS hdd_softap_GetStaId( hdd_adapter_t *pAdapter, v_MACADDR_t *pMa
                   : VOS_STATUS_SUCCESS otherwise
   =========================================================================== */
 extern VOS_STATUS hdd_softap_GetConnectedStaId( hdd_adapter_t *pAdapter, v_U8_t *staId);
+
+/**==========================================================================
+
+  \brief hdd_start_trafficMonitor() -
+   This function dynamically enable traffic monitor functonality
+   the command iwpriv wlanX setTrafficMon <value>.
+
+  @param pAdapter : [in] pointer to adapter context
+  @return         : VOS_STATUS_E_FAILURE if any errors encountered
+
+  ========================================================================== */
+VOS_STATUS hdd_start_trafficMonitor( hdd_adapter_t *pAdapter );
+
+/**==========================================================================
+
+  \brief hdd_stop_trafficMonitor() -
+   This function dynamically disable traffic monitor functonality
+   the command iwpriv wlanX setTrafficMon <value>.
+
+  @param pAdapter : [in] pointer to adapter context
+  @return         : VOS_STATUS_E_FAILURE if any errors encountered
+
+  ========================================================================== */
+VOS_STATUS hdd_stop_trafficMonitor( hdd_adapter_t *pAdapter );
 
 #ifdef QCA_LL_TX_FLOW_CT
 /**============================================================================

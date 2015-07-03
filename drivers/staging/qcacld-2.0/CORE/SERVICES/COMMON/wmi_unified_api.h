@@ -140,13 +140,6 @@ void
 wmi_set_target_suspend(wmi_unified_t wmi_handle, A_BOOL val);
 
 /**
- WMI API to set D0WOW flag
-*/
-#ifdef FEATURE_WLAN_D0WOW
-void
-wmi_set_d0wow_flag(wmi_unified_t wmi_handle, A_BOOL flag);
-#endif
-/**
  WMA Callback to get the Tx complete for WOW_ENABLE
 */
 typedef void (*wma_wow_tx_complete_cbk)(void *scn_handle);

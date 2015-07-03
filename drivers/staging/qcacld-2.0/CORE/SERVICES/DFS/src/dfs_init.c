@@ -184,7 +184,7 @@ int dfs_init_radar_filters(struct ieee80211com *ic,
     if (dfs == NULL) {
         VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
                         "%s[%d]: dfs is NULL", __func__, __LINE__);
-        return DFS_STATUS_FAIL;
+        return 1;
     }
     /* clear up the dfs domain flag first */
 #ifndef ATH_DFS_RADAR_DETECTION_ONLY
@@ -201,10 +201,7 @@ int dfs_init_radar_filters(struct ieee80211com *ic,
                         __func__, __LINE__, dfs->dfsdomain);
         /* Disable radar detection since we don't have a radar domain */
         dfs->dfs_proc_phyerr &= ~DFS_RADAR_EN;
-        /* Returning success though we are not completing init. A failure
-         * will fail dfs_attach also.
-         */
-        return DFS_STATUS_SUCCESS;
+        return 0;
     }
 
     VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO,
@@ -357,10 +354,10 @@ int dfs_init_radar_filters(struct ieee80211com *ic,
     VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO,
                     "%s[%d]:DFS max pulse dur = %d ticks",
                     __func__ ,__LINE__, dfs->dfs_rinfo.rn_maxpulsedur);
-    return DFS_STATUS_SUCCESS;
+    return 0;
 
  bad4:
-     return DFS_STATUS_FAIL;
+     return 1;
 }
 
 void

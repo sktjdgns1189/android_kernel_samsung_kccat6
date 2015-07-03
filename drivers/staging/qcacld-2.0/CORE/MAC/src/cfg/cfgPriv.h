@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -43,6 +43,7 @@
 #include <sirCommon.h>
 #include <sirTypes.h>
 #include <sirDebug.h>
+#include <wniStat.h>
 #include <utilsApi.h>
 #include <limApi.h>
 #include <schApi.h>
@@ -73,6 +74,17 @@ typedef struct sCfgBinHdr
     tANI_U32   iBufSize;
     tANI_U32   sBufSize;
 } tCfgBinHdr, *tpCfgBinHdr;
+
+
+/*--------------------------------------------------------------------*/
+/* Polaris HW counter access structure                                */
+/*--------------------------------------------------------------------*/
+typedef struct
+{
+    tANI_U32    addr;
+    tANI_U32    mask;
+    tANI_U32    shift;
+} tCfgHwCnt;
 
 
 #define CFG_STAT_CNT_LO_MASK       0x0000ffff

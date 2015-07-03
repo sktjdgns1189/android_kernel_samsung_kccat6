@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -53,9 +53,6 @@
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT
 #include "vos_diag_core_log.h"
 #endif //FEATURE_WLAN_DIAG_SUPPORT
-#ifdef WLAN_FEATURE_VOWIFI_11R
-#include "limFTDefs.h"
-#endif
 #include "limSession.h"
 #include "limSerDesUtils.h"
 
@@ -430,7 +427,32 @@ void limHandleHeartBeatFailure(tpAniSirGlobal pMac,tpPESession psessionEntry)
 
     /* Ensure HB Status for the session has been reseted */
     psessionEntry->LimHBFailureStatus = eANI_BOOLEAN_FALSE;
+    /** Re Activate Timer if the system is Waiting for ReAssoc Response*/
+    if(((psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE) ||
+        (psessionEntry->limSystemRole == eLIM_STA_ROLE) ||
+        (psessionEntry->limSystemRole == eLIM_BT_AMP_STA_ROLE)) &&
+       (LIM_IS_CONNECTION_ACTIVE(psessionEntry) ||
+        (limIsReassocInProgress(pMac, psessionEntry))))
+    {
+        if(psessionEntry->LimRxedBeaconCntDuringHB < MAX_NO_BEACONS_PER_HEART_BEAT_INTERVAL)
+            pMac->lim.gLimHeartBeatBeaconStats[psessionEntry->LimRxedBeaconCntDuringHB]++;
+        else
+            pMac->lim.gLimHeartBeatBeaconStats[0]++;
 
+        /******
+         * Note: Use this code once you have converted all
+         * limReactivateHeartBeatTimer() calls to
+         * limReactivateTimer() calls.
+         *
+         ******/
+        //limReactivateTimer(pMac, eLIM_HEART_BEAT_TIMER, psessionEntry);
+        limReactivateHeartBeatTimer(pMac, psessionEntry);
+
+        // Reset number of beacons received
+        limResetHBPktCount(psessionEntry);
+        return;
+
+    }
     if (((psessionEntry->limSystemRole == eLIM_STA_ROLE) ||
          (psessionEntry->limSystemRole == eLIM_BT_AMP_STA_ROLE)) &&
          (psessionEntry->limMlmState == eLIM_MLM_LINK_ESTABLISHED_STATE) &&

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012,2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -48,6 +48,10 @@
 /*---------------------------------------------------------------------*/
 /* CFG definitions                                                     */
 /*---------------------------------------------------------------------*/
+#define CFG_TYPE_STR                0x0000000
+#define CFG_TYPE_INT                0x0000001
+#define CFG_HOST_RE                 0x0000002
+#define CFG_HOST_WE                 0x0000004
 
 // CFG status
 typedef enum eCfgStatusTypes {
@@ -88,6 +92,9 @@ tSirRetStatus cfgCheckValid(tpAniSirGlobal, tANI_U16);
 /// Get integer parameter value
 tSirRetStatus wlan_cfgGetInt(tpAniSirGlobal, tANI_U16, tANI_U32*);
 
+/// Increment integer parameter
+tSirRetStatus cfgIncrementInt(tpAniSirGlobal, tANI_U16, tANI_U32);
+
 /// Set string parameter value
 tSirRetStatus cfgSetStr(tpAniSirGlobal, tANI_U16, tANI_U8*, tANI_U32);
 
@@ -120,7 +127,7 @@ extern tSirRetStatus cfgGetCapabilityInfo(tpAniSirGlobal pMac, tANI_U16 *pCap,tp
 /// Set capability info
 extern void cfgSetCapabilityInfo(tpAniSirGlobal, tANI_U16);
 
-/* Clean up CFG module */
+/// Cleanup CFG module
 void cfgCleanup(tpAniSirGlobal pMac);
 
 extern tANI_U8 *gCfgParamName[];

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -137,13 +137,6 @@ VOS_STATUS vos_get_binary_blob( VOS_BINARY_ID binaryId,
 -----------------------------------------------------------------------------*/
 tVOS_CON_MODE vos_get_conparam( void );
 tVOS_CONCURRENCY_MODE vos_get_concurrency_mode( void );
-v_BOOL_t vos_concurrent_open_sessions_running(void);
-v_BOOL_t vos_max_concurrent_connections_reached(void);
-void vos_clear_concurrent_session_count(void);
-v_BOOL_t vos_is_multiple_active_sta_sessions (void);
-v_BOOL_t vos_is_sta_active_connection_exists (void);
+v_BOOL_t vos_concurrent_sessions_running(void);
 
-#ifdef WLAN_FEATURE_MBSSID
-v_BOOL_t vos_concurrent_sap_sessions_running(v_VOID_t);
-#endif
 #endif // !defined __VOS_GETBIN_H

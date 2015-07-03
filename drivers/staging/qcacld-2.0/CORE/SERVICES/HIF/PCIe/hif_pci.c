@@ -55,7 +55,7 @@
 #include "hif_pci.h"
 #include "vos_trace.h"
 #include "vos_api.h"
-#if  defined(CONFIG_CNSS)
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC) && defined(CONFIG_CNSS)
 #include <net/cnss.h>
 #endif
 #include <vos_getBin.h>
@@ -70,9 +70,6 @@ static DEFINE_SPINLOCK(pciwar_lock);
 OSDRV_CALLBACKS HIF_osDrvcallback;
 
 #define HIF_PCI_DEBUG   ATH_DEBUG_MAKE_MODULE_MASK(0)
-#ifdef IPA_UC_OFFLOAD
-#define HIF_PCI_IPA_UC_ASSIGNED_CE  5
-#endif /* IPA_UC_OFFLOAD */
 
 #if defined(DEBUG)
 static ATH_DEBUG_MASK_DESCRIPTION g_HIFDebugDescription[] = {
@@ -125,15 +122,11 @@ static struct CE_attr host_CE_config_wlan[] =
 {
         { /* CE0 */ CE_ATTR_FLAGS, 0, 16, 256, 0, NULL, }, /* host->target HTC control and raw streams */
                                                            /* could be moved to share CE3 */
-        { /* CE1 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL, },/* target->host HTT + HTC control */
+        { /* CE1 */ CE_ATTR_FLAGS, 0, 0, 512, 512, NULL, },/* target->host HTT + HTC control */
         { /* CE2 */ CE_ATTR_FLAGS, 0, 0, 2048, 32, NULL, },/* target->host WMI */
         { /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL, },/* host->target WMI */
         { /* CE4 */ CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR, 0, CE_HTT_H2T_MSG_SRC_NENTRIES , 256, 0, NULL, }, /* host->target HTT */
-#ifndef IPA_UC_OFFLOAD
         { /* CE5 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL, },    /* unused */
-#else
-        { /* CE5 */ CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR, 0, 1024, 512, 0, NULL, },    /* ipa_uc->target HTC control */
-#endif /* IPA_UC_OFFLOAD */
         { /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL, },    /* Target autonomous HIF_memcpy */
         { /* CE7 */ CE_ATTR_FLAGS, 0, 2, DIAG_TRANSFER_LIMIT, 2, NULL, }, /* ce_diag, the Diagnostic Window */
 };
@@ -147,16 +140,12 @@ static struct CE_attr *host_CE_config = host_CE_config_wlan;
  */
 static struct CE_pipe_config target_CE_config_wlan[] = {
         { /* CE0 */ 0, PIPEDIR_OUT, 32, 256, CE_ATTR_FLAGS, 0, },   /* host->target HTC control and raw streams */
-        { /* CE1 */ 1, PIPEDIR_IN, 32, 2048, CE_ATTR_FLAGS, 0, },    /* target->host HTT + HTC control */
+        { /* CE1 */ 1, PIPEDIR_IN, 32, 512, CE_ATTR_FLAGS, 0, },    /* target->host HTT + HTC control */
         { /* CE2 */ 2, PIPEDIR_IN, 32, 2048, CE_ATTR_FLAGS, 0, },   /* target->host WMI */
         { /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0, },  /* host->target WMI */
         { /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE_ATTR_FLAGS, 0, },  /* host->target HTT */
                                    /* NB: 50% of src nentries, since tx has 2 frags */
-#ifndef IPA_UC_OFFLOAD
         { /* CE5 */ 5, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0, },  /* unused */
-#else
-        { /* CE5 */ 5, PIPEDIR_OUT, 1024, 64, CE_ATTR_FLAGS, 0, },  /* ipa_uc->target HTC control */
-#endif /* IPA_UC_OFFLOAD */
         { /* CE6 */ 6, PIPEDIR_INOUT, 32, 4096, CE_ATTR_FLAGS, 0, },/* Reserved for target autonomous HIF_memcpy */
         /* CE7 used only by Host */
 };
@@ -329,12 +318,6 @@ HIFSend_head(HIF_DEVICE *hif_device,
     }
     pipe_info->num_sends_allowed -= nfrags;
     adf_os_spin_unlock_bh(&pipe_info->completion_freeq_lock);
-
-    if(adf_os_unlikely(ce_hdl == NULL)) {
-        AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-        ("%s: error CE handle is null\n", __func__));
-        return A_ERROR;
-    }
 
     status = CE_sendlist_send(ce_hdl, nbuf, &sendlist, transfer_id);
     A_ASSERT(status == A_OK);
@@ -719,12 +702,7 @@ hif_completion_thread(struct HIF_CE_state *hif_state)
             return 0;
         }
 
-        /* Make sure that HTC registered call backs with the HIF are valid */
-        if (!msg_callbacks->fwEventHandler
-               || !msg_callbacks->txCompletionHandler
-               || !msg_callbacks->rxCompletionHandler) {
-            return 0;
-        }
+
 
         while (atomic_read(&hif_state->fw_event_pending) > 0) {
             /*
@@ -732,7 +710,7 @@ hif_completion_thread(struct HIF_CE_state *hif_state)
              * another while we process the first.
              */
             atomic_set(&hif_state->fw_event_pending, 0);
-            msg_callbacks->fwEventHandler(msg_callbacks->Context, A_ERROR);
+            msg_callbacks->fwEventHandler(msg_callbacks->Context);
         }
 
         if (hif_state->sc->ol_sc->target_status == OL_TRGET_STATUS_RESET)
@@ -953,12 +931,6 @@ HIFMapServiceToPipe(HIF_DEVICE *hif_device, a_uint16_t ServiceId, a_uint8_t *ULP
             *DLPipe = 2;
             break;
 
-#ifdef IPA_UC_OFFLOAD
-        case WDI_IPA_TX_SVC:
-            *ULPipe = 5;
-            break;
-#endif /* IPA_UC_OFFLOAD */
-
         /* pipe 5 unused   */
         /* pipe 6 reserved */
         /* pipe 7 reserved */
@@ -971,31 +943,6 @@ HIFMapServiceToPipe(HIF_DEVICE *hif_device, a_uint16_t ServiceId, a_uint8_t *ULP
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-%s\n",__FUNCTION__));
 
     return status;
-}
-
-void HIFDumpTargetMemory(HIF_DEVICE *hif_device, void *ramdump_base,
-                                  u_int32_t address, u_int32_t size)
-{
-    struct HIF_CE_state *hif_state;
-    struct hif_pci_softc *sc;
-    A_target_id_t targid;
-    u_int32_t loc = address;
-    u_int32_t val = 0;
-    u_int32_t j = 0;
-    u8 *temp = ramdump_base;
-
-    hif_state = (struct HIF_CE_state *)hif_device;
-    sc = hif_state->sc;
-    targid = hif_state->targid;
-
-    A_TARGET_ACCESS_BEGIN(targid);
-    while (j < size) {
-       val = A_PCI_READ32(sc->mem + loc + j);
-       OS_MEMCPY(temp, &val, 4);
-       j += 4;
-       temp += 4;
-    }
-    A_TARGET_ACCESS_END(targid);
 }
 
 /*
@@ -2097,13 +2044,7 @@ static struct service_to_pipe target_service_to_CE_map_wlan[] = {
         PIPEDIR_IN,  /* in = DL = target -> host */
         1,
     },
-#ifdef IPA_UC_OFFLOAD
-    {
-        WDI_IPA_TX_SVC,
-        PIPEDIR_OUT,  /* in = DL = target -> host */
-        5,
-    },
-#endif /* IPA_UC_OFFLOAD */
+
     /* (Additions here) */
 
     { /* Must be last */
@@ -2164,9 +2105,6 @@ HIF_sleep_entry(void *arg)
 	A_target_id_t pci_addr = TARGID_TO_PCI_ADDR(hif_state->targid);
 	struct hif_pci_softc *sc = hif_state->sc;
 	u_int32_t idle_ms;
-
-	if (sc->recovery)
-		return;
 
 	adf_os_spin_lock_irqsave(&hif_state->keep_awake_lock);
 	if (hif_state->verified_awake == FALSE) {
@@ -2438,8 +2376,6 @@ HIF_PCIDeviceProbed(hif_handle_t hif_hdl)
                  banks_switched = 6;
                  break;
              case 0x8: /* ROME 3.0 */
-             case 0x9: /* ROME 3.1 */
-             case 0xA: /* ROME 3.2 */
                  banks_switched = 9;
                  break;
              case 0x0: /* ROME 1.0 */
@@ -2523,9 +2459,7 @@ HIFGetTargetId(HIF_DEVICE *hif_device)
 /* worker thread to recover when target does not respond over PCIe */
 static void recovery_work_handler(struct work_struct *recovery)
 {
-#ifdef CONFIG_CNSS
     cnss_device_self_recovery();
-#endif
 }
 
 static DECLARE_WORK(recovery_work, recovery_work_handler);
@@ -2868,20 +2802,3 @@ void HIFsuspendwow(HIF_DEVICE *hif_device)
        struct hif_pci_softc *sc = hif_state->sc;
        adf_os_atomic_set(&sc->wow_done, 1);
 }
-
-#ifdef IPA_UC_OFFLOAD
-void HIFIpaGetCEResource(HIF_DEVICE *hif_device,
-                          A_UINT32 *ce_sr_base_paddr,
-                          A_UINT32 *ce_sr_ring_size,
-                          A_UINT32 *ce_reg_paddr)
-{
-    struct HIF_CE_state *hif_state = (struct HIF_CE_state *)hif_device;
-    struct HIF_CE_pipe_info *pipe_info =
-        &(hif_state->pipe_info[HIF_PCI_IPA_UC_ASSIGNED_CE]);
-    struct CE_handle *ce_hdl = pipe_info->ce_hdl;
-
-    CE_ipaGetResource(ce_hdl, ce_sr_base_paddr, ce_sr_ring_size, ce_reg_paddr);
-    return;
-}
-#endif /* IPA_UC_OFFLOAD */
-

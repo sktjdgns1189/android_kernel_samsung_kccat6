@@ -87,49 +87,6 @@ extern "C" {
     ((arg & DBGLOG_TIMESTAMP_MASK) >> DBGLOG_TIMESTAMP_OFFSET)
 
 
-#define DIAG_FWID_OFFSET            24
-#define DIAG_FWID_MASK              0xFF000000 /* Bit 24-31 */
-
-#define DIAG_TIMESTAMP_OFFSET       0
-#define DIAG_TIMESTAMP_MASK         0x00FFFFFF /* Bit 0-23 */
-
-#define DIAG_ID_OFFSET              16
-#define DIAG_ID_MASK                0xFFFF0000 /* Bit 16-31 */
-
-#define DIAG_VDEVID_OFFSET          11
-#define DIAG_VDEVID_MASK            0x0000F800 /* Bit 11-15 */
-#define DIAG_VDEVID_NUM_MAX         16
-
-#define DIAG_VDEVLEVEL_OFFSET       8
-#define DIAG_VDEVLEVEL_MASK         0x00000700 /* Bit 8-10 */
-
-#define DIAG_PAYLEN_OFFSET          0
-#define DIAG_PAYLEN_MASK            0x000000FF /* Bit 0-7 */
-
-#define DIAG_PAYLEN_OFFSET16        0
-#define DIAG_PAYLEN_MASK16          0x0000FFFF /* Bit 0-16 */
-
-#define DIAG_GET_TYPE(arg) \
-    ((arg & DIAG_FWID_MASK) >> DIAG_FWID_OFFSET)
-
-#define DIAG_GET_TIME_STAMP(arg) \
-    ((arg & DIAG_TIMESTAMP_MASK) >> DIAG_TIMESTAMP_OFFSET)
-
-#define DIAG_GET_ID(arg) \
-    ((arg & DIAG_ID_MASK) >> DIAG_ID_OFFSET)
-
-#define DIAG_GET_VDEVID(arg) \
-    ((arg & DIAG_VDEVID_MASK) >> DIAG_VDEVID_OFFSET)
-
-#define DIAG_GET_VDEVLEVEL(arg) \
-    ((arg & DIAG_VDEVLEVEL_MASK) >> DIAG_VDEVLEVEL_OFFSET)
-
-#define DIAG_GET_PAYLEN(arg) \
-    ((arg & DIAG_PAYLEN_MASK) >> DIAG_PAYLEN_OFFSET)
-
-#define DIAG_GET_PAYLEN16(arg) \
-    ((arg & DIAG_PAYLEN_MASK16) >> DIAG_PAYLEN_OFFSET16)
-
 /* Debug Log levels*/
 
 typedef enum {
@@ -171,6 +128,83 @@ PREPACK struct dbglog_hdr_host {
 } POSTPACK;
 
 #define DBGLOG_MAX_VDEVID 15 /* 0-15 */
+
+/** value representing all modules */
+#define WMI_DEBUG_LOG_MODULE_ALL 0xffff
+
+/* param definitions */
+
+/**
+  * Log level for a given module. Value contains both module id and log level.
+  * here is the bitmap definition for value.
+  * module Id   : 16
+  *     Flags   :  reserved
+  *     Level   :  8
+  * if odule Id  is WMI_DEBUG_LOG_MODULE_ALL then  log level is  applied to all modules (global).
+  * WMI_DEBUG_LOG_MIDULE_ALL will overwrites per module level setting.
+  */
+#define WMI_DEBUG_LOG_PARAM_LOG_LEVEL      0x1
+
+#define WMI_DBGLOG_SET_LOG_LEVEL(val,lvl) do { \
+        (val) |=  (lvl & 0xff);                \
+     } while(0)
+
+#define WMI_DBGLOG_GET_LOG_LEVEL(val) ((val) & 0xff)
+
+#define WMI_DBGLOG_SET_MODULE_ID(val,mid) do { \
+        (val) |=  ((mid & 0xffff) << 16);        \
+     } while(0)
+
+#define WMI_DBGLOG_GET_MODULE_ID(val) (( (val) >> 16) & 0xffff)
+
+/**
+  * Enable the debug log for a given vdev. Value is vdev id
+  */
+#define WMI_DEBUG_LOG_PARAM_VDEV_ENABLE    0x2
+
+/**
+  * Disable the debug log for a given vdev. Value is vdev id
+  * All the log level  for a given VDEV is disabled except the ERROR log messages
+  */
+#define WMI_DEBUG_LOG_PARAM_VDEV_DISABLE   0x3
+
+/**
+  * set vdev enable bitmap. value is the vden enable bitmap
+  */
+#define WMI_DEBUG_LOG_PARAM_VDEV_ENABLE_BITMAP    0x4
+
+/**
+  * set a given log level to all the modules specified in the module bitmap.
+  * and set the log levle for all other modules to DBGLOG_ERR.
+  *  value: log levelt to be set.
+  *  module_id_bitmap : identifies the modules for which the log level should be set and
+  *                      modules for which the log level should be reset to DBGLOG_ERR.
+  */
+#define WMI_DEBUG_LOG_PARAM_MOD_ENABLE_BITMAP    0x5
+
+#define NUM_MODULES_PER_ENTRY ((sizeof(A_UINT32)) << 3)
+
+#define WMI_MODULE_ENABLE(pmid_bitmap,mod_id) \
+    ( (pmid_bitmap)[(mod_id)/NUM_MODULES_PER_ENTRY] |= \
+         (1 << ((mod_id)%NUM_MODULES_PER_ENTRY)) )
+
+#define WMI_MODULE_DISABLE(pmid_bitmap,mod_id)     \
+    ( (pmid_bitmap)[(mod_id)/NUM_MODULES_PER_ENTRY] &=  \
+      ( ~(1 << ((mod_id)%NUM_MODULES_PER_ENTRY)) ) )
+
+#define WMI_MODULE_IS_ENABLED(pmid_bitmap,mod_id) \
+    ( ((pmid_bitmap)[(mod_id)/NUM_MODULES_PER_ENTRY ] &  \
+       (1 << ((mod_id)%NUM_MODULES_PER_ENTRY)) ) != 0)
+
+#define MAX_MODULE_ID_BITMAP_WORDS 16 /* 16*32=512 module ids. should be more than sufficient */
+typedef struct {
+	A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_debug_log_config_cmd_fixed_param */
+        A_UINT32 dbg_log_param; /** param types are defined above */
+        A_UINT32 value;
+	/* The below array will follow this tlv ->fixed length module_id_bitmap[]
+        A_UINT32 module_id_bitmap[MAX_MODULE_ID_BITMAP_WORDS];
+	 */
+} wmi_debug_log_config_cmd_fixed_param;
 
 #ifdef __cplusplus
 }

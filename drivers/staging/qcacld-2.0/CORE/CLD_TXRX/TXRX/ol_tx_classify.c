@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -54,45 +54,46 @@
 
 #if defined(CONFIG_HL_SUPPORT)
 
+#ifdef QCA_WIFI_ISOC
+
+A_STATUS
+ol_tx_classify_extension(
+    struct ol_txrx_vdev_t *vdev,
+    struct ol_tx_desc_t *tx_desc,
+    adf_nbuf_t tx_nbuf,
+    struct ol_txrx_msdu_info_t *tx_msdu_info);
+
+A_STATUS
+ol_tx_classify_mgmt_extension(
+    struct ol_txrx_vdev_t *vdev,
+    struct ol_tx_desc_t *tx_desc,
+    adf_nbuf_t tx_nbuf,
+    struct ol_txrx_msdu_info_t *tx_msdu_info);
+
+#define OL_TX_CLASSIFY_EXTENSION(vdev, tx_desc, netbuf, msdu_info, txq) \
+    do { \
+        A_STATUS status; \
+        status = ol_tx_classify_extension( \
+            vdev, tx_desc, netbuf, msdu_info); \
+        if (A_OK != status) { \
+            txq = NULL; /* error */ \
+        } \
+    } while (0)
+
+#define OL_TX_CLASSIFY_MGMT_EXTENSION(vdev, tx_desc, netbuf, msdu_info, txq) \
+    do { \
+        A_STATUS status; \
+        status = ol_tx_classify_mgmt_extension( \
+            vdev, tx_desc, netbuf, msdu_info); \
+        if (A_OK != status) { \
+            txq = NULL; /* error */ \
+        } \
+    } while (0)
+
+#else
 #define OL_TX_CLASSIFY_EXTENSION(vdev, tx_desc, netbuf, msdu_info, txq)
 #define OL_TX_CLASSIFY_MGMT_EXTENSION(vdev, tx_desc, netbuf, msdu_info, txq)
-
-#ifdef QCA_TX_HTT2_SUPPORT
-static void
-ol_tx_classify_htt2_frm(
-    struct ol_txrx_vdev_t *vdev,
-    adf_nbuf_t tx_nbuf,
-    struct ol_txrx_msdu_info_t *tx_msdu_info)
-{
-    struct htt_msdu_info_t *htt = &tx_msdu_info->htt;
-    A_UINT8 candi_frm = 0;
-
-    /*
-     * Offload the frame re-order to L3 protocol and ONLY support
-     * TCP protocol now.
-     */
-    if ((htt->info.l2_hdr_type == htt_pkt_type_ethernet) &&
-        (htt->info.frame_type == htt_frm_type_data) &&
-        htt->info.is_unicast &&
-        (htt->info.ethertype == ETHERTYPE_IPV4))
-    {
-        struct ipv4_hdr_t *ipHdr;
-
-        ipHdr = (struct ipv4_hdr_t *)(adf_nbuf_data(tx_nbuf) +
-                                        htt->info.l3_hdr_offset);
-        if (ipHdr->protocol == IP_PROTOCOL_TCP) {
-            candi_frm = 1;
-        }
-    }
-
-    adf_nbuf_set_tx_parallel_dnload_frm(tx_nbuf, candi_frm);
-}
-
-#define OL_TX_CLASSIFY_HTT2_EXTENSION(vdev, netbuf, msdu_info)      \
-    ol_tx_classify_htt2_frm(vdev, netbuf, msdu_info);
-#else
-#define OL_TX_CLASSIFY_HTT2_EXTENSION(vdev, netbuf, msdu_info)      /* no-op */
-#endif /* QCA_TX_HTT2_SUPPORT */
+#endif /* QCA_WIFI_ISOC */
 
 /* EAPOL go with voice priority: WMM_AC_TO_TID1(WMM_AC_VO);*/
 #define TX_EAPOL_TID  6
@@ -132,69 +133,6 @@ ol_tx_tid_by_ipv6(
     return (IPV6_TRAFFIC_CLASS((struct ipv6_hdr_t *) pkt) >> 5) & 0x7;
 }
 
-static inline void
-ol_tx_set_ether_type(
-    A_UINT8 *datap,
-    struct ol_txrx_msdu_info_t *tx_msdu_info)
-{
-    A_UINT16 typeorlength;
-    A_UINT8 * ptr;
-    A_UINT8 *l3_data_ptr;
-
-    if (tx_msdu_info->htt.info.l2_hdr_type == htt_pkt_type_raw) {
-         /* adjust hdr_ptr to RA */
-        struct ieee80211_frame *wh = (struct ieee80211_frame *)datap;
-
-        if ((wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == IEEE80211_FC0_TYPE_DATA) {
-            struct llc_snap_hdr_t *llc;
-            /* dot11 encapsulated frame */
-            struct ieee80211_qosframe *whqos = (struct ieee80211_qosframe *)datap;
-            if (whqos->i_fc[0] & IEEE80211_FC0_SUBTYPE_QOS) {
-                tx_msdu_info->htt.info.l3_hdr_offset =
-                    sizeof(struct ieee80211_qosframe);
-            } else {
-                tx_msdu_info->htt.info.l3_hdr_offset =
-                    sizeof(struct ieee80211_frame);
-            }
-            llc = (struct llc_snap_hdr_t *)
-                (datap + tx_msdu_info->htt.info.l3_hdr_offset);
-            tx_msdu_info->htt.info.ethertype =
-                (llc->ethertype[0] << 8) | llc->ethertype[1];
-            /*
-             * l3_hdr_offset refers to the end of the 802.3 or 802.11 header,
-             * which may be a LLC/SNAP header rather than the IP header.
-             * Thus, don't increment l3_hdr_offset += sizeof(*llc); rather,
-             * leave it as is.
-             */
-        } else {
-            /*
-             * This function should only be applied to data frames.
-             * For management frames, we already know to use HTT_TX_EXT_TID_MGMT.
-             */
-            TXRX_ASSERT2(0);
-        }
-    } else if (tx_msdu_info->htt.info.l2_hdr_type == htt_pkt_type_ethernet) {
-        ptr = (datap + ETHERNET_ADDR_LEN * 2);
-        typeorlength = (ptr[0] << 8) | ptr[1];
-        l3_data_ptr = datap + sizeof(struct ethernet_hdr_t);//ETHERNET_HDR_LEN;
-
-        if (typeorlength == ETHERTYPE_VLAN) {
-            ptr = (datap + ETHERNET_ADDR_LEN * 2 + ETHERTYPE_VLAN_LEN);
-            typeorlength = (ptr[0] << 8) | ptr[1];
-            l3_data_ptr += ETHERTYPE_VLAN_LEN;
-        }
-
-        if (!IS_ETHERTYPE(typeorlength)) { // 802.3 header
-            struct llc_snap_hdr_t *llc_hdr = (struct llc_snap_hdr_t *) l3_data_ptr;
-            typeorlength = (llc_hdr->ethertype[0] << 8) | llc_hdr->ethertype[1];
-            l3_data_ptr += sizeof(struct llc_snap_hdr_t);
-        }
-
-        tx_msdu_info->htt.info.l3_hdr_offset = (A_UINT8)(l3_data_ptr - datap);
-        tx_msdu_info->htt.info.ethertype = typeorlength;
-    }
-}
-
 static inline A_UINT8
 ol_tx_tid_by_ether_type(
     A_UINT8 *datap,
@@ -203,9 +141,25 @@ ol_tx_tid_by_ether_type(
     A_UINT8 tid;
     A_UINT8 *l3_data_ptr;
     A_UINT16 typeorlength;
+    A_UINT8 * ptr;
 
-    l3_data_ptr = datap + tx_msdu_info->htt.info.l3_hdr_offset;
-    typeorlength = tx_msdu_info->htt.info.ethertype;
+    ptr = (datap + ETHERNET_ADDR_LEN * 2);
+    typeorlength = (ptr[0] << 8) | ptr[1];
+    l3_data_ptr = datap + sizeof(struct ethernet_hdr_t);//ETHERNET_HDR_LEN;
+
+    if (typeorlength == ETHERTYPE_VLAN) {
+        ptr = (datap + ETHERNET_ADDR_LEN * 2 + ETHERTYPE_VLAN_LEN);
+        typeorlength = (ptr[0] << 8) | ptr[1];
+        l3_data_ptr += ETHERTYPE_VLAN_LEN;
+    }
+
+    if (!IS_ETHERTYPE(typeorlength)) { // 802.3 header
+        struct llc_snap_hdr_t *llc_hdr = (struct llc_snap_hdr_t *) l3_data_ptr;
+        typeorlength = (llc_hdr->ethertype[0] << 8) | llc_hdr->ethertype[1];
+        l3_data_ptr += sizeof(struct llc_snap_hdr_t);
+    }
+    tx_msdu_info->htt.info.l3_hdr_offset = (A_UINT8)(l3_data_ptr - datap);
+    tx_msdu_info->htt.info.ethertype = typeorlength;
 
     /* IP packet, do packet inspection for TID */
     if (typeorlength == ETHERTYPE_IPV4) {
@@ -238,13 +192,28 @@ ol_tx_tid_by_raw_type(
      * is not at usual location.
      */
     if ((wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK) == IEEE80211_FC0_TYPE_DATA) {
+        struct llc_snap_hdr_t *llc;
         /* dot11 encapsulated frame */
         struct ieee80211_qosframe *whqos = (struct ieee80211_qosframe *)datap;
         if (whqos->i_fc[0] & IEEE80211_FC0_SUBTYPE_QOS) {
             tid = whqos->i_qos[0] & IEEE80211_QOS_TID;
+            tx_msdu_info->htt.info.l3_hdr_offset =
+                sizeof(struct ieee80211_qosframe);
         } else {
             tid = HTT_NON_QOS_TID;
+            tx_msdu_info->htt.info.l3_hdr_offset =
+                sizeof(struct ieee80211_frame);
         }
+        llc = (struct llc_snap_hdr_t *)
+            (datap + tx_msdu_info->htt.info.l3_hdr_offset);
+        tx_msdu_info->htt.info.ethertype =
+            (llc->ethertype[0] << 8) | llc->ethertype[1];
+        /*
+         * l3_hdr_offset refers to the end of the 802.3 or 802.11 header,
+         * which may be a LLC/SNAP header rather than the IP header.
+         * Thus, don't increment l3_hdr_offset += sizeof(*llc); rather,
+         * leave it as is.
+         */
     } else {
         /*
          * This function should only be applied to data frames.
@@ -266,18 +235,10 @@ ol_tx_tid(
 
     if (pdev->frame_format == wlan_frm_fmt_raw) {
         tx_msdu_info->htt.info.l2_hdr_type = htt_pkt_type_raw;
-
-        ol_tx_set_ether_type(datap, tx_msdu_info);
-        tid = tx_msdu_info->htt.info.ext_tid == ADF_NBUF_TX_EXT_TID_INVALID ?
-            ol_tx_tid_by_raw_type(datap, tx_msdu_info) :
-            tx_msdu_info->htt.info.ext_tid;
+        tid = ol_tx_tid_by_raw_type(datap, tx_msdu_info);
     } else if (pdev->frame_format == wlan_frm_fmt_802_3) {
         tx_msdu_info->htt.info.l2_hdr_type = htt_pkt_type_ethernet;
-
-        ol_tx_set_ether_type(datap, tx_msdu_info);
-        tid = tx_msdu_info->htt.info.ext_tid == ADF_NBUF_TX_EXT_TID_INVALID ?
-            ol_tx_tid_by_ether_type(datap, tx_msdu_info) :
-            tx_msdu_info->htt.info.ext_tid;
+        tid = ol_tx_tid_by_ether_type(datap, tx_msdu_info);
     } else if (pdev->frame_format == wlan_frm_fmt_native_wifi) {
         struct llc_snap_hdr_t *llc;
 
@@ -294,8 +255,7 @@ ol_tx_tid(
          */
         tid = tx_msdu_info->htt.info.ext_tid;
     } else {
-        VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_FATAL,
-            "Invalid standard frame type: %d\n", pdev->frame_format);
+        adf_os_print("Invalid standard frame type: %d\n", pdev->frame_format);
         adf_os_assert(0);
         tid = HTT_TX_EXT_TID_INVALID;
     }
@@ -314,16 +274,14 @@ ol_tx_classify(
     struct ol_tx_frms_queue_t *txq = NULL;
     A_UINT8 *dest_addr;
     A_UINT8 tid;
-#if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
-    u_int8_t peer_id;
-#endif
 
     TX_SCHED_DEBUG_PRINT("Enter %s\n", __func__);
 
     dest_addr = ol_tx_dest_addr_find(pdev, tx_nbuf);
     if (IEEE80211_IS_MULTICAST(dest_addr)) {
         txq = &vdev->txqs[OL_TX_VDEV_MCAST_BCAST];
-        tx_msdu_info->htt.info.ext_tid = HTT_TX_EXT_TID_NON_QOS_MCAST_BCAST;
+        tx_msdu_info->htt.info.ext_tid =
+            OL_TX_NUM_TIDS + OL_TX_VDEV_MCAST_BCAST;
         if (vdev->opmode == wlan_op_mode_sta) {
             /*
              * The STA sends a frame with a broadcast dest addr (DA) as a
@@ -333,7 +291,7 @@ ol_tx_classify(
              */
             peer = ol_txrx_assoc_peer_find(vdev);
             if (!peer) {
-                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+                adf_os_print(
                     "Error: STA %p (%02x:%02x:%02x:%02x:%02x:%02x) "
                     "trying to send bcast DA tx data frame "
                     "w/o association\n",
@@ -357,7 +315,7 @@ ol_tx_classify(
              */
             peer = ol_txrx_peer_find_hash_find(pdev, vdev->mac_addr.raw, 0, 1);
             if (!peer) {
-                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+                adf_os_print(
                     "Error: vdev %p (%02x:%02x:%02x:%02x:%02x:%02x) "
                     "trying to send bcast/mcast, but no self-peer found\n",
                     vdev,
@@ -372,7 +330,7 @@ ol_tx_classify(
         /* tid would be overwritten for non QoS case*/
         tid = ol_tx_tid(pdev, tx_nbuf, tx_msdu_info);
         if ((HTT_TX_EXT_TID_INVALID == tid) || (tid >= OL_TX_NUM_TIDS)) {
-             VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+             adf_os_print(
                  "%s Error: could not classify packet into valid TID(%d).\n",
                  __func__, tid);
              return NULL;
@@ -382,8 +340,7 @@ ol_tx_classify(
         if (tx_msdu_info->htt.info.ethertype == ETHERTYPE_WAI) {
             /* WAI frames should not be encrypted */
             tx_msdu_info->htt.action.do_encrypt = 0;
-            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
-                "Tx Frame is a WAI frame\n");
+            adf_os_print("Tx Frame is a WAI frame\n");
         }
         #endif /* ATH_SUPPORT_WAPI */
 
@@ -421,21 +378,7 @@ ol_tx_classify(
                 peer = ol_txrx_assoc_peer_find(vdev);
             }
             #endif
-            #if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
-            if (vdev->hlTdlsFlag) {
-                peer = ol_txrx_find_peer_by_addr(pdev, vdev->hl_tdls_ap_mac_addr.raw, &peer_id);
-                if (peer &&  (peer->peer_ids[0] == HTT_INVALID_PEER_ID))
-                    peer = NULL;
-                else {
-                    if (peer)
-                       adf_os_atomic_inc(&peer->ref_cnt);
-                }
-            }
-            if (!peer)
-                peer = ol_txrx_assoc_peer_find(vdev);
-            #else
             peer = ol_txrx_assoc_peer_find(vdev);
-            #endif
         } else {
             peer = ol_txrx_peer_find_hash_find(pdev, dest_addr, 0, 1);
         }
@@ -446,7 +389,7 @@ ol_tx_classify(
              * It is illegitimate to send unicast data if there is no peer
              * to send it to.
              */
-            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+            adf_os_print(
                 "Error: vdev %p (%02x:%02x:%02x:%02x:%02x:%02x) "
                 "trying to send unicast tx data frame to an unknown peer\n",
                 vdev,
@@ -509,10 +452,6 @@ ol_tx_classify(
         /* Making peer NULL in case if multicast non STA mode */
         tx_msdu_info->peer = NULL;
     }
-
-    /* Whether this frame can download though HTT2 data pipe or not. */
-    OL_TX_CLASSIFY_HTT2_EXTENSION(vdev, tx_nbuf, tx_msdu_info);
-
     TX_SCHED_DEBUG_PRINT("Leave %s\n", __func__);
     return txq;
 }
@@ -539,6 +478,8 @@ ol_tx_classify_mgmt(
          * STA: probe requests can be either broadcast or unicast
          */
         txq = &vdev->txqs[OL_TX_VDEV_DEFAULT_MGMT];
+        tx_msdu_info->htt.info.ext_tid =
+            OL_TX_NUM_TIDS + OL_TX_VDEV_DEFAULT_MGMT;
         tx_msdu_info->htt.info.peer_id = HTT_INVALID_PEER_ID;
         tx_msdu_info->peer = NULL;
         tx_msdu_info->htt.info.is_unicast = 0;
@@ -568,6 +509,8 @@ ol_tx_classify_mgmt(
         tx_msdu_info->peer = peer;
         if (!peer) {
             txq = &vdev->txqs[OL_TX_VDEV_DEFAULT_MGMT];
+            tx_msdu_info->htt.info.ext_tid =
+                OL_TX_NUM_TIDS + OL_TX_VDEV_DEFAULT_MGMT;
             tx_msdu_info->htt.info.peer_id = HTT_INVALID_PEER_ID;
         } else {
             txq = &peer->txqs[HTT_TX_EXT_TID_MGMT];
@@ -587,10 +530,6 @@ ol_tx_classify_mgmt(
      * indicate an error.
      */
     OL_TX_CLASSIFY_MGMT_EXTENSION(vdev, tx_desc, tx_nbuf, tx_msdu_info, txq);
-
-    /* Whether this frame can download though HTT2 data pipe or not. */
-    OL_TX_CLASSIFY_HTT2_EXTENSION(vdev, tx_nbuf, tx_msdu_info);
-
     TX_SCHED_DEBUG_PRINT("Leave %s\n", __func__);
     return txq;
 }

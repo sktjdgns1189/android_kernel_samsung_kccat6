@@ -46,7 +46,7 @@
 
 /* # of WDS entries to support.
  */
-#define CFG_TGT_WDS_ENTRIES             0
+#define CFG_TGT_WDS_ENTRIES             32
 
 /* MAC DMA burst size. 0: 128B - default, 1: 256B, 2: 64B
  */
@@ -197,16 +197,6 @@
  * number of peers that each Tdls vdev can track
  */
 #define CFG_TGT_NUM_TDLS_CONN_TABLE_ENTRIES    32
-
-/*
- * number of TDLS concurrent sleep STAs
- */
-#define CFG_TGT_NUM_TDLS_CONC_SLEEP_STAS    1
-
-/*
- * number of TDLS concurrent buffer STAs
- */
-#define CFG_TGT_NUM_TDLS_CONC_BUFFER_STAS    1
 
 /*
  * ht enable highest MCS by default

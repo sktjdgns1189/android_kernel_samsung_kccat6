@@ -46,7 +46,6 @@
 
 #include <htt.h>          /* HTT_HL_RX_DESC_SIZE */
 #include <ol_cfg.h>
-#include <ol_rx.h>
 #include <ol_htt_rx_api.h>
 #include <htt_internal.h> /* HTT_ASSERT, htt_pdev_t, HTT_RX_BUF_SIZE */
 #include "regtable.h"
@@ -93,9 +92,6 @@ extern int process_wma_set_command(int sessid, int paramid,
 #ifndef HTT_RX_RING_REFILL_RETRY_TIME_MS
 #define HTT_RX_RING_REFILL_RETRY_TIME_MS    50
 #endif
-
-void
-htt_rx_hash_deinit(struct htt_pdev_t *pdev);
 
 static int
 CEIL_PWR2(int value)
@@ -274,22 +270,7 @@ htt_rx_ring_fill_n(struct htt_pdev_t *pdev, int num)
             goto fail;
         }
         paddr = adf_nbuf_get_frag_paddr_lo(rx_netbuf, 0);
-        if (pdev->cfg.is_full_reorder_offload) {
-            if(adf_os_unlikely(
-               htt_rx_hash_list_insert(pdev, paddr, rx_netbuf))) {
-                adf_os_print("%s: hash insert failed!\n", __FUNCTION__);
-#ifdef DEBUG_DMA_DONE
-                adf_nbuf_unmap(pdev->osdev, rx_netbuf,
-                                ADF_OS_DMA_BIDIRECTIONAL);
-#else
-                adf_nbuf_unmap(pdev->osdev, rx_netbuf, ADF_OS_DMA_FROM_DEVICE);
-#endif
-                adf_nbuf_free(rx_netbuf);
-                goto fail;
-            }
-        } else {
-            pdev->rx_ring.buf.netbufs_ring[idx] = rx_netbuf;
-        }
+        pdev->rx_ring.buf.netbufs_ring[idx] = rx_netbuf;
         pdev->rx_ring.buf.paddrs_ring[idx] = paddr;
         pdev->rx_ring.fill_cnt++;
 
@@ -311,34 +292,16 @@ htt_rx_ring_elems(struct htt_pdev_t *pdev)
         pdev->rx_ring.size_mask;
 }
 
-unsigned int
-htt_rx_in_order_ring_elems(struct htt_pdev_t *pdev)
-{
-    return
-        (*pdev->rx_ring.alloc_idx.vaddr - *pdev->rx_ring.target_idx.vaddr) &
-        pdev->rx_ring.size_mask;
-}
-
 void
 htt_rx_detach(struct htt_pdev_t *pdev)
 {
+    int sw_rd_idx = pdev->rx_ring.sw_rd_idx.msdu_payld;
 
     if (pdev->cfg.is_high_latency) {
         return;
     }
 
-    if (pdev->cfg.is_full_reorder_offload) {
-        adf_os_mem_free_consistent(
-            pdev->osdev,
-            sizeof(u_int32_t),
-            pdev->rx_ring.target_idx.vaddr,
-            pdev->rx_ring.target_idx.paddr,
-            adf_os_get_dma_mem_context((&pdev->rx_ring.target_idx), memctx));
-            htt_rx_hash_deinit(pdev);
-    } else {
-        int sw_rd_idx = pdev->rx_ring.sw_rd_idx.msdu_payld;
-
-        while (sw_rd_idx != *(pdev->rx_ring.alloc_idx.vaddr)) {
+    while (sw_rd_idx != *(pdev->rx_ring.alloc_idx.vaddr)) {
 #ifdef DEBUG_DMA_DONE
         adf_nbuf_unmap(
             pdev->osdev, pdev->rx_ring.buf.netbufs_ring[sw_rd_idx],
@@ -348,11 +311,9 @@ htt_rx_detach(struct htt_pdev_t *pdev)
             pdev->osdev, pdev->rx_ring.buf.netbufs_ring[sw_rd_idx],
             ADF_OS_DMA_FROM_DEVICE);
 #endif
-            adf_nbuf_free(pdev->rx_ring.buf.netbufs_ring[sw_rd_idx]);
-            sw_rd_idx++;
-            sw_rd_idx &= pdev->rx_ring.size_mask;
-        }
-        adf_os_mem_free(pdev->rx_ring.buf.netbufs_ring);
+        adf_nbuf_free(pdev->rx_ring.buf.netbufs_ring[sw_rd_idx]);
+        sw_rd_idx++;
+        sw_rd_idx &= pdev->rx_ring.size_mask;
     }
 
     adf_os_timer_cancel(&pdev->rx_ring.refill_retry_timer);
@@ -364,13 +325,13 @@ htt_rx_detach(struct htt_pdev_t *pdev)
         pdev->rx_ring.alloc_idx.vaddr,
         pdev->rx_ring.alloc_idx.paddr,
         adf_os_get_dma_mem_context((&pdev->rx_ring.alloc_idx), memctx));
-
     adf_os_mem_free_consistent(
         pdev->osdev,
         pdev->rx_ring.size * sizeof(u_int32_t),
         pdev->rx_ring.buf.paddrs_ring,
         pdev->rx_ring.base_paddr,
         adf_os_get_dma_mem_context((&pdev->rx_ring.buf), memctx));
+    adf_os_mem_free(pdev->rx_ring.buf.netbufs_ring);
 }
 
 /*--- rx descriptor field access functions ----------------------------------*/
@@ -404,7 +365,7 @@ htt_rx_mpdu_desc_seq_num_hl(htt_pdev_handle pdev, void *mpdu_desc)
 {
     if (pdev->rx_desc_size_hl) {
         return pdev->cur_seq_num_hl =
-            (u_int16_t)(HTT_WORD_GET(*(u_int32_t*)mpdu_desc,
+            (u_int16_t)(HTT_WORD_GET(*(A_UINT32*)mpdu_desc,
                     HTT_HL_RX_DESC_MPDU_SEQ_NUM));
     } else {
         return (u_int16_t)(pdev->cur_seq_num_hl);
@@ -691,15 +652,6 @@ htt_rx_netbuf_pop(
     return msdu;
 }
 
-static inline adf_nbuf_t
-htt_rx_in_order_netbuf_pop(
-    htt_pdev_handle pdev, u_int32_t paddr)
-{
-    HTT_ASSERT1(htt_rx_in_order_ring_elems(pdev) != 0);
-    pdev->rx_ring.fill_cnt--;
-    return htt_rx_hash_list_lookup(pdev, paddr);
-}
-
 /* FIX ME: this function applies only to LL rx descs. An equivalent for HL rx descs is needed. */
 #ifdef CHECKSUM_OFFLOAD
 static inline
@@ -974,17 +926,9 @@ htt_rx_amsdu_pop_ll(
                                   & RX_ATTENTION_0_MSDU_DONE_MASK)))
             {
 
-#ifdef HTT_RX_RESTORE
-                adf_os_print("RX done bit error detected!\n");
-                adf_nbuf_set_next(msdu, NULL);
-                *tail_msdu = msdu;
-                pdev->rx_ring.rx_reset = 1;
-                return msdu_chaining;
-#else
                 process_wma_set_command(0,(int)GEN_PARAM_CRASH_INJECT,
                                         0, GEN_CMD);
                 HTT_ASSERT_ALWAYS(0);
-#endif
             }
             pdev->rx_ring.dbg_sync_success++;
             adf_os_print("debug iter %d success %d\n", dbg_iter,
@@ -1153,28 +1097,7 @@ htt_rx_amsdu_pop_hl(
 #endif
 
     adf_nbuf_set_next(*tail_msdu, NULL);
-    return 0;
-}
-
-int
-htt_rx_frag_pop_hl(
-    htt_pdev_handle pdev,
-    adf_nbuf_t frag_msg,
-    adf_nbuf_t *head_msdu,
-    adf_nbuf_t *tail_msdu)
-{
-    adf_nbuf_pull_head(frag_msg, HTT_RX_FRAG_IND_BYTES);
-    pdev->rx_desc_size_hl =
-        (adf_nbuf_data(frag_msg))
-        [HTT_ENDIAN_BYTE_IDX_SWAP(
-             HTT_RX_IND_HL_RX_DESC_LEN_OFFSET)];
-
-    /* point to the rx desc */
-    adf_nbuf_pull_head(frag_msg,
-                       sizeof(struct hl_htt_rx_ind_base));
-    *head_msdu = *tail_msdu = frag_msg;
-
-    adf_nbuf_set_next(*tail_msdu, NULL);
+    /* here the defrag has not been taken into account */
     return 0;
 }
 
@@ -1190,7 +1113,7 @@ htt_rx_offload_msdu_pop_ll(
     adf_nbuf_t *tail_buf)
 {
     adf_nbuf_t buf;
-    u_int32_t *msdu_hdr, msdu_len;
+    A_UINT32 *msdu_hdr, msdu_len;
 
     *head_buf = *tail_buf = buf = htt_rx_netbuf_pop(pdev);
     /* Fake read mpdu_desc to keep desc ptr in sync */
@@ -1201,7 +1124,7 @@ htt_rx_offload_msdu_pop_ll(
 #else
     adf_nbuf_unmap(pdev->osdev, buf, ADF_OS_DMA_FROM_DEVICE);
 #endif
-    msdu_hdr = (u_int32_t *)adf_nbuf_data(buf);
+    msdu_hdr = (A_UINT32 *)adf_nbuf_data(buf);
 
     /* First dword */
     msdu_len = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_LEN_GET(*msdu_hdr);
@@ -1211,54 +1134,6 @@ htt_rx_offload_msdu_pop_ll(
     msdu_hdr++;
     *vdev_id = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_VDEV_ID_GET(*msdu_hdr);
     *tid = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_TID_GET(*msdu_hdr);
-    *fw_desc = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_DESC_GET(*msdu_hdr);
-
-    adf_nbuf_pull_head(buf, HTT_RX_OFFLOAD_DELIVER_IND_MSDU_HDR_BYTES);
-    adf_nbuf_set_pktlen(buf, msdu_len);
-    return 0;
-}
-
-int
-htt_rx_offload_paddr_msdu_pop_ll(
-    htt_pdev_handle pdev,
-    u_int32_t * msg_word,
-    int msdu_iter,
-    int *vdev_id,
-    int *peer_id,
-    int *tid,
-    u_int8_t *fw_desc,
-    adf_nbuf_t *head_buf,
-    adf_nbuf_t *tail_buf)
-{
-    adf_nbuf_t buf;
-    u_int32_t *msdu_hdr, msdu_len;
-    u_int32_t * curr_msdu;
-    u_int32_t paddr;
-
-    curr_msdu = msg_word + (msdu_iter * HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS);
-    paddr = HTT_RX_IN_ORD_PADDR_IND_PADDR_GET(*curr_msdu);
-    *head_buf = *tail_buf = buf = htt_rx_in_order_netbuf_pop(pdev, paddr);
-
-    if (adf_os_unlikely(NULL == buf)) {
-        adf_os_print("%s: netbuf pop failed!\n", __FUNCTION__);
-        return 0;
-    }
-    adf_nbuf_set_pktlen(buf, HTT_RX_BUF_SIZE);
-#ifdef DEBUG_DMA_DONE
-    adf_nbuf_unmap(pdev->osdev, buf, ADF_OS_DMA_BIDIRECTIONAL);
-#else
-    adf_nbuf_unmap(pdev->osdev, buf, ADF_OS_DMA_FROM_DEVICE);
-#endif
-    msdu_hdr = (u_int32_t *)adf_nbuf_data(buf);
-
-    /* First dword */
-    msdu_len = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_LEN_GET(*msdu_hdr); /* 2 bytes */
-    *peer_id = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_PEER_ID_GET(*msdu_hdr); /* 2 bytes */
-
-    /* Second dword */
-    msdu_hdr++;
-    *vdev_id = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_VDEV_ID_GET(*msdu_hdr); /* 1 bytes */
-    *tid = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_TID_GET(*msdu_hdr); /* 1 bytes */
     *fw_desc = HTT_RX_OFFLOAD_DELIVER_IND_MSDU_DESC_GET(*msdu_hdr);
 
     adf_nbuf_pull_head(buf, HTT_RX_OFFLOAD_DELIVER_IND_MSDU_HDR_BYTES);
@@ -1278,106 +1153,6 @@ htt_rx_offload_msdu_pop_hl(
     adf_nbuf_t *tail_buf)
 {
     return 0;
-}
-
-#ifdef RX_HASH_DEBUG
-#define HTT_RX_CHECK_MSDU_COUNT(msdu_count) HTT_ASSERT_ALWAYS(msdu_count)
-#else
-#define HTT_RX_CHECK_MSDU_COUNT(msdu_count) /* no-op */
-#endif
-
-/* Return values: 1 - success, 0 - failure */
-int
-htt_rx_amsdu_rx_in_order_pop_ll(
-    htt_pdev_handle pdev,
-    adf_nbuf_t rx_ind_msg,
-    adf_nbuf_t *head_msdu,
-    adf_nbuf_t *tail_msdu)
-{
-    adf_nbuf_t msdu, next;
-    u_int8_t *rx_ind_data;
-    u_int32_t *msg_word;
-    unsigned int msdu_count = 0;
-    u_int8_t offload_ind;
-    struct htt_host_rx_desc_base *rx_desc;
-
-    HTT_ASSERT1(htt_rx_in_order_ring_elems(pdev) != 0);
-
-    rx_ind_data = adf_nbuf_data(rx_ind_msg);
-    msg_word = (u_int32_t *)rx_ind_data;
-
-    offload_ind = HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_GET(*msg_word);
-
-    /* Get the total number of MSDUs */
-    msdu_count = HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_GET(*(msg_word + 1));
-    HTT_RX_CHECK_MSDU_COUNT(msdu_count);
-
-    msg_word = (u_int32_t *)(rx_ind_data + HTT_RX_IN_ORD_PADDR_IND_HDR_BYTES);
-    if (offload_ind) {
-        ol_rx_offload_paddr_deliver_ind_handler(pdev, msdu_count,
-                                                  msg_word);
-        return 0;
-    }
-
-    (*head_msdu) = msdu =
-        htt_rx_in_order_netbuf_pop(pdev,
-                                  HTT_RX_IN_ORD_PADDR_IND_PADDR_GET(*msg_word));
-
-    if (adf_os_unlikely(NULL == msdu)) {
-        adf_os_print("%s: netbuf pop failed!\n", __FUNCTION__);
-        return 0;
-    }
-
-    while (msdu_count > 0) {
-
-        /*
-         * Set the netbuf length to be the entire buffer length initially,
-         * so the unmap will unmap the entire buffer.
-         */
-        adf_nbuf_set_pktlen(msdu, HTT_RX_BUF_SIZE);
-#ifdef DEBUG_DMA_DONE
-        adf_nbuf_unmap(pdev->osdev, msdu, ADF_OS_DMA_BIDIRECTIONAL);
-#else
-        adf_nbuf_unmap(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
-#endif
-
-        /* cache consistency has been taken care of by the adf_nbuf_unmap */
-
-        rx_desc = htt_rx_desc(msdu);
-        /*
-         * Make the netbuf's data pointer point to the payload rather
-         * than the descriptor.
-         */
-        adf_nbuf_pull_head(msdu, HTT_RX_STD_DESC_RESERVATION);
-
-        adf_nbuf_trim_tail(
-           msdu, HTT_RX_BUF_SIZE - (RX_STD_DESC_SIZE +
-                              HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_GET(*(msg_word + 1))));
-
-        *((u_int8_t *) &rx_desc->fw_desc.u.val) =
-             HTT_RX_IN_ORD_PADDR_IND_FW_DESC_GET(*(msg_word + 1));
-
-        msdu_count--;
-
-        /* check if this is the last msdu */
-        if (msdu_count) {
-            msg_word += HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS;
-            next = htt_rx_in_order_netbuf_pop(pdev,
-                                  HTT_RX_IN_ORD_PADDR_IND_PADDR_GET(*msg_word));
-            if (adf_os_unlikely(NULL == next)) {
-                adf_os_print("%s: netbuf pop failed!\n", __FUNCTION__);
-                return 0;
-            }
-            adf_nbuf_set_next(msdu, next);
-            msdu = next;
-        }
-        else {
-            *tail_msdu = msdu;
-            adf_nbuf_set_next(msdu, NULL);
-        }
-    }
-
-    return 1;
 }
 
 /* Util fake function that has same prototype as adf_nbuf_clone that just
@@ -1769,21 +1544,9 @@ htt_rx_mpdu_desc_rssi_dbm(htt_pdev_handle pdev, void *mpdu_desc)
 /*
  * htt_rx_amsdu_pop -
  * global function pointer that is programmed during attach to point
- * to either htt_rx_amsdu_pop_ll or htt_rx_amsdu_pop_hl or
- * htt_rx_amsdu_rx_in_order_pop_ll.
+ * to either htt_rx_amsdu_pop_ll or htt_rx_amsdu_pop_hl.
  */
 int (*htt_rx_amsdu_pop)(
-    htt_pdev_handle pdev,
-    adf_nbuf_t rx_ind_msg,
-    adf_nbuf_t *head_msdu,
-    adf_nbuf_t *tail_msdu);
-
-/*
- * htt_rx_frag_pop -
- * global function pointer that is programmed during attach to point
- * to either htt_rx_amsdu_pop_ll or htt_rx_frag_pop_hl.
- */
-int (*htt_rx_frag_pop)(
     htt_pdev_handle pdev,
     adf_nbuf_t rx_ind_msg,
     adf_nbuf_t *head_msdu,
@@ -1846,12 +1609,6 @@ htt_rx_mpdu_desc_list_next_ll(htt_pdev_handle pdev, adf_nbuf_t rx_ind_msg)
     adf_nbuf_t netbuf = pdev->rx_ring.buf.netbufs_ring[idx];
     pdev->rx_ring.sw_rd_idx.msdu_desc = pdev->rx_ring.sw_rd_idx.msdu_payld;
     return (void *) htt_rx_desc(netbuf);
-}
-
-void *
-htt_rx_in_ord_mpdu_desc_list_next_ll(htt_pdev_handle pdev, adf_nbuf_t netbuf)
-{
-    return (void*)htt_rx_desc(netbuf);
 }
 
 void *
@@ -1935,16 +1692,8 @@ htt_rx_msdu_desc_key_id_ll(htt_pdev_handle pdev, void *mpdu_desc,
 a_bool_t
 htt_rx_msdu_desc_key_id_hl(htt_pdev_handle htt_pdev, void *mpdu_desc, u_int8_t *key_id)
 {
-    if (htt_rx_msdu_first_msdu_flag_hl(htt_pdev, mpdu_desc) == A_TRUE) {
-        /* Fix Me: only for little endian */
-        struct hl_htt_rx_desc_base *rx_desc =
-            (struct hl_htt_rx_desc_base *) mpdu_desc;
-
-        *key_id = rx_desc->key_id_oct;
-        return A_TRUE;
-    }
-
-    return A_FALSE;
+   /* TODO: Implement it for HL */
+   return A_FALSE;
 }
 
 void
@@ -2057,303 +1806,6 @@ void htt_rx_get_vowext_stats(adf_nbuf_t msdu, struct vow_extstats *vowstats)
 }
 
 #endif
-
-/*--- RX In Order Hash Code --------------------------------------------------*/
-
-/* Number of buckets in the hash table */
-#define RX_NUM_HASH_BUCKETS 1024 /* This should always be a power of 2 */
-#define RX_NUM_HASH_BUCKETS_MASK (RX_NUM_HASH_BUCKETS - 1)
-
-/* Number of hash entries allocated per bucket */
-#define RX_ENTRIES_SIZE 10
-
-#define RX_HASH_FUNCTION(a) (((a >> 14) ^ (a >> 4)) & RX_NUM_HASH_BUCKETS_MASK)
-
-#ifdef RX_HASH_DEBUG_LOG
-#define RX_HASH_LOG(x) x
-#else
-#define RX_HASH_LOG(x) /* no-op */
-#endif
-
-/* Initializes the circular linked list */
-static inline void htt_list_init(htt_list_head * head)
-{
-    head->prev = head;
-    head->next = head;
-}
-
-/* Adds entry to the end of the linked list */
-static inline void
-htt_list_add_tail(htt_list_head * head, htt_list_node * node)
-{
-    head->prev->next = node;
-    node->prev = head->prev;
-    node->next = head;
-    head->prev = node;
-}
-
-/* Removes the entry corresponding to the input node from the linked list */
-static inline void
-htt_list_remove(htt_list_node * node)
-{
-    node->prev->next = node->next;
-    node->next->prev = node->prev;
-}
-
-/* Helper macro to iterate through the linked list */
-#define HTT_LIST_ITER_FWD(iter, head) for( iter=(head)->next; \
-    (iter)!=(head); (iter)=(iter)->next ) \
-
-#ifdef RX_HASH_DEBUG
-/* Hash cookie related macros */
-#define HTT_RX_HASH_COOKIE 0xDEED
-
-#define HTT_RX_HASH_COOKIE_SET(hash_element)\
-    hash_element->cookie = HTT_RX_HASH_COOKIE
-
-#define HTT_RX_HASH_COOKIE_CHECK(hash_element)\
-    HTT_ASSERT_ALWAYS(hash_element->cookie == HTT_RX_HASH_COOKIE)
-
-/* Hash count related macros */
-#define HTT_RX_HASH_COUNT_INCR(hash_bucket)\
-    hash_bucket.count++
-
-#define HTT_RX_HASH_COUNT_DECR(hash_bucket)\
-    hash_bucket.count--
-
-#define HTT_RX_HASH_COUNT_RESET(hash_bucket) hash_bucket.count = 0
-
-#define HTT_RX_HASH_COUNT_PRINT(hash_bucket)\
-    RX_HASH_LOG(adf_os_print(" count %d\n", hash_bucket.count))
-#else /* RX_HASH_DEBUG */
-/* Hash cookie related macros */
-#define HTT_RX_HASH_COOKIE_SET(hash_element) /* no-op */
-#define HTT_RX_HASH_COOKIE_CHECK(hash_element) /* no-op */
-/* Hash count related macros */
-#define HTT_RX_HASH_COUNT_INCR(hash_bucket) /* no-op */
-#define HTT_RX_HASH_COUNT_DECR(hash_bucket) /* no-op */
-#define HTT_RX_HASH_COUNT_PRINT(hash_bucket) /* no-op */
-#define HTT_RX_HASH_COUNT_RESET(hash_bucket) /* no-op */
-#endif /* RX_HASH_DEBUG */
-
-
-/* Inserts the given "physical address - network buffer" pair into the
-   hash table for the given pdev. This function will do the following:
-   1. Determine which bucket to insert the pair into
-   2. First try to allocate the hash entry for this pair from the pre-allocated
-      entries list
-   3. If there are no more entries in the pre-allocated entries list, allocate
-      the hash entry from the hash memory pool
-   Note: this function is not thread-safe
-   Returns 0 - success, 1 - failure */
-int
-htt_rx_hash_list_insert(struct htt_pdev_t *pdev, u_int32_t paddr,
-     adf_nbuf_t netbuf)
-{
-    int i;
-    struct htt_rx_hash_entry * hash_element = NULL;
-
-    i = RX_HASH_FUNCTION(paddr);
-
-    /* Check if there are any entries in the pre-allocated free list */
-    if( pdev->rx_ring.hash_table[i].freepool.next !=
-         &pdev->rx_ring.hash_table[i].freepool) {
-
-        hash_element =
-            (struct htt_rx_hash_entry *)((char *)pdev->rx_ring.hash_table[i]
-                                         .freepool.next -
-                                          pdev->rx_ring.listnode_offset);
-        if (adf_os_unlikely(NULL == hash_element)) {
-            HTT_ASSERT_ALWAYS(0);
-            return 1;
-        }
-
-        htt_list_remove(pdev->rx_ring.hash_table[i].freepool.next);
-    }
-    else {
-        hash_element = adf_os_mem_alloc(pdev->osdev, sizeof(hash_element));
-        if (adf_os_unlikely(NULL == hash_element)) {
-            HTT_ASSERT_ALWAYS(0);
-            return 1;
-        }
-        hash_element->fromlist = 0;
-    }
-
-    hash_element->netbuf = netbuf;
-    hash_element->paddr = paddr;
-    HTT_RX_HASH_COOKIE_SET(hash_element);
-
-    htt_list_add_tail(&pdev->rx_ring.hash_table[i].listhead,
-                       &hash_element->listnode);
-
-    RX_HASH_LOG(adf_os_print("rx hash: %s: paddr 0x%x netbuf %p bucket %d\n",
-                             __FUNCTION__, paddr, netbuf,(int)i));
-
-    HTT_RX_HASH_COUNT_INCR(pdev->rx_ring.hash_table[i]);
-    HTT_RX_HASH_COUNT_PRINT(pdev->rx_ring.hash_table[i]);
-
-    return 0;
-}
-
-/* Given a physical address this function will find the corresponding network
-   buffer from the hash table.
-   Note: this function is not thread-safe */
-adf_nbuf_t
-htt_rx_hash_list_lookup(struct htt_pdev_t *pdev, u_int32_t paddr)
-{
-    u_int32_t i;
-    htt_list_node * list_iter = NULL;
-    adf_nbuf_t  netbuf = NULL;
-    struct htt_rx_hash_entry * hash_entry;
-
-    i = RX_HASH_FUNCTION(paddr);
-
-    HTT_LIST_ITER_FWD(list_iter, &pdev->rx_ring.hash_table[i].listhead)
-    {
-        hash_entry = (struct htt_rx_hash_entry *)
-        ((char *)list_iter - pdev->rx_ring.listnode_offset);
-
-        HTT_RX_HASH_COOKIE_CHECK(hash_entry);
-
-        if (hash_entry->paddr == paddr) {
-            /* Found the entry corresponding to paddr */
-            netbuf = hash_entry->netbuf;
-            htt_list_remove(&hash_entry->listnode);
-            HTT_RX_HASH_COUNT_DECR(pdev->rx_ring.hash_table[i]);
-            /* if the rx entry is from the pre-allocated list, return it */
-            if (hash_entry->fromlist) {
-                htt_list_add_tail(&pdev->rx_ring.hash_table[i].freepool,
-                                   &hash_entry->listnode);
-            }
-            else {
-                adf_os_mem_free(hash_entry);
-            }
-            break;
-        }
-    }
-
-    RX_HASH_LOG(adf_os_print("rx hash: %s: paddr 0x%x, netbuf %p, bucket %d\n",
-                              __FUNCTION__, paddr, netbuf,(int)i));
-    HTT_RX_HASH_COUNT_PRINT(pdev->rx_ring.hash_table[i]);
-
-    if (netbuf == NULL) {
-        adf_os_print("rx hash: %s: no entry found for 0x%x!!!\n",
-                     __FUNCTION__, paddr);
-        HTT_ASSERT_ALWAYS(0);
-    }
-
-    return netbuf;
-}
-
-/* Initialization function of the rx buffer hash table. This function will
-   allocate a hash table of a certain pre-determined size and initialize all
-   the elements */
-int
-htt_rx_hash_init(struct htt_pdev_t *pdev)
-{
-    int i,j;
-
-    HTT_ASSERT2(IS_PWR2(RX_NUM_HASH_BUCKETS));
-
-    pdev->rx_ring.hash_table = adf_os_mem_alloc(
-       pdev->osdev, RX_NUM_HASH_BUCKETS * sizeof(struct htt_rx_hash_bucket));
-
-    if ( NULL == pdev->rx_ring.hash_table) {
-        adf_os_print("rx hash table allocation failed!\n");
-        return 1;
-    }
-
-    for (i = 0; i < RX_NUM_HASH_BUCKETS; i++) {
-        HTT_RX_HASH_COUNT_RESET(pdev->rx_ring.hash_table[i]);
-
-        /* initialize the hash table buckets */
-        htt_list_init(&pdev->rx_ring.hash_table[i].listhead);
-
-        /* initialize the hash table free pool per bucket */
-        htt_list_init(&pdev->rx_ring.hash_table[i].freepool);
-
-        /* pre-allocate a pool of entries for this bucket */
-        pdev->rx_ring.hash_table[i].entries = adf_os_mem_alloc(
-           pdev->osdev, RX_ENTRIES_SIZE * sizeof(struct htt_rx_hash_entry));
-
-        if (NULL == pdev->rx_ring.hash_table[i].entries) {
-            adf_os_print("rx hash entries allocation for bucket %d failed!\n",
-                          (int)i);
-            while (i) {
-                i--;
-                adf_os_mem_free(pdev->rx_ring.hash_table[i].entries);
-            }
-            return 1;
-        }
-
-        /* initialize the free list with pre-allocated entries */
-        for (j = 0; j < RX_ENTRIES_SIZE; j++) {
-            pdev->rx_ring.hash_table[i].entries[j].fromlist = 1;
-            htt_list_add_tail(&pdev->rx_ring.hash_table[i].freepool,
-                              &pdev->rx_ring.hash_table[i].entries[j].listnode);
-        }
-    }
-
-    pdev->rx_ring.listnode_offset =
-         adf_os_offsetof(struct htt_rx_hash_entry, listnode);
-
-    return 0;
-}
-
-/* De -initialization function of the rx buffer hash table. This function will
-   free up the hash table which includes freeing all the pending rx buffers*/
-void
-htt_rx_hash_deinit(struct htt_pdev_t *pdev)
-{
-
-    u_int32_t i;
-    struct htt_rx_hash_entry * hash_entry;
-    htt_list_node * list_iter = NULL;
-
-    for (i = 0; i < RX_NUM_HASH_BUCKETS; i++) {
-        /* Free the hash entries in hash bucket i */
-        list_iter = pdev->rx_ring.hash_table[i].listhead.next;
-        while (list_iter != &pdev->rx_ring.hash_table[i].listhead) {
-            hash_entry =
-                 (struct htt_rx_hash_entry *)((char *)list_iter -
-                                               pdev->rx_ring.listnode_offset);
-            if (hash_entry->netbuf) {
-                adf_nbuf_free(hash_entry->netbuf);
-                hash_entry->paddr = 0;
-            }
-            list_iter = list_iter->next;
-
-            if (!hash_entry->fromlist) {
-                adf_os_mem_free(hash_entry);
-            }
-        }
-
-        adf_os_mem_free(pdev->rx_ring.hash_table[i].entries);
-
-    }
-}
-
-void
-htt_rx_hash_dump_table(struct htt_pdev_t *pdev)
-{
-    u_int32_t i;
-    struct htt_rx_hash_entry * hash_entry;
-    htt_list_node * list_iter = NULL;
-
-    for (i = 0; i < RX_NUM_HASH_BUCKETS; i++) {
-        HTT_LIST_ITER_FWD(list_iter, &pdev->rx_ring.hash_table[i].listhead)
-        {
-            hash_entry =
-                 (struct htt_rx_hash_entry *)((char *)list_iter -
-                                               pdev->rx_ring.listnode_offset);
-            adf_os_print("hash_table[%d]: netbuf %p paddr 0x%x\n",
-                          i, hash_entry->netbuf, hash_entry->paddr);
-        }
-    }
-}
-
-/*--- RX In Order Hash Code --------------------------------------------------*/
-
 /* move the function to the end of file
  * to omit ll/hl pre-declaration
  */
@@ -2376,31 +1828,10 @@ htt_rx_attach(struct htt_pdev_t *pdev)
          */
         pdev->rx_ring.fill_level = htt_rx_ring_fill_level(pdev);
 
-        if (pdev->cfg.is_full_reorder_offload) {
-            if (htt_rx_hash_init(pdev)) {
-                goto fail1;
-            }
-
-            /* allocate the target index */
-            pdev->rx_ring.target_idx.vaddr = adf_os_mem_alloc_consistent(
-                pdev->osdev,
-                sizeof(u_int32_t),
-                &paddr,
-                adf_os_get_dma_mem_context((&pdev->rx_ring.target_idx), memctx));
-            if (!pdev->rx_ring.target_idx.vaddr) {
-                goto fail1;
-            }
-            pdev->rx_ring.target_idx.paddr = paddr;
-            *pdev->rx_ring.target_idx.vaddr = 0;
-        } else {
-            pdev->rx_ring.buf.netbufs_ring = adf_os_mem_alloc(
-               pdev->osdev, pdev->rx_ring.size * sizeof(adf_nbuf_t));
-            if (!pdev->rx_ring.buf.netbufs_ring) {
-                goto fail1;
-            }
-
-            pdev->rx_ring.sw_rd_idx.msdu_payld = 0;
-            pdev->rx_ring.sw_rd_idx.msdu_desc = 0;
+        pdev->rx_ring.buf.netbufs_ring = adf_os_mem_alloc(
+            pdev->osdev, pdev->rx_ring.size * sizeof(adf_nbuf_t));
+        if (!pdev->rx_ring.buf.netbufs_ring) {
+            goto fail1;
         }
 
         pdev->rx_ring.buf.paddrs_ring = adf_os_mem_alloc_consistent(
@@ -2421,6 +1852,8 @@ htt_rx_attach(struct htt_pdev_t *pdev)
             goto fail3;
         }
         pdev->rx_ring.alloc_idx.paddr = paddr;
+        pdev->rx_ring.sw_rd_idx.msdu_payld = 0;
+        pdev->rx_ring.sw_rd_idx.msdu_desc = 0;
         *pdev->rx_ring.alloc_idx.vaddr = 0;
 
         /*
@@ -2440,23 +1873,11 @@ htt_rx_attach(struct htt_pdev_t *pdev)
         pdev->rx_ring.dbg_refill_cnt = 0;
         pdev->rx_ring.dbg_sync_success = 0;
 #endif
-#ifdef HTT_RX_RESTORE
-        pdev->rx_ring.rx_reset = 0;
-        pdev->rx_ring.htt_rx_restore = 0;
-#endif
         htt_rx_ring_fill_n(pdev, pdev->rx_ring.fill_level);
 
-        if (pdev->cfg.is_full_reorder_offload) {
-            adf_os_print("HTT: full reorder offload enabled\n");
-            htt_rx_amsdu_pop = htt_rx_amsdu_rx_in_order_pop_ll;
-            htt_rx_frag_pop = htt_rx_amsdu_rx_in_order_pop_ll;
-            htt_rx_mpdu_desc_list_next = htt_rx_in_ord_mpdu_desc_list_next_ll;
-        } else {
-            htt_rx_amsdu_pop = htt_rx_amsdu_pop_ll;
-            htt_rx_frag_pop = htt_rx_amsdu_pop_ll;
-            htt_rx_mpdu_desc_list_next = htt_rx_mpdu_desc_list_next_ll;
-        }
+        htt_rx_amsdu_pop = htt_rx_amsdu_pop_ll;
         htt_rx_offload_msdu_pop = htt_rx_offload_msdu_pop_ll;
+        htt_rx_mpdu_desc_list_next = htt_rx_mpdu_desc_list_next_ll;
         htt_rx_mpdu_desc_seq_num = htt_rx_mpdu_desc_seq_num_ll;
         htt_rx_mpdu_desc_pn = htt_rx_mpdu_desc_pn_ll;
         htt_rx_msdu_desc_completes_mpdu = htt_rx_msdu_desc_completes_mpdu_ll;
@@ -2475,7 +1896,6 @@ htt_rx_attach(struct htt_pdev_t *pdev)
         /* host can force ring base address if it wish to do so */
         pdev->rx_ring.base_paddr = 0;
         htt_rx_amsdu_pop = htt_rx_amsdu_pop_hl;
-        htt_rx_frag_pop = htt_rx_frag_pop_hl;
         htt_rx_offload_msdu_pop = htt_rx_offload_msdu_pop_hl;
         htt_rx_mpdu_desc_list_next = htt_rx_mpdu_desc_list_next_hl;
         htt_rx_mpdu_desc_seq_num = htt_rx_mpdu_desc_seq_num_hl;
@@ -2512,88 +1932,8 @@ fail3:
         adf_os_get_dma_mem_context((&pdev->rx_ring.buf), memctx));
 
 fail2:
-    if (pdev->cfg.is_full_reorder_offload) {
-        adf_os_mem_free_consistent(
-            pdev->osdev,
-            sizeof(u_int32_t),
-            pdev->rx_ring.target_idx.vaddr,
-            pdev->rx_ring.target_idx.paddr,
-            adf_os_get_dma_mem_context((&pdev->rx_ring.target_idx), memctx));
-            htt_rx_hash_deinit(pdev);
-    } else {
-        adf_os_mem_free(pdev->rx_ring.buf.netbufs_ring);
-    }
+    adf_os_mem_free(pdev->rx_ring.buf.netbufs_ring);
 
 fail1:
     return 1; /* failure */
 }
-
-#ifdef IPA_UC_OFFLOAD
-int htt_rx_ipa_uc_attach(struct htt_pdev_t *pdev,
-       unsigned int rx_ind_ring_elements)
-{
-   /* Allocate RX indication ring */
-   /* RX IND ring element
-    *   4bytes: pointer
-    *   2bytes: VDEV ID
-    *   2bytes: length */
-   pdev->ipa_uc_rx_rsc.rx_ind_ring_base.vaddr =
-       adf_os_mem_alloc_consistent(pdev->osdev,
-                rx_ind_ring_elements * sizeof(struct ipa_uc_rx_ring_elem_t),
-                &pdev->ipa_uc_rx_rsc.rx_ind_ring_base.paddr,
-                adf_os_get_dma_mem_context(
-                   (&pdev->ipa_uc_rx_rsc.rx_ind_ring_base), memctx));
-   if (!pdev->ipa_uc_rx_rsc.rx_ind_ring_base.vaddr) {
-      adf_os_print("%s: RX IND RING alloc fail", __func__);
-      return -1;
-   }
-
-   /* RX indication ring size, by bytes */
-   pdev->ipa_uc_rx_rsc.rx_ind_ring_size = rx_ind_ring_elements *
-       sizeof(struct ipa_uc_rx_ring_elem_t);
-
-   /* Allocate RX process done index */
-   pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.vaddr =
-       adf_os_mem_alloc_consistent(pdev->osdev,
-                4,
-                &pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.paddr,
-                adf_os_get_dma_mem_context(
-                   (&pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx), memctx));
-   if (!pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.vaddr) {
-      adf_os_print("%s: RX PROC DONE IND alloc fail", __func__);
-      adf_os_mem_free_consistent(pdev->osdev,
-           pdev->ipa_uc_rx_rsc.rx_ind_ring_size,
-           pdev->ipa_uc_rx_rsc.rx_ind_ring_base.vaddr,
-           pdev->ipa_uc_rx_rsc.rx_ind_ring_base.paddr,
-           adf_os_get_dma_mem_context(
-              (&pdev->ipa_uc_rx_rsc.rx_ind_ring_base), memctx));
-      return -2;
-   }
-
-   return 0;
-}
-
-int htt_rx_ipa_uc_detach(struct htt_pdev_t *pdev)
-{
-   if (pdev->ipa_uc_rx_rsc.rx_ind_ring_base.vaddr) {
-      adf_os_mem_free_consistent(pdev->osdev,
-           pdev->ipa_uc_rx_rsc.rx_ind_ring_size,
-           pdev->ipa_uc_rx_rsc.rx_ind_ring_base.vaddr,
-           pdev->ipa_uc_rx_rsc.rx_ind_ring_base.paddr,
-           adf_os_get_dma_mem_context(
-              (&pdev->ipa_uc_rx_rsc.rx_ind_ring_base), memctx));
-   }
-
-   if (pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.vaddr) {
-      adf_os_mem_free_consistent(pdev->osdev,
-           4,
-           pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.vaddr,
-           pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.paddr,
-           adf_os_get_dma_mem_context(
-              (&pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx), memctx));
-   }
-
-   return 0;
-}
-#endif /* IPA_UC_OFFLOAD */
-

@@ -49,16 +49,6 @@ enum wlan_frm_fmt {
     wlan_frm_fmt_802_3,
 };
 
-#ifdef IPA_UC_OFFLOAD
-struct wlan_ipa_uc_rsc_t {
-   u8  uc_offload_enabled;
-   u32 tx_max_buf_cnt;
-   u32 tx_buf_size;
-   u32 rx_ind_ring_size;
-   u32 tx_partition_base;
-};
-#endif /* IPA_UC_OFFLOAD */
-
 /* Config parameters for txrx_pdev */
 struct txrx_pdev_cfg_t {
 	u8 is_high_latency;
@@ -79,10 +69,6 @@ struct txrx_pdev_cfg_t {
 	enum wlan_frm_fmt frame_type;
 	u8 rx_fwd_disabled;
 	u8 is_packet_log_enabled;
-	u8 is_full_reorder_offload;
-#ifdef IPA_UC_OFFLOAD
-	struct wlan_ipa_uc_rsc_t ipa_uc_rsc;
-#endif /* IPA_UC_OFFLOAD */
 };
 
 /**
@@ -265,7 +251,7 @@ int ol_cfg_netbuf_frags_max(ol_pdev_handle pdev);
  *      1 -> free the tx frame as soon as the download completes
  */
 int ol_cfg_tx_free_at_download(ol_pdev_handle pdev);
-void ol_cfg_set_tx_free_at_download(ol_pdev_handle pdev);
+
 
 /**
  * @brief Low water mark for target tx credit.
@@ -351,19 +337,6 @@ int ol_cfg_rx_host_defrag_timeout_duplicate_check(ol_pdev_handle pdev);
  */
 int ol_cfg_throttle_period_ms(ol_pdev_handle pdev);
 
-/**
- * brief Check whether full reorder offload is
- * enabled/disable by the host
- * @details
- *   If the host does not support receive reorder (i.e. the
- *   target performs full receive re-ordering) this will return
- *   "enabled"
- *
- * @param pdev - handle to the physical device
- * @return 1 - enable, 0 - disable
- */
-int ol_cfg_is_full_reorder_offload(ol_pdev_handle pdev);
-
 typedef enum {
    wlan_frm_tran_cap_raw = 0x01,
    wlan_frm_tran_cap_native_wifi = 0x02,
@@ -396,17 +369,32 @@ ol_cfg_sw_encap_hdr_max_size(ol_pdev_handle pdev)
 static inline u_int8_t
 ol_cfg_tx_encap(ol_pdev_handle pdev)
 {
+#ifdef QCA_WIFI_ISOC
+    /*
+     * Tx encap done in SW for Riva.
+     * TBD: do tx encap in HW for Pronto and Northstar?
+     */
+    return 1;
+#else
     /* tx encap done in HW */
     return 0;
+#endif
 }
 
 static inline int
 ol_cfg_host_addba(ol_pdev_handle pdev)
 {
+#ifdef QCA_WIFI_ISOC
+    /*
+     * ADDBA negotiation is handled by the host SW for the Riva family.
+     */
+    return 1;
+#else
     /*
      * ADDBA negotiation is handled by the target FW for Peregrine + Rome.
      */
     return 0;
+#endif
 }
 
 /**
@@ -452,49 +440,4 @@ void ol_set_cfg_packet_log_enabled(ol_pdev_handle pdev, u_int8_t val);
  */
 u_int8_t ol_cfg_is_packet_log_enabled(ol_pdev_handle pdev);
 
-#ifdef IPA_UC_OFFLOAD
-/**
- * @brief IPA micro controller data path offload enable or not
- * @detail
- *  This function returns IPA micro controller data path offload
- *  feature enabled or not
- *
- * @param pdev - handle to the physical device
- */
-unsigned int ol_cfg_ipa_uc_offload_enabled(ol_pdev_handle pdev);
-/**
- * @brief IPA micro controller data path TX buffer size
- * @detail
- *  This function returns IPA micro controller data path offload
- *  TX buffer size which should be pre-allocated by driver.
- *  Default buffer size is 2K
- *
- * @param pdev - handle to the physical device
- */
-unsigned int ol_cfg_ipa_uc_tx_buf_size(ol_pdev_handle pdev);
-/**
- * @brief IPA micro controller data path TX buffer size
- * @detail
- *  This function returns IPA micro controller data path offload
- *  TX buffer count which should be pre-allocated by driver.
- *
- * @param pdev - handle to the physical device
- */
-unsigned int ol_cfg_ipa_uc_tx_max_buf_cnt(ol_pdev_handle pdev);
-/**
- * @brief IPA micro controller data path TX buffer size
- * @detail
- *  This function returns IPA micro controller data path offload
- *  RX indication ring size which will notified by WLAN FW to IPA
- *  micro controller
- *
- * @param pdev - handle to the physical device
- */
-unsigned int ol_cfg_ipa_uc_rx_ind_ring_size(ol_pdev_handle pdev);
-/**
- * @brief IPA micro controller data path TX buffer size
- * @param pdev - handle to the physical device
- */
-unsigned int ol_cfg_ipa_uc_tx_partition_base(ol_pdev_handle pdev);
-#endif /* IPA_UC_OFFLOAD */
 #endif /* _OL_CFG__H_ */

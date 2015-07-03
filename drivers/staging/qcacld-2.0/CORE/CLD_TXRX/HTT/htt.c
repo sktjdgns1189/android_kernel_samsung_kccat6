@@ -58,23 +58,6 @@ htt_h2t_rx_ring_cfg_msg_hl(struct htt_pdev_t *pdev);
 A_STATUS (*htt_h2t_rx_ring_cfg_msg)(
         struct htt_pdev_t *pdev);
 
-#ifdef IPA_UC_OFFLOAD
-A_STATUS
-htt_ipa_config(htt_pdev_handle pdev, A_STATUS status)
-{
-    if ((A_OK == status) &&
-        ol_cfg_ipa_uc_offload_enabled(pdev->ctrl_pdev)) {
-        status = htt_h2t_ipa_uc_rsc_cfg_msg(pdev);
-    }
-    return status;
-}
-
-#define HTT_IPA_CONFIG htt_ipa_config
-#else
-#define HTT_IPA_CONFIG(pdev, status) status /* no-op */
-#endif /* IPA_UC_OFFLOAD */
-
-
 struct htt_htc_pkt *
 htt_htc_pkt_alloc(struct htt_pdev_t *pdev)
 {
@@ -184,13 +167,7 @@ htt_attach(
 
     /* for efficiency, store a local copy of the is_high_latency flag */
     pdev->cfg.is_high_latency = ol_cfg_is_high_latency(pdev->ctrl_pdev);
-    pdev->cfg.default_tx_comp_req =
-         !ol_cfg_tx_free_at_download(pdev->ctrl_pdev);
 
-    pdev->cfg.is_full_reorder_offload =
-         ol_cfg_is_full_reorder_offload(pdev->ctrl_pdev);
-    adf_os_print("is_full_reorder_offloaded? %d\n",
-                  (int)pdev->cfg.is_full_reorder_offload);
     pdev->targetdef = htc_get_targetdef(htc_pdev);
     /*
      * Connect to HTC service.
@@ -306,7 +283,7 @@ htt_attach(
          * This maximum download length is for management tx frames,
          * which have an 802.11 header.
          */
-        #ifdef ATH_11AC_TXCOMPACT
+        #if ATH_11AC_TXCOMPACT
         pdev->download_len =
             sizeof(struct htt_host_tx_desc_t) +
             HTT_TX_HDR_SIZE_OUTER_HDR_MAX + /* worst case */
@@ -354,10 +331,7 @@ htt_attach_target(htt_pdev_handle pdev)
      * handshaking.
      */
 
-    status = htt_h2t_rx_ring_cfg_msg(pdev);
-    status = HTT_IPA_CONFIG(pdev, status);
-
-    return status;
+    return htt_h2t_rx_ring_cfg_msg(pdev);
 }
 
 void
@@ -408,20 +382,7 @@ htt_htc_attach(struct htt_pdev_t *pdev)
     connect.MaxSendQueueDepth = HTT_MAX_SEND_QUEUE_DEPTH;
 
     /* disable flow control for HTT data message service */
-#ifdef HIF_SDIO
-    /*
-     * HTC Credit mechanism is disabled based on
-     * default_tx_comp_req as throughput will be lower
-     * if we disable htc credit mechanism with default_tx_comp_req
-     * set since txrx download packet will be limited by ota
-     * completion.
-     * TODO:Conditional disabling will be removed once firmware
-     * with reduced tx completion is pushed into release builds.
-     */
-    if (!pdev->cfg.default_tx_comp_req) {
-       connect.ConnectionFlags |= HTC_CONNECT_FLAGS_DISABLE_CREDIT_FLOW_CTRL;
-    }
-#else
+#ifndef HIF_SDIO
     connect.ConnectionFlags |= HTC_CONNECT_FLAGS_DISABLE_CREDIT_FLOW_CTRL;
 #endif
 
@@ -437,41 +398,6 @@ htt_htc_attach(struct htt_pdev_t *pdev)
 #if defined(HIF_PCI)
     hif_pci_save_htc_htt_config_endpoint(pdev->htc_endpoint);
 #endif
-
-#ifdef QCA_TX_HTT2_SUPPORT
-    /* Start TX HTT2 service if the target support it. */
-    if (pdev->cfg.is_high_latency) {
-        adf_os_mem_set(&connect, 0, sizeof(connect));
-        adf_os_mem_set(&response, 0, sizeof(response));
-
-        /* The same as HTT service but no RX. */
-        connect.EpCallbacks.pContext = pdev;
-        connect.EpCallbacks.EpTxComplete = htt_h2t_send_complete;
-        connect.EpCallbacks.EpSendFull = htt_h2t_full;
-        connect.MaxSendQueueDepth = HTT_MAX_SEND_QUEUE_DEPTH;
-
-        /* Should NOT support credit flow control. */
-        connect.ConnectionFlags |= HTC_CONNECT_FLAGS_DISABLE_CREDIT_FLOW_CTRL;
-        /* Enable HTC schedule mechanism for TX HTT2 service. */
-        connect.ConnectionFlags |= HTC_CONNECT_FLAGS_ENABLE_HTC_SCHEDULE;
-
-        connect.ServiceID = HTT_DATA2_MSG_SVC;
-
-        status = HTCConnectService(pdev->htc_pdev, &connect, &response);
-        if (status != A_OK) {
-            pdev->htc_tx_htt2_endpoint = ENDPOINT_UNUSED;
-            pdev->htc_tx_htt2_max_size = 0;
-        } else {
-            pdev->htc_tx_htt2_endpoint = response.Endpoint;
-            pdev->htc_tx_htt2_max_size = HTC_TX_HTT2_MAX_SIZE;
-        }
-
-        adf_os_print("TX HTT %s, ep %d size %d\n",
-                     (status == A_OK ? "ON" : "OFF"),
-                     pdev->htc_tx_htt2_endpoint,
-                     pdev->htc_tx_htt2_max_size);
-    }
-#endif /* QCA_TX_HTT2_SUPPORT */
 
     return 0; /* success */
 }
@@ -515,98 +441,3 @@ void htt_htc_disable_aspm(void)
 {
     htc_disable_aspm();
 }
-
-#ifdef IPA_UC_OFFLOAD
-/*
- * Attach resource for micro controller data path
- */
-int
-htt_ipa_uc_attach(struct htt_pdev_t *pdev)
-{
-    int error;
-
-    /* TX resource attach */
-    error = htt_tx_ipa_uc_attach(pdev,
-       ol_cfg_ipa_uc_tx_buf_size(pdev->ctrl_pdev),
-       ol_cfg_ipa_uc_tx_max_buf_cnt(pdev->ctrl_pdev),
-       ol_cfg_ipa_uc_tx_partition_base(pdev->ctrl_pdev));
-    if (error) {
-        adf_os_print("HTT IPA UC TX attach fail code %d\n", error);
-        HTT_ASSERT0(0);
-        return error;
-    }
-
-    /* RX resource attach */
-    error = htt_rx_ipa_uc_attach(pdev,
-       ol_cfg_ipa_uc_rx_ind_ring_size(pdev->ctrl_pdev));
-    if (error) {
-        adf_os_print("HTT IPA UC RX attach fail code %d\n", error);
-        htt_tx_ipa_uc_detach(pdev);
-        HTT_ASSERT0(0);
-        return error;
-    }
-
-    return 0; /* success */
-}
-
-void
-htt_ipa_uc_detach(struct htt_pdev_t *pdev)
-{
-    /* TX IPA micro controller detach */
-    htt_tx_ipa_uc_detach(pdev);
-
-    /* RX IPA micro controller detach */
-    htt_rx_ipa_uc_detach(pdev);
-}
-
-/*
- * Distribute micro controller resource to control module
- */
-int
-htt_ipa_uc_get_resource(htt_pdev_handle pdev,
-           u_int32_t *ce_sr_base_paddr,
-           u_int32_t *ce_sr_ring_size,
-           u_int32_t *ce_reg_paddr,
-           u_int32_t *tx_comp_ring_base_paddr,
-           u_int32_t *tx_comp_ring_size,
-           u_int32_t *tx_num_alloc_buffer,
-           u_int32_t *rx_rdy_ring_base_paddr,
-           u_int32_t *rx_rdy_ring_size,
-           u_int32_t *rx_proc_done_idx_paddr)
-{
-    /* Release allocated resource to client */
-    *tx_comp_ring_base_paddr =
-        (u_int32_t)pdev->ipa_uc_tx_rsc.tx_comp_base.paddr;
-    *tx_comp_ring_size =
-        (u_int32_t)ol_cfg_ipa_uc_tx_max_buf_cnt(pdev->ctrl_pdev);
-    *tx_num_alloc_buffer =
-        (u_int32_t)pdev->ipa_uc_tx_rsc.alloc_tx_buf_cnt;
-    *rx_rdy_ring_base_paddr =
-        (u_int32_t)pdev->ipa_uc_rx_rsc.rx_ind_ring_base.paddr;
-    *rx_rdy_ring_size =
-        (u_int32_t)pdev->ipa_uc_rx_rsc.rx_ind_ring_size;
-    *rx_proc_done_idx_paddr =
-        (u_int32_t)pdev->ipa_uc_rx_rsc.rx_ipa_prc_done_idx.paddr;
-
-    /* Get copy engine, bus resource */
-    HTCIpaGetCEResource(pdev->htc_pdev,
-        ce_sr_base_paddr, ce_sr_ring_size, ce_reg_paddr);
-
-
-    return 0;
-}
-
-/*
- * Distribute micro controller doorbell register to firmware
- */
-int
-htt_ipa_uc_set_doorbell_paddr(htt_pdev_handle pdev,
-           u_int32_t ipa_uc_tx_doorbell_paddr,
-           u_int32_t ipa_uc_rx_doorbell_paddr)
-{
-   pdev->ipa_uc_tx_rsc.tx_comp_idx_paddr = ipa_uc_tx_doorbell_paddr;
-   pdev->ipa_uc_rx_rsc.rx_rdy_idx_paddr = ipa_uc_rx_doorbell_paddr;
-   return 0;
-}
-#endif /* IPA_UC_OFFLOAD */
-

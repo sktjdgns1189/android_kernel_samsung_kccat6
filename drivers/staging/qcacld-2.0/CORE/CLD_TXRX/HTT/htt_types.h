@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,44 +39,7 @@
 #include <ol_ctrl_api.h>  /* ol_pdev_handle */
 #include <ol_txrx_api.h>  /* ol_txrx_pdev_handle */
 
-#define DEBUG_DMA_DONE
-
 #define HTT_TX_MUTEX_TYPE adf_os_spinlock_t
-
-#ifdef QCA_TX_HTT2_SUPPORT
-#ifndef HTC_TX_HTT2_MAX_SIZE
-/* Should sync to the target's implementation. */
-#define HTC_TX_HTT2_MAX_SIZE    (120)
-#endif
-#endif /* QCA_TX_HTT2_SUPPORT */
-
-#define HTT_INVALID_PEER    0xffff
-#define HTT_INVALID_VDEV    0xff
-#define HTT_NON_QOS_TID     16
-#define HTT_INVALID_TID     31
-
-#define HTT_TX_EXT_TID_DEFAULT              0
-#define HTT_TX_EXT_TID_NON_QOS_MCAST_BCAST 16
-#define HTT_TX_EXT_TID_MGMT                17
-#define HTT_TX_EXT_TID_INVALID             31
-
-/**
- * @brief General specification of the tx frame contents
- *
- * @details
- * for efficiency, the HTT packet type values correspond
- * to the bit positions of the WAL packet type values, so the
- * translation is a simple shift operation.
- */
-enum htt_pkt_type {
-    htt_pkt_type_raw = 0,
-    htt_pkt_type_native_wifi = 1,
-    htt_pkt_type_ethernet = 2,
-    htt_pkt_type_mgmt = 3,
-
-    /* keep this last */
-    htt_pkt_num_types
-};
 
 struct htt_pdev_t;
 
@@ -122,80 +85,6 @@ struct htt_tx_mgmt_desc_ctxt {
     A_UINT32    pending_cnt;
 };
 
-typedef struct _htt_list_node {
-    struct _htt_list_node * prev;
-    struct _htt_list_node * next;
-} htt_list_node;
-
-typedef htt_list_node htt_list_head;
-
-struct htt_rx_hash_entry {
-    A_UINT32    paddr;
-    adf_nbuf_t  netbuf;
-    A_UINT8     fromlist;
-    htt_list_node listnode;
-#ifdef RX_HASH_DEBUG
-    A_UINT32    cookie;
-#endif
-};
-
-struct htt_rx_hash_bucket {
-    htt_list_head listhead;
-    struct htt_rx_hash_entry * entries;
-    htt_list_head freepool;
-#ifdef RX_HASH_DEBUG
-    A_UINT32 count;
-#endif
-};
-
-#ifdef IPA_UC_OFFLOAD
-
-/* IPA micro controller
-   wlan host driver
-   firmware shared memory structure */
-struct uc_shared_mem_t
-{
-   u_int32_t *vaddr;
-   adf_os_dma_addr_t paddr;
-   adf_os_dma_mem_context(memctx);
-};
-
-/* Micro controller datapath offload
- * WLAN TX resources */
-struct htt_ipa_uc_tx_resource_t
-{
-   struct uc_shared_mem_t tx_ce_idx;
-   struct uc_shared_mem_t tx_comp_base;
-
-   u_int32_t           tx_comp_idx_paddr;
-   adf_nbuf_t         *tx_buf_pool_vaddr_strg;
-   u_int32_t           alloc_tx_buf_cnt;
-};
-
-/* Micro controller datapath offload
- * WLAN RX resources */
-struct htt_ipa_uc_rx_resource_t
-{
-   adf_os_dma_addr_t  rx_rdy_idx_paddr;
-   struct uc_shared_mem_t rx_ind_ring_base;
-   struct uc_shared_mem_t rx_ipa_prc_done_idx;
-   u_int32_t          rx_ind_ring_size;
-};
-
-struct ipa_uc_rx_ring_elem_t
-{
-   u_int32_t  rx_packet_paddr;
-   u_int16_t  vdev_id;
-   u_int16_t  rx_packet_leng;
-};
-#endif /* IPA_UC_OFFLOAD */
-
-struct htt_tx_credit_t
-{
-    adf_os_atomic_t bus_delta;
-    adf_os_atomic_t target_delta;
-};
-
 struct htt_pdev_t {
     ol_pdev_handle ctrl_pdev;
     ol_txrx_pdev_handle txrx_pdev;
@@ -203,12 +92,6 @@ struct htt_pdev_t {
     adf_os_device_t osdev;
 
     HTC_ENDPOINT_ID htc_endpoint;
-
-#ifdef QCA_TX_HTT2_SUPPORT
-    HTC_ENDPOINT_ID htc_tx_htt2_endpoint;
-    u_int16_t htc_tx_htt2_max_size;
-#endif /* QCA_TX_HTT2_SUPPORT */
-
 #ifdef ATH_11AC_TXCOMPACT
     HTT_TX_MUTEX_TYPE		txnbufq_mutex;
     adf_nbuf_queue_t		txnbufq;
@@ -218,8 +101,6 @@ struct htt_pdev_t {
     struct htt_htc_pkt_union *htt_htc_pkt_freelist;
     struct {
         int is_high_latency;
-        int is_full_reorder_offload;
-        int default_tx_comp_req;
     } cfg;
     struct {
         u_int8_t major;
@@ -256,28 +137,10 @@ struct htt_pdev_t {
         int fill_cnt;   /* how many rx buffers (full+empty) are in the ring */
 
         /*
-         * target_idx -
-         * Without reorder offload:
-         * not used
-         * With reorder offload:
-         * points to the location in the rx ring from which rx buffers are
-         * available to copy into the MAC DMA ring
-         */
-        struct {
-            u_int32_t *vaddr;
-            u_int32_t paddr;
-            adf_os_dma_mem_context(memctx);
-        } target_idx;
-
-        /*
-         * alloc_idx/host_idx -
-         * Without reorder offload:
-         * where HTT SW has deposited empty buffers
+         * alloc_idx - where HTT SW has deposited empty buffers
          * This is allocated in consistent mem, so that the FW can read
          * this variable, and program the HW's FW_IDX reg with the value
-         * of this shadow register
-         * With reorder offload:
-         * points to the end of the available free rx buffers
+         * of this shadow register.
          */
         struct {
             u_int32_t *vaddr;
@@ -311,12 +174,6 @@ struct htt_pdev_t {
         u_int32_t dbg_refill_cnt;
         u_int32_t dbg_sync_success;
 #endif
-#ifdef HTT_RX_RESTORE
-        int rx_reset;
-        u_int8_t htt_rx_restore;
-#endif
-        struct htt_rx_hash_bucket * hash_table;
-        u_int32_t listnode_offset;
     } rx_ring;
     int rx_desc_size_hl;
     long rx_fw_desc_offset;
@@ -345,13 +202,6 @@ struct htt_pdev_t {
     int cur_seq_num_hl;
     struct htt_tx_mgmt_desc_ctxt tx_mgmt_desc_ctxt;
     struct targetdef_s *targetdef;
-
-#ifdef IPA_UC_OFFLOAD
-    struct htt_ipa_uc_tx_resource_t ipa_uc_tx_rsc;
-    struct htt_ipa_uc_rx_resource_t ipa_uc_rx_rsc;
-#endif /* IPA_UC_OFFLOAD */
-
-    struct htt_tx_credit_t htt_tx_credit;
 };
 
 #endif /* _HTT_TYPES__H_ */

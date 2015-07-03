@@ -103,7 +103,7 @@ __adf_nbuf_alloc(adf_os_device_t osdev, size_t size, int reserve, int align, int
 void
 __adf_nbuf_free(struct sk_buff *skb)
 {
-#if defined(IPA_OFFLOAD) && !defined(IPA_UC_OFFLOAD)
+#ifdef IPA_OFFLOAD
     if( (NBUF_OWNER_ID(skb) == IPA_NBUF_OWNER_ID) && NBUF_CALLBACK_FN(skb) )
         NBUF_CALLBACK_FN_EXEC(skb);
     else
@@ -316,7 +316,11 @@ __adf_nbuf_set_rx_cksum(struct sk_buff *skb, adf_nbuf_rx_cksum_t *cksum)
         skb->ip_summed = CHECKSUM_UNNECESSARY;
         break;
     case ADF_NBUF_RX_CKSUM_TCP_UDP_HW:
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,19)
+        skb->ip_summed = CHECKSUM_HW;
+#else
         skb->ip_summed = CHECKSUM_PARTIAL;
+#endif
         skb->csum      = cksum->val;
         break;
     default:

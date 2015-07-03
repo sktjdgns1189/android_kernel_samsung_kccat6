@@ -39,9 +39,6 @@
 #include "limUtils.h"
 #include "limSerDesUtils.h"
 #include "limApi.h"
-#ifdef WLAN_FEATURE_VOWIFI_11R
-#include "limFTDefs.h"
-#endif
 #include "limSession.h"
 #if defined WLAN_FEATURE_VOWIFI
 #include "rrmApi.h"
@@ -164,8 +161,7 @@ limCollectBssDescription(tpAniSirGlobal pMac,
      */
     if ((NULL != pMac->lim.gpLimMlmScanReq && pMac->lim.gpLimMlmScanReq->p2pSearch) ||
             (pMac->fScanOffload && pMac->lim.fOffloadScanPending &&
-             (pMac->lim.fOffloadScanP2PSearch ||
-              pMac->lim.fOffloadScanP2PListen)))
+             pMac->lim.fOffloadScanP2PSearch))
     {
         if (NULL == limGetP2pIEPtr(pMac, (pBody + SIR_MAC_B_PR_SSID_OFFSET), ieLen))
         {
@@ -239,6 +235,8 @@ limCollectBssDescription(tpAniSirGlobal pMac,
     channelNum = pBssDescr->channelId;
     pBssDescr->nwType = limGetNwType(pMac, channelNum, SIR_MAC_MGMT_FRAME, pBPR);
 
+    pBssDescr->aniIndicator = pBPR->propIEinfo.aniIndicator;
+
     // Copy RSSI & SINR from BD
 
     PELOG4(limLog(pMac, LOG4, "***********BSS Description for BSSID:*********** ");
@@ -291,13 +289,12 @@ limCollectBssDescription(tpAniSirGlobal pMac,
                   pBody + SIR_MAC_B_PR_SSID_OFFSET,
                   ieLen);
 
-    /*set channel number in beacon in case it is not present*/
-    pBPR->channelNumber = pBssDescr->channelId;
-
+    //sirDumpBuf( pMac, SIR_LIM_MODULE_ID, LOGW, (tANI_U8 *) pBssDescr, pBssDescr->length + 2 );
     limLog( pMac, LOG3,
-        FL("Collected BSS Description for Channel(%1d), length(%u), IE Fields(%u)"),
+        FL("Collected BSS Description for Channel(%1d), length(%u), aniIndicator(%d), IE Fields(%u)"),
         pBssDescr->channelId,
         pBssDescr->length,
+        pBssDescr->aniIndicator,
         ieLen );
 
     return eHAL_STATUS_SUCCESS;

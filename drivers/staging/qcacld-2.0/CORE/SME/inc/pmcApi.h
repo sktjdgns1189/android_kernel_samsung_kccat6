@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, 2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -48,11 +48,8 @@
 
 #define __PMC_API_H__
 
-/*
- * This timer value determines the default periodicity at which BMPS retries
- * will happen; this default value is overwritten typically by OS specific
- * registry/INI values.
- */
+//This timer value determines the default periodicity at which BMPS retries will happen
+//This default value is overwritten typicaly by OS specific registry/INI values.
 #define BMPS_TRAFFIC_TIMER_DEFAULT 5000  //unit = ms
 #define DHCP_REMAIN_POWER_ACTIVE_THRESHOLD 12 // (12 * 5) sec = 60 seconds = 1 min
 
@@ -206,7 +203,7 @@ typedef enum ePmcBeaconsToForward
 
 
 
-/* The Spatial Multiplexing Power Save modes. */
+/* The Spatial Mulitplexing Power Save modes. */
 
 typedef enum ePmcSmpsMode
 
@@ -284,7 +281,7 @@ typedef struct sPmcBmpsConfigParams
 
 
 
-/* Configuration parameters for Spatial Multiplexing Power Save (SMPS). */
+/* Configuration parameters for Spatial Mulitplexing Power Save (SMPS). */
 
 typedef struct sPmcSmpsConfigParams
 
@@ -308,6 +305,8 @@ extern eHalStatus pmcStart (tHalHandle hHal);
 extern eHalStatus pmcStop (tHalHandle hHal);
 
 extern eHalStatus pmcClose (tHalHandle hHal );
+
+extern eHalStatus pmcSignalPowerEvent (tHalHandle hHal, tPmcPowerEvent event);
 
 extern eHalStatus pmcSetConfigPowerSave (tHalHandle hHal, tPmcPowerSavingMode psMode, void *pConfigParams);
 
@@ -433,7 +432,7 @@ extern eHalStatus pmcSetHostOffload (tHalHandle hHal, tpSirHostOffloadReq pReque
     \param  hHal - The handle returned by macOpen.
     \param  pRequest - Pointer to the Keep Alive.
     \return eHalStatus
-            eHAL_STATUS_FAILURE  Cannot set the keep alive.
+            eHAL_STATUS_FAILURE  Cannot set the keepalive.
             eHAL_STATUS_SUCCESS  Request accepted.
   ---------------------------------------------------------------------------*/
 extern eHalStatus pmcSetKeepAlive (tHalHandle hHal, tpSirKeepAliveReq pRequest, tANI_U8 sessionId);
@@ -532,7 +531,7 @@ extern eHalStatus pmcTriggerBatchScanResultInd
 
 /* -----------------------------------------------------------------------------
     \fn pmcStopBatchScanInd
-    \brief  Stop batch scan request in FW
+    \brief  Stoping batch scan request in FW
     \param  hHal - The handle returned by macOpen.
     \param  pInd - Pointer to stop batch scan indication
     \return eHalStatus
@@ -559,7 +558,7 @@ typedef enum eUapsdStatus
     PMC_UAPSD_ENABLE_PENDING
 }tUapsdStatus;
 
-/* Power save Check Routine */
+/* Powersave Check Routine */
 typedef tANI_BOOLEAN (*PwrSaveCheckRoutine)(void *checkContext,
                                             tANI_U32 sessionId);
 

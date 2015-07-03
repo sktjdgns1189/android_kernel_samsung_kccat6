@@ -45,6 +45,7 @@
 #include <linux/firmware.h>
 #include <wcnss_api.h>
 #include <wlan_hdd_tx_rx.h>
+#include <palTimer.h>
 #include <wniApi.h>
 #include <wlan_nlink_srv.h>
 #include <wlan_btc_svc.h>
@@ -323,8 +324,7 @@ void epping_destroy_adapter(epping_adapter_t *pAdapter)
    while (adf_nbuf_queue_len(&pAdapter->nodrop_queue)) {
       adf_nbuf_t tmp_nbuf = NULL;
       tmp_nbuf = adf_nbuf_queue_remove(&pAdapter->nodrop_queue);
-      if (tmp_nbuf)
-         adf_nbuf_free(tmp_nbuf);
+      adf_nbuf_free(tmp_nbuf);
    }
 
    free_netdev(dev);
@@ -431,7 +431,7 @@ int epping_connect_service(epping_context_t *pEpping_ctx)
    }
    pEpping_ctx->EppingEndpoint[0] = response.Endpoint;
 
-#if defined(HIF_PCI) || defined(HIF_USB)
+#if defined(HIF_PCI)
    connect.ServiceID = WMI_DATA_BK_SVC;
    status = HTCConnectService(pEpping_ctx->HTCHandle,
                               &connect, &response);

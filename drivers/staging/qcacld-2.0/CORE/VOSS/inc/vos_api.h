@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( __VOS_API_H )
 #define __VOS_API_H
 
@@ -72,8 +73,6 @@
 #include <vos_threads.h>
 #include <vos_timer.h>
 #include <vos_pack_align.h>
-
-#define VOS_WDA_TIMEOUT 15000
 
 /*-------------------------------------------------------------------------
   Function declarations and documenation
@@ -336,7 +335,4 @@ v_U64_t vos_get_monotonic_boottime(void);
 
 void vos_trigger_recovery(void);
 
-#ifdef FEATURE_WLAN_D0WOW
-v_VOID_t vos_pm_control(v_BOOL_t vote);
-#endif
 #endif // if !defined __VOS_API_H

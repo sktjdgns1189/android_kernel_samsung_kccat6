@@ -60,8 +60,7 @@
 #endif
 
 /* Roam score for a neighbor AP will be calculated based on the below definitions.
-    The calculated roam score will be used to select the roam able
-    candidate from neighbor AP list */
+    The calculated roam score will be used to select the roamable candidate from neighbor AP list */
 #define RRM_ROAM_SCORE_NEIGHBOR_REPORT_REACHABILITY             0   /* When we support 11r over the DS, this should have a non-zero value */
 #define RRM_ROAM_SCORE_NEIGHBOR_REPORT_SECURITY                 10
 #define RRM_ROAM_SCORE_NEIGHBOR_REPORT_KEY_SCOPE                20
@@ -533,21 +532,17 @@ static eHalStatus sme_RrmSendScanResult( tpAniSirGlobal pMac,
 
    if (NULL == pResult)
    {
-      /*
-       * no scan results
-       *
-       * Spec. doesnt say anything about such condition.
-       * Since section 7.4.6.2 (IEEE802.11k-2008) says-rrm report frame should
-       * contain one or more report IEs. It probably means dont send any
-       * response if no matching BSS found. Moreover, there is no flag or
-       * field in measurement report IE(7.3.2.22) OR beacon report
-       * IE(7.3.2.22.6) that can be set to indicate no BSS found on a
-       * given channel.
-       *
-       * If we finished measurement on all the channels, we still need to
-       * send a xmit indication with moreToFollow set to MEASURMENT_DONE
-       * so that PE can clean any context allocated.
-       */
+      // no scan results
+      //
+      // Spec. doesnt say anything about such condition.
+      // Since section 7.4.6.2 (IEEE802.11k-2008) says-rrm report frame should contain
+      // one or more report IEs. It probably means dont send any respose if no matching
+      // BSS found. Moreover, there is no flag or field in measurement report IE(7.3.2.22)
+      // OR beacon report IE(7.3.2.22.6) that can be set to indicate no BSS found on a given channel.
+      //
+      // If we finished measurement on all the channels, we still need to
+      // send a xmit indication with moreToFollow set to MEASURMENT_DONE
+      // so that PE can clean any context allocated.
       if( measurementDone )
       {
 #if defined(FEATURE_WLAN_ESE_UPLOAD)
@@ -639,11 +634,8 @@ static eHalStatus sme_RrmSendScanResult( tpAniSirGlobal pMac,
 
   --------------------------------------------------------------------------*/
 
-static eHalStatus sme_RrmScanRequestCallback(tHalHandle halHandle,
-                                             void *pContext,
-                                             tANI_U8 sessionId,
-                                             tANI_U32 scanId,
-                                             eCsrScanStatus status)
+static eHalStatus sme_RrmScanRequestCallback(tHalHandle halHandle, void *pContext,
+                         tANI_U32 scanId, eCsrScanStatus status)
 {
 
    tANI_U16 interval;
@@ -664,9 +656,8 @@ static eHalStatus sme_RrmScanRequestCallback(tHalHandle halHandle,
       sme_RrmSendScanResult( pMac, 1, &pSmeRrmContext->channelList.ChannelList[pSmeRrmContext->currentIndex], false );
 
       pSmeRrmContext->currentIndex++; //Advance the current index.
-
-      /* Start the timer to issue next request. From timer tick get a random
-       number within 10ms and max randomization interval. */
+      //start the timer to issue next request.
+      //From timer tick get a random number within 10ms and max randmization interval.
       time_tick = vos_timer_get_system_ticks();
       interval = time_tick % (pSmeRrmContext->randnIntvl - 10 + 1) + 10;
 
@@ -1047,9 +1038,6 @@ static void rrmCalculateNeighborAPRoamScore(tpAniSirGlobal pMac, tpRrmNeighborRe
 {
     tpSirNeighborBssDescripton  pNeighborBssDesc;
     tANI_U32    roamScore = 0;
-#ifdef FEATURE_WLAN_ESE
-    tANI_U8     sessionId;
-#endif
 
     if (NULL == pNeighborReportDesc)
     {
@@ -1093,14 +1081,13 @@ static void rrmCalculateNeighborAPRoamScore(tpAniSirGlobal pMac, tpRrmNeighborRe
         }
     }
 #ifdef FEATURE_WLAN_ESE
-    sessionId = pNeighborReportDesc->sessionId;
-    /* It has come in the report so its the best score */
-    if (csrNeighborRoamIs11rAssoc(pMac, sessionId) == FALSE) {
-        /* IAPP Route so lets make use of this info
-         * save all AP, as the list does not come all the time
-         * Save and reuse till the next AP List comes to us.
-         * Even save our own MAC address. Will be useful next time around.
-         */
+    // It has come in the report so its the best score
+    if (csrNeighborRoamIs11rAssoc(pMac) == FALSE)
+    {
+        // IAPP Route so lets make use of this info
+        // save all AP, as the list does not come all the time
+        // Save and reuse till the next AP List comes to us.
+        // Even save our own MAC address. Will be useful next time around.
         roamScore += RRM_ROAM_SCORE_NEIGHBOR_IAPP_LIST;
     }
 #endif
@@ -1186,20 +1173,15 @@ eHalStatus sme_RrmProcessNeighborReport(tpAniSirGlobal pMac, void *pMsgBuf)
    tpRrmNeighborReportDesc  pNeighborReportDesc;
    tANI_U8 i = 0;
    VOS_STATUS vosStatus = VOS_STATUS_SUCCESS;
-   tANI_U8 sessionId;
 
-   /* Get the session id */
-   status = csrRoamGetSessionIdFromBSSID(pMac, (tCsrBssid *)pNeighborRpt->bssId,
-                                        (tANI_U32*) &sessionId);
-   if (HAL_STATUS_SUCCESS(status)) {
 #ifdef FEATURE_WLAN_ESE
-       /* Clear the cache for ESE. */
-       if (csrNeighborRoamIsESEAssoc(pMac, sessionId)) {
-           rrmLLPurgeNeighborCache(pMac,
+   // Clear the cache for ESE.
+   if (csrNeighborRoamIsESEAssoc(pMac))
+   {
+       rrmLLPurgeNeighborCache(pMac,
            &pMac->rrm.rrmSmeContext.neighborReportCache);
-       }
-#endif
    }
+#endif
 
    for (i = 0; i < pNeighborRpt->numNeighborReports; i++)
    {
@@ -1304,8 +1286,10 @@ eHalStatus sme_RrmMsgProcessor( tpAniSirGlobal pMac,  v_U16_t msg_type,
 
     \fn rrmIterMeasTimerHandle
 
-    \brief  Timer handler to handle the timeout condition when a specific BT
+    \brief  Timer handler to handlet the timeout condition when a specific BT
+
             stop event does not come back, in which case to restore back the
+
             heartbeat timer.
 
     \param  pMac - The handle returned by macOpen.

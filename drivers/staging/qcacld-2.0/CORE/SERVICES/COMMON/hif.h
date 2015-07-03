@@ -485,6 +485,7 @@ int hifWaitForPendingRecv(HIF_DEVICE *device);
 #define DIAG_TRANSFER_LIMIT 2048U /* maximum number of bytes that can be
                                     handled atomically by DiagRead/DiagWrite */
 
+#if !defined(QCA_WIFI_ISOC)
     /* API to handle HIF-specific BMI message exchanges, this API is synchronous
      * and only allowed to be called from a context that can block (sleep) */
 int HIFExchangeBMIMsg(HIF_DEVICE *device,
@@ -508,8 +509,7 @@ int HIFExchangeBMIMsg(HIF_DEVICE *device,
      */
 int HIFDiagReadAccess(HIF_DEVICE *hifDevice, A_UINT32 address, A_UINT32 *data);
 int HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbytes);
-void HIFDumpTargetMemory(HIF_DEVICE *hif_device, void *ramdump_base,
-                           u_int32_t address, u_int32_t size);
+
     /*
      * APIs to handle HIF specific diagnostic write accesses. These APIs are
      * synchronous and only allowed to be called from a context that can block (sleep).
@@ -522,6 +522,12 @@ void HIFDumpTargetMemory(HIF_DEVICE *hif_device, void *ramdump_base,
      */
 int HIFDiagWriteAccess(HIF_DEVICE *hifDevice, A_UINT32 address, A_UINT32 data);
 int HIFDiagWriteMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbytes);
+#else
+inline int HIFDiagReadAccess(HIF_DEVICE *hifDevice, A_UINT32 address, A_UINT32 *data) {return A_OK;};
+inline int HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbytes) {return A_OK;};
+inline int HIFDiagWriteAccess(HIF_DEVICE *hifDevice, A_UINT32 address, A_UINT32 data) {return A_OK;};
+inline int HIFDiagWriteMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbytes) {return A_OK;};
+#endif
 #if defined(HIF_PCI) && ! defined(A_SIMOS_DEVHOST)
 /*
  * This API allows the Host to access Target registers of a given
@@ -801,19 +807,6 @@ void sim_target_register_write(struct ol_softc *scn, u_int32_t addr, u_int32_t v
 
 #endif
 
-#ifdef IPA_UC_OFFLOAD
-/*
- * IPA micro controller data path offload feature enabled,
- * HIF should release copy engine related resource information to IPA UC
- * IPA UC will access hardware resource with released information
- */
-void HIFIpaGetCEResource(HIF_DEVICE *hif_device,
-                          A_UINT32 *ce_sr_base_paddr,
-                          A_UINT32 *ce_sr_ring_size,
-                          A_UINT32 *ce_reg_paddr);
-#endif /* IPA_UC_OFFLOAD */
-
-void HIFSetMailboxSwap(HIF_DEVICE  *device);
 #ifdef __cplusplus
 }
 #endif

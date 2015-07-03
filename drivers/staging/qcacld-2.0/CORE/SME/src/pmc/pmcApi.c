@@ -37,6 +37,7 @@
 
 #include "palTypes.h"
 #include "aniGlobal.h"
+#include "palTimer.h"
 #include "csrLinkList.h"
 #include "smsDebug.h"
 #include "pmcApi.h"
@@ -93,6 +94,7 @@ eHalStatus pmcOpen (tHalHandle hHal)
     pMac->pmc.bmpsEnabled = TRUE;
     pMac->pmc.standbyEnabled = TRUE;
     pMac->pmc.wowlEnabled = TRUE;
+    pMac->pmc.rfSuppliesVotedOff= FALSE;
 
     vos_mem_set(&(pMac->pmc.bmpsConfig), sizeof(tPmcBmpsConfigParams), 0);
     vos_mem_set(&(pMac->pmc.impsConfig), sizeof(tPmcImpsConfigParams), 0);
@@ -382,6 +384,94 @@ eHalStatus pmcClose (tHalHandle hHal)
     pmcCloseDeferredMsgList(pMac);
 
     return eHAL_STATUS_SUCCESS;
+}
+
+
+/******************************************************************************
+*
+* Name:  pmcSignalPowerEvent
+*
+* Description:
+*    Signals to PMC that a power event has occurred.
+*
+* Parameters:
+*    hHal - HAL handle for device
+*    event - the event that has occurred
+*
+* Returns:
+*    eHAL_STATUS_SUCCESS - signaling successful
+*    eHAL_STATUS_FAILURE - signaling not successful
+*
+******************************************************************************/
+eHalStatus pmcSignalPowerEvent (tHalHandle hHal, tPmcPowerEvent event)
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+#ifndef GEN6_ONWARDS
+    tSirMacHTMIMOPowerSaveState  htMimoPowerSaveState;
+#endif
+
+    pmcLog(pMac, LOG2, FL("Entering pmcSignalPowerEvent, event %d"), event);
+
+    /* Take action based on the event being signaled. */
+    switch (event)
+    {
+#ifndef GEN6_ONWARDS
+    case ePMC_SYSTEM_HIBERNATE:
+        return pmcEnterLowPowerState(hHal);
+
+    case ePMC_SYSTEM_RESUME:
+        return pmcExitLowPowerState(hHal);
+
+    case ePMC_HW_WLAN_SWITCH_OFF:
+        pMac->pmc.hwWlanSwitchState = ePMC_SWITCH_OFF;
+        return pmcEnterLowPowerState(hHal);
+
+    case ePMC_HW_WLAN_SWITCH_ON:
+        pMac->pmc.hwWlanSwitchState = ePMC_SWITCH_ON;
+        return pmcExitLowPowerState(hHal);
+
+    case ePMC_SW_WLAN_SWITCH_OFF:
+        pMac->pmc.swWlanSwitchState = ePMC_SWITCH_OFF;
+        return pmcEnterLowPowerState(hHal);
+
+    case ePMC_SW_WLAN_SWITCH_ON:
+        pMac->pmc.swWlanSwitchState = ePMC_SWITCH_ON;
+        return pmcExitLowPowerState(hHal);
+
+    case ePMC_BATTERY_OPERATION:
+        pMac->pmc.powerSource = BATTERY_POWER;
+
+        /* Turn on SMPS. */
+        if (pMac->pmc.smpsEnabled)
+        {
+            if (pMac->pmc.smpsConfig.mode == ePMC_DYNAMIC_SMPS)
+                htMimoPowerSaveState = eSIR_HT_MIMO_PS_DYNAMIC;
+            if (pMac->pmc.smpsConfig.mode == ePMC_STATIC_SMPS)
+                htMimoPowerSaveState = eSIR_HT_MIMO_PS_STATIC;
+            if (pmcSendMessage(hHal, eWNI_PMC_SMPS_STATE_IND, &htMimoPowerSaveState,
+                               sizeof(tSirMacHTMIMOPowerSaveState)) != eHAL_STATUS_SUCCESS)
+                return eHAL_STATUS_FAILURE;
+        }
+        return eHAL_STATUS_SUCCESS;
+
+    case ePMC_AC_OPERATION:
+        pMac->pmc.powerSource = AC_POWER;
+
+        /* Turn off SMPS. */
+        if (!pMac->pmc.smpsConfig.enterOnAc)
+        {
+            htMimoPowerSaveState = eSIR_HT_MIMO_PS_NO_LIMIT;
+            if (pmcSendMessage(hHal, eWNI_PMC_SMPS_STATE_IND, &htMimoPowerSaveState,
+                               sizeof(tSirMacHTMIMOPowerSaveState)) != eHAL_STATUS_SUCCESS)
+                return eHAL_STATUS_FAILURE;
+        }
+        return eHAL_STATUS_SUCCESS;
+#endif //GEN6_ONWARDS
+    default:
+        pmcLog(pMac, LOGE, FL("Invalid event %d"), event);
+        PMC_ABORT;
+        return eHAL_STATUS_FAILURE;
+    }
 }
 
 
@@ -1111,7 +1201,7 @@ eHalStatus pmcRegisterPowerSaveCheck (tHalHandle hHal, tANI_BOOLEAN (*checkRouti
 * Name:  pmcDeregisterPowerSaveCheck
 *
 * Description:
-*    Re-registers a routine that was previously registered with
+*    Reregisters a routine that was previously registered with
 *    pmcRegisterPowerSaveCheck.
 *
 * Parameters:
@@ -1564,7 +1654,7 @@ tANI_BOOLEAN pmcValidateConnectState( tHalHandle hHal )
       pmcLog(pMac, LOGW, "PMC: BT-AMP exists. BMPS cannot be entered");
       return eANI_BOOLEAN_FALSE;
    }
-   if ((vos_concurrent_open_sessions_running()) &&
+   if ((vos_concurrent_sessions_running()) &&
        (csrIsConcurrentInfraConnected( pMac ) ||
        (vos_get_concurrency_mode()& VOS_SAP) ||
        (vos_get_concurrency_mode()& VOS_P2P_GO)))
@@ -1594,8 +1684,7 @@ tANI_BOOLEAN pmcAllowImps( tHalHandle hHal )
     //All sessions must be disconnected to allow IMPS
     if ( !csrIsAllSessionDisconnected( pMac ) )
     {
-       pmcLog(pMac, LOGW,
-              "PMC: At-least one connected session. IMPS cannot be entered");
+       pmcLog(pMac, LOGW, "PMC: Atleast one connected session. IMPS cannot be entered");
        return eANI_BOOLEAN_FALSE;
     }
 
@@ -2006,9 +2095,9 @@ eHalStatus pmcDeregisterDeviceStateUpdateInd (tHalHandle hHal,
     \fn pmcReady
     \brief  fn to inform PMC that eWNI_SME_SYS_READY_IND has been sent to PE.
             This acts as a trigger to send a message to PE to update the power
-            save related config to FW. Note that if HDD configures any power
-            save related stuff before this API is invoked, PMC will buffer all
-            the configuration.
+            save related conig to FW. Note that if HDD configures any power save
+            related stuff before this API is invoked, PMC will buffer all the
+            configutaion.
     \param  hHal - The handle returned by macOpen.
     \return eHalStatus
   ---------------------------------------------------------------------------*/
@@ -2224,37 +2313,33 @@ skip_pmc_state_transition:
 /* ---------------------------------------------------------------------------
     \fn pmcEnterWowl
     \brief  Request that the device be brought to full power state.
-            Note 1: If "fullPowerReason" specified in this API is set to
-            eSME_FULL_PWR_NEEDED_BY_HDD, PMC will clear any "buffered wowl"
-            requests and also clear any "buffered BMPS requests by HDD".
-            Assumption is that since HDD is requesting full power, we need to
-            undo any previous HDD requests for BMPS (using sme_RequestBmps) or
-            WoWL (using sme_EnterWoWL). If the reason is specified anything
-            other than above, the buffered requests for BMPS and WoWL
+            Note 1: If "fullPowerReason" specificied in this API is set to
+            eSME_FULL_PWR_NEEDED_BY_HDD, PMC will clear any "buffered wowl" requests
+            and also clear any "buffered BMPS requests by HDD". Assumption is that since
+            HDD is requesting full power, we need to undo any previous HDD requests for
+            BMPS (using sme_RequestBmps) or WoWL (using sme_EnterWoWL). If the reason is
+            specified anything other than above, the buffered requests for BMPS and WoWL
             will not be cleared.
-            Note 2: Requesting full power (no matter what the fullPowerReason
-            is) doesn't disable the "auto bmps timer" (if it is enabled) or
-            clear any "buffered uapsd request".
-            Note 3: When the device finally enters Full Power PMC will start
-            a timer if any of the following holds true:
+            Note 2: Requesting full power (no matter what the fullPowerReason is) doesn't
+            disable the "auto bmps timer" (if it is enabled) or clear any "buffered uapsd
+            request".
+            Note 3: When the device finally enters Full Power PMC will start a timer
+            if any of the following holds true:
             - Auto BMPS mode is enabled
             - Uapsd request is pending
             - HDD's request for BMPS is pending
             - HDD's request for WoWL is pending
-            On timer expiry PMC will attempt to put the device in BMPS mode
-            if following (in addition to those listed above) holds true:
+            On timer expiry PMC will attempt to put the device in BMPS mode if following
+            (in addition to those listed above) holds true:
             - Polling of all modules through the Power Save Check routine passes
             - STA is associated to an access point
     \param  hHal - The handle returned by macOpen.
-    \param  - enterWowlCallbackRoutine Callback routine invoked in case of
-              success/failure
-    \param  - enterWowlCallbackContext - Cookie to be passed back during
-              callback
-    \param  - wakeReasonIndCB Callback routine invoked for Wake Reason
-              Indication
+    \param  - enterWowlCallbackRoutine Callback routine invoked in case of success/failure
+    \param  - enterWowlCallbackContext -  Cookie to be passed back during callback
+    \param  - wakeReasonIndCB Callback routine invoked for Wake Reason Indication
     \param  - wakeReasonIndCBContext -  Cookie to be passed back during callback
-    \param  - fullPowerReason - Reason why this API is being invoked. SME needs
-              to distinguish between BAP and HDD requests
+    \param  - fullPowerReason - Reason why this API is being invoked. SME needs to
+              distinguish between BAP and HDD requests
     \return eHalStatus - status
      eHAL_STATUS_SUCCESS - device brought to full power state
      eHAL_STATUS_FAILURE - device cannot be brought to full power state
@@ -2337,7 +2422,7 @@ eHalStatus pmcEnterWowl (
    }
 
    /* Is there a pending UAPSD request? HDD should have triggered QoS
-      module to do the necessary cleanup before triggering WOWL*/
+      module to do the necessary cleanup before triggring WOWL*/
    if(pMac->pmc.uapsdSessionRequired)
    {
       pmcLog(pMac, LOGE, "PMC: Cannot request WOWL. Pending UAPSD request");
@@ -2478,7 +2563,7 @@ eHalStatus pmcSetHostOffload (tHalHandle hHal, tpSirHostOffloadReq pRequest,
     \param  hHal - The handle returned by macOpen.
     \param  pRequest - Pointer to the Keep Alive.
     \return eHalStatus
-            eHAL_STATUS_FAILURE  Cannot set the keep alive.
+            eHAL_STATUS_FAILURE  Cannot set the keepalive.
             eHAL_STATUS_SUCCESS  Request accepted.
   ---------------------------------------------------------------------------*/
 eHalStatus pmcSetKeepAlive (tHalHandle hHal, tpSirKeepAliveReq pRequest, tANI_U8 sessionId)
@@ -3390,10 +3475,9 @@ eHalStatus pmcTriggerBatchScanResultInd
 
 /* -----------------------------------------------------------------------------
     \fn pmcStopBatchScanInd
-    \brief  Stop batch scan request in FW
+    \brief  Stoping batch scan request in FW
     \param  hHal - The handle returned by macOpen.
-    \param  callbackRoutine - Pointer to stop batch scan request
-                              callback routine
+    \param  callbackRoutine - Pointer to stop batch scan request callback routine
     \return eHalStatus
              eHAL_STATUS_FAILURE  Cannot set batch scan request
              eHAL_STATUS_SUCCESS  Request accepted.
@@ -3619,7 +3703,7 @@ eHalStatus pmcOffloadDeregisterPowerSaveCheck(tHalHandle hHal,
             else
             {
                 smsLog(pMac, LOGE,
-                       FL("Cannot remove power save check routine list entry"));
+                       FL("Cannot remove powersave check routine list entry"));
                 return eHAL_STATUS_FAILURE;
             }
             return eHAL_STATUS_SUCCESS;
@@ -3687,7 +3771,7 @@ eHalStatus pmcOffloadDeregisterDeviceStateUpdateInd(tHalHandle hHal,
                                  pEntry, FALSE))
             {
                 smsLog(pMac, LOGE,
-                    FL("Cannot remove device state update ind entry list"));
+                    FL("Cannot remove devicestate update ind entry list"));
                 return eHAL_STATUS_FAILURE;
             }
             vos_mem_free(pDeviceStateUpdateIndEntry);
@@ -3723,7 +3807,7 @@ eHalStatus PmcOffloadEnableStaModePowerSave(tHalHandle hHal,
         {
             /* Successfully Queued Enabling Sta Mode Ps Request */
             smsLog(pMac, LOG2,
-                   FL("Successful Queued Enabling Sta Mode Ps Request"));
+                   FL("Successfull Queued Enabling Sta Mode Ps Request"));
 
             pmc->configStaPsEnabled = TRUE;
             return eHAL_STATUS_SUCCESS;
@@ -3741,7 +3825,7 @@ eHalStatus PmcOffloadEnableStaModePowerSave(tHalHandle hHal,
         /*
          * configStaPsEnabled is the master flag
          * to enable sta mode power save
-         * If it is already set Auto Power save Timer
+         * If it is already set Auto Powersave Timer
          * will take care of enabling Power Save
          */
         smsLog(pMac, LOGE,

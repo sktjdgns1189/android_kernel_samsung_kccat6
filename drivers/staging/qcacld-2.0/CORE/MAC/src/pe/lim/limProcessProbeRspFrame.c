@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -100,13 +100,11 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
     tANI_U8 qosEnabled =    false;
     tANI_U8 wmeEnabled =    false;
 
-    if (!psessionEntry)
+    if (psessionEntry)
     {
-        limLog(pMac, LOGE, FL("psessionEntry is NULL") );
-        return;
-    }
-    limLog(pMac,LOG1,"SessionId:%d ProbeRsp Frame is received",
+        limLog(pMac,LOG1,"SessionId:%d ProbeRsp Frame is received",
                psessionEntry->peSessionId);
+    }
 
     pProbeRsp = vos_mem_malloc(sizeof(tSirProbeRespBeacon));
     if ( NULL == pProbeRsp )
@@ -117,6 +115,8 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
 
     pProbeRsp->ssId.length              = 0;
     pProbeRsp->wpa.length               = 0;
+    pProbeRsp->propIEinfo.apName.length = 0;
+
 
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
 
@@ -242,6 +242,16 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
             * our Probe Request sent upon reaching
             * heart beat threshold
             */
+            #if 0
+            if (wlan_cfgGetStr(pMac,
+                          WNI_CFG_BSSID,
+                          currentBssId,
+                          &cfg) != eSIR_SUCCESS)
+            {
+                /// Could not get BSSID from CFG. Log error.
+                limLog(pMac, LOGP, FL("could not retrieve BSSID"));
+            }
+            #endif //TO SUPPORT BT-AMP
             sirCopyMacAddr(currentBssId,psessionEntry->bssId);
 
             if ( !vos_mem_compare(currentBssId, pHdr->bssId, sizeof(tSirMacAddr)) )
@@ -264,7 +274,8 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
 
             if (psessionEntry->limSystemRole == eLIM_STA_ROLE)
             {
-                if (pProbeRsp->channelSwitchPresent)
+                if (pProbeRsp->channelSwitchPresent ||
+                    pProbeRsp->propIEinfo.propChannelSwitchPresent)
                 {
                     limUpdateChannelSwitch(pMac, pProbeRsp, psessionEntry);
                 }
@@ -302,8 +313,10 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
                     // If needed, downgrade the EDCA parameters
                     limSetActiveEdcaParams(pMac, psessionEntry->gLimEdcaParams, psessionEntry);
 
-                    limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive,
-                                      pStaDs->bssId);
+                    if (pStaDs->aniPeer == eANI_BOOLEAN_TRUE)
+                        limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive, pStaDs->bssId, eANI_BOOLEAN_TRUE);
+                    else
+                        limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive, pStaDs->bssId, eANI_BOOLEAN_FALSE);
                 }
                 else
                     PELOGE(limLog(pMac, LOGE, FL("Self Entry missing in Hash Table"));)
@@ -344,6 +357,8 @@ limProcessProbeRspFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo)
 
     pProbeRsp->ssId.length              = 0;
     pProbeRsp->wpa.length               = 0;
+    pProbeRsp->propIEinfo.apName.length = 0;
+
 
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
 

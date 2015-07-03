@@ -843,19 +843,8 @@ CE_per_engine_servicereap(struct hif_pci_softc *sc, unsigned int CE_id)
 
     A_TARGET_ACCESS_BEGIN(targid);
 
-    /* Since this function is called from both user context and
-     * tasklet context the spinlock has to lock the bottom halves.
-     * This fix assumes that ATH_11AC_TXCOMPACT flag is always
-     * enabled in TX polling mode. If this is not the case, more
-     * bottom halve spin lock changes are needed. Due to data path
-     * performance concern, after internal discussion we've decided
-     * to make minimum change, i.e., only address the issue occurred
-     * in this function. The possible negative effect of this minimum
-     * change is that, in the future, if some other function will also
-     * be opened to let the user context to use, those cases need to be
-     * addressed by change spin_lock to spin_lock_bh also. */
+    adf_os_spin_lock(&sc->target_lock);
 
-    adf_os_spin_lock_bh(&sc->target_lock);
 
     if (CE_state->send_cb) {
        {
@@ -864,22 +853,22 @@ CE_per_engine_servicereap(struct hif_pci_softc *sc, unsigned int CE_id)
                         &buf, &nbytes, &id, &sw_idx, &hw_idx) == A_OK)
             {
                 if(CE_id != CE_HTT_H2T_MSG){
-                    adf_os_spin_unlock_bh(&sc->target_lock);
+                    adf_os_spin_unlock(&sc->target_lock);
                     CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id,
                                       sw_idx, hw_idx);
-                    adf_os_spin_lock_bh(&sc->target_lock);
+                    adf_os_spin_lock(&sc->target_lock);
                 }else{
                      struct HIF_CE_pipe_info *pipe_info = (struct HIF_CE_pipe_info *)CE_context;
 
-                     adf_os_spin_lock_bh(&pipe_info->completion_freeq_lock);
+                     adf_os_spin_lock(&pipe_info->completion_freeq_lock);
                      pipe_info->num_sends_allowed++;
-                     adf_os_spin_unlock_bh(&pipe_info->completion_freeq_lock);
+                     adf_os_spin_unlock(&pipe_info->completion_freeq_lock);
                 }
             }
         }
     }
 
-    adf_os_spin_unlock_bh(&sc->target_lock);
+    adf_os_spin_unlock(&sc->target_lock);
     A_TARGET_ACCESS_END(targid);
 }
 
@@ -1605,7 +1594,7 @@ CE_fini(struct CE_handle *copyeng)
         if (CE_state->dest_ring->base_addr_owner_space_unaligned)
             pci_free_consistent(scn->sc_osdev->bdev,
                    (CE_state->dest_ring->nentries * sizeof(struct CE_dest_desc) + CE_DESC_RING_ALIGN),
-                   CE_state->dest_ring->base_addr_owner_space_unaligned, CE_state->dest_ring->base_addr_CE_space);
+                   CE_state->dest_ring->base_addr_owner_space, CE_state->dest_ring->base_addr_CE_space);
         A_FREE(CE_state->dest_ring);
 
         /* epping */
@@ -1616,63 +1605,3 @@ CE_fini(struct CE_handle *copyeng)
     }
     A_FREE(CE_state);
 }
-
-#ifdef IPA_UC_OFFLOAD
-/*
- * Copy engine should release resource to micro controller
- * Micro controller needs
-   - Copy engine source descriptor base address
-   - Copy engine source descriptor size
-   - PCI BAR address to access copy engine regiser
- */
-void CE_ipaGetResource(struct CE_handle *ce,
-            a_uint32_t *ce_sr_base_paddr,
-            a_uint32_t *ce_sr_ring_size,
-            a_uint32_t *ce_reg_paddr)
-{
-    struct CE_state *CE_state = (struct CE_state *)ce;
-    a_uint32_t ring_loop;
-    struct CE_src_desc *ce_desc;
-    a_uint32_t bar_value;
-    struct hif_pci_softc *sc = CE_state->sc;
-
-    if (CE_RUNNING != CE_state->state)
-    {
-        *ce_sr_base_paddr = 0;
-        *ce_sr_ring_size = 0;
-        return;
-    }
-
-    /* Update default value for descriptor */
-    for (ring_loop = 0; ring_loop < CE_state->src_ring->nentries; ring_loop++)
-    {
-        ce_desc = (struct CE_src_desc *)
-                  ((char *)CE_state->src_ring->base_addr_owner_space +
-                   ring_loop * (sizeof(struct CE_src_desc)));
-        /* Source pointer and ID,
-         * should be updated by uc dynamically
-         * ce_desc->src_ptr   = buffer;
-         * ce_desc->meta_data = transfer_id; */
-        /* No Byte SWAP */
-        ce_desc->byte_swap = 0;
-        /* DL size
-         * pdev->download_len =
-         *   sizeof(struct htt_host_tx_desc_t) +
-         *   HTT_TX_HDR_SIZE_OUTER_HDR_MAX +
-         *   HTT_TX_HDR_SIZE_802_1Q +
-         *   HTT_TX_HDR_SIZE_LLC_SNAP +
-         *   ol_cfg_tx_download_size(pdev->ctrl_pdev); */
-        ce_desc->nbytes = 60;
-        /* Single fragment No gather */
-        ce_desc->gather = 0;
-    }
-
-    /* Get BAR address */
-    hif_read_bar(CE_state->sc, &bar_value);
-
-    *ce_sr_base_paddr = (a_uint32_t)CE_state->src_ring->base_addr_CE_space;
-    *ce_sr_ring_size = (a_uint32_t)CE_state->src_ring->nentries;
-    *ce_reg_paddr = bar_value + CE_BASE_ADDRESS(CE_state->id) + SR_WR_INDEX_ADDRESS;
-    return;
-}
-#endif /* IPA_UC_OFFLOAD */

@@ -51,6 +51,82 @@
 
 static void limUpdateConfig(tpAniSirGlobal pMac,tpPESession psessionEntry);
 
+#if 0
+/**
+ * limGetCfgIdOfDefaultKeyid()
+ *
+ *FUNCTION:
+ * This function is called to get CFG ID of default key id
+ *
+ *PARAMS:
+ *
+ *LOGIC:
+ *
+ *ASSUMPTIONS:
+ * NA
+ *
+ *NOTE:
+ * NA
+ *
+ * @param  dkid     - Value of default key id
+ * @return dkCfgId  - CFG ID of key corresponding to default key Id
+ */
+
+static tANI_U32
+limGetCfgIdOfDefaultKeyid(tANI_U32 dkid)
+{
+    if (dkid == WNI_CFG_WEP_DEFAULT_KEYID_0)
+        return WNI_CFG_WEP_DEFAULT_KEY_1;
+    else if (dkid == WNI_CFG_WEP_DEFAULT_KEYID_1)
+        return WNI_CFG_WEP_DEFAULT_KEY_2;
+    else if (dkid == WNI_CFG_WEP_DEFAULT_KEYID_2)
+        return WNI_CFG_WEP_DEFAULT_KEY_3;
+    else // dkid == WNI_CFG_WEP_DEFAULT_KEYID_3
+        return WNI_CFG_WEP_DEFAULT_KEY_4;
+} /*** end limGetCfgIdOfDefaultKeyid() ***/
+#endif
+
+
+/**
+ * limSetDefaultKeyIdAndKeys()
+ *
+ *FUNCTION:
+ * This function is called while applying configuration
+ * during JOIN/REASSOC/START_BSS.
+ *
+ *PARAMS:
+ *
+ *LOGIC:
+ *
+ *ASSUMPTIONS:
+ * NA
+ *
+ *NOTE:
+ *
+ * @param  pMac  - Pointer to Global MAC structure
+ * @return None
+ */
+
+static void
+limSetDefaultKeyIdAndKeys(tpAniSirGlobal pMac)
+{
+#ifdef FIXME_GEN6
+    tANI_U32 val;
+    tANI_U32 dkCfgId;
+
+    PELOG1(limLog(pMac, LOG1, FL("Setting default keys at SP"));)
+
+    if (wlan_cfgGetInt(pMac, WNI_CFG_WEP_DEFAULT_KEYID,
+                  &val) != eSIR_SUCCESS)
+    {
+        limLog(pMac, LOGP,
+               FL("Unable to retrieve defaultKeyId from CFG"));
+    }
+    dkCfgId = limGetCfgIdOfDefaultKeyid(val);
+#endif
+
+} /*** end limSetDefaultKeyIdAndKeys() ***/
+
 /** -------------------------------------------------------------
 \fn limSetCfgProtection
 \brief sets lim global cfg cache from the config.
@@ -148,48 +224,7 @@ static tSirRetStatus limUpdateTriggerStaBkScanFlag(tpAniSirGlobal pMac)
 
     return eSIR_FAILURE;
 }
-/**
- * limHandleParamUpdate()
- *
- *FUNCTION:
- * This function is use to post a message whenever need indicate
- * there is update of config parameter.
- *
- *PARAMS:
- *
- *LOGIC:
- *
- *ASSUMPTIONS:
- * NA
- *
- *NOTE:
- *
- * @param  pMac  - Pointer to Global MAC structure
- * @param  cfgId - ID of CFG parameter that got updated
- * @return None
- */
-void
-limHandleParamUpdate(tpAniSirGlobal pMac, eUpdateIEsType cfgId)
-{
-    tSirMsgQ msg = {0};
-    tANI_U32 status;
 
-    PELOG3(limLog(pMac, LOG3, FL("Handling CFG parameter id %X update"), cfgId);)
-    switch (cfgId)
-    {
-    case eUPDATE_IE_PROBE_BCN:
-    {
-        msg.type = SIR_LIM_UPDATE_BEACON;
-        status = limPostMsgApi(pMac, &msg);
-
-        if (status != TX_SUCCESS)
-        PELOGE(limLog(pMac, LOGE, FL("Failed limPostMsgApi %u"), status);)
-        break;
-    }
-    default:
-        break;
-    }
-}
 
 /**
  * limHandleCFGparamUpdate()
@@ -225,6 +260,13 @@ limHandleCFGparamUpdate(tpAniSirGlobal pMac, tANI_U32 cfgId)
     switch (cfgId)
     {
         case WNI_CFG_WEP_DEFAULT_KEYID:
+
+            // !!LAC - when the default KeyID is changed, force all of the
+            // keys and the keyID to be reprogrammed.  this allows the
+            // keys to change after the initial setting of the keys when the CFG was
+            // applied at association time through CFG changes of the keys.
+            limSetDefaultKeyIdAndKeys( pMac );
+
             break;
 
         case WNI_CFG_EXCLUDE_UNENCRYPTED:
@@ -234,8 +276,12 @@ limHandleCFGparamUpdate(tpAniSirGlobal pMac, tANI_U32 cfgId)
                 limLog(pMac, LOGP,
                    FL("Unable to retrieve excludeUnencr from CFG"));
             }
+#if 0
+            halSetSpExclUndecrypted(pMac, (tHalBitVal) val);
+#else
             limLog(pMac, LOGE,
                    FL("Unsupported CFG: WNI_CFG_EXCLUDE_UNENCRYPTED"));
+#endif
 
             break;
 
@@ -526,6 +572,8 @@ limHandleCFGparamUpdate(tpAniSirGlobal pMac, tANI_U32 cfgId)
             PELOGE(limLog(pMac, LOGE, FL("could not retrieve Dot11 Mode  CFG"));)
             break;
         }
+        /* TODO */
+        //psessionEntry->dot11mode = val1;    //// un comment this line ...FORBUILD -TEMPFIX.. HOW TO GET sessionEntry?????
         break;
     case WNI_CFG_ADDBA_REQ_DECLINE:
         if(wlan_cfgGetInt(pMac, WNI_CFG_ADDBA_REQ_DECLINE, &val1) != eSIR_SUCCESS) {
@@ -608,9 +656,14 @@ limApplyConfiguration(tpAniSirGlobal pMac,tpPESession psessionEntry)
 
     PELOG2(limLog(pMac, LOG2, FL("Applying config"));)
 
+    limInitWdsInfoParams(pMac);
+
     psessionEntry->limSentCapsChangeNtf = false;
 
     limGetPhyMode(pMac, &phyMode, psessionEntry);
+
+    // Set default keyId and keys
+    limSetDefaultKeyIdAndKeys(pMac);
 
     limUpdateConfig(pMac,psessionEntry);
 
@@ -672,20 +725,19 @@ limUpdateConfig(tpAniSirGlobal pMac,tpPESession psessionEntry)
 {
     tANI_U32 val;
 
+    #if 0
+    if (wlan_cfgGetStr(pMac, WNI_CFG_STA_ID, pMac->lim.gLimMyMacAddr, &len) != eSIR_SUCCESS)
+        limLog(pMac, LOGP, FL("cfg get sta id failed"));
+    #endif //To SUPPORT BT-AMP
     sirCopyMacAddr(pMac->lim.gLimMyMacAddr,psessionEntry->selfMacAddr);
 
     if (wlan_cfgGetInt(pMac, WNI_CFG_SHORT_PREAMBLE, &val) != eSIR_SUCCESS)
         limLog(pMac, LOGP, FL("cfg get short preamble failed"));
     psessionEntry->beaconParams.fShortPreamble = (val) ? 1 : 0;
 
-    /* In STA case this parameter is filled during the join request */
-    if (psessionEntry->limSystemRole == eLIM_AP_ROLE ||
-        psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE)
-    {
-        if (wlan_cfgGetInt(pMac, WNI_CFG_WME_ENABLED, &val) != eSIR_SUCCESS)
-            limLog(pMac, LOGP, FL("cfg get wme enabled failed"));
-        psessionEntry->limWmeEnabled = (val) ? 1 : 0;
-    }
+    if (wlan_cfgGetInt(pMac, WNI_CFG_WME_ENABLED, &val) != eSIR_SUCCESS)
+        limLog(pMac, LOGP, FL("cfg get wme enabled failed"));
+    psessionEntry->limWmeEnabled = (val) ? 1 : 0;
 
     if (wlan_cfgGetInt(pMac, WNI_CFG_WSM_ENABLED, &val) != eSIR_SUCCESS)
         limLog(pMac, LOGP, FL("cfg get wsm enabled failed"));
@@ -696,14 +748,11 @@ limUpdateConfig(tpAniSirGlobal pMac,tpPESession psessionEntry)
         PELOGE(limLog(pMac, LOGE, FL("Can't enable WSM without WME"));)
         psessionEntry->limWsmEnabled = 0;
     }
-    /* In STA , this parameter is filled during the join request */
-    if (psessionEntry->limSystemRole== eLIM_AP_ROLE ||
-        psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE)
-    {
-        if (wlan_cfgGetInt(pMac, WNI_CFG_QOS_ENABLED, &val) != eSIR_SUCCESS)
-            limLog(pMac, LOGP, FL("cfg get qos enabled failed"));
-        psessionEntry->limQosEnabled = (val) ? 1 : 0;
-    }
+
+    if (wlan_cfgGetInt(pMac, WNI_CFG_QOS_ENABLED, &val) != eSIR_SUCCESS)
+        limLog(pMac, LOGP, FL("cfg get qos enabled failed"));
+    psessionEntry->limQosEnabled = (val) ? 1 : 0;
+
     if (wlan_cfgGetInt(pMac, WNI_CFG_HCF_ENABLED, &val) != eSIR_SUCCESS)
         limLog(pMac, LOGP, FL("cfg get hcf enabled failed"));
     psessionEntry->limHcfEnabled = (val) ? 1 : 0;
@@ -725,12 +774,12 @@ limUpdateConfig(tpAniSirGlobal pMac,tpPESession psessionEntry)
     if(wlan_cfgGetInt(pMac, WNI_CFG_ASSOC_STA_LIMIT, &val) != eSIR_SUCCESS) {
         limLog( pMac, LOGP, FL( "cfg get assoc sta limit failed" ));
     }
-    if(val >= WNI_CFG_ASSOC_STA_LIMIT_STAMAX)
+    if( (!WDI_getFwWlanFeatCaps(SAP32STA)) && (val >= WNI_CFG_ASSOC_STA_LIMIT_STAMAX))
     {
         if(ccmCfgSetInt(pMac, WNI_CFG_ASSOC_STA_LIMIT, WNI_CFG_ASSOC_STA_LIMIT_STADEF,
             NULL, eANI_BOOLEAN_FALSE) != eHAL_STATUS_SUCCESS)
         {
-           limLog( pMac, LOGP, FL( "cfg set assoc sta limit failed" ));
+           limLog( pMac, LOGP, FL( "cfg get assoc sta limit failed" ));
         }
         val = WNI_CFG_ASSOC_STA_LIMIT_STADEF;
     }

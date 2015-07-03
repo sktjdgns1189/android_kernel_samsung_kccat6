@@ -74,7 +74,7 @@ when           who                what, where, why
 #include "vos_types.h"
 
 #include "p2p_Api.h"
-#include "sme_Api.h"
+
 /*----------------------------------------------------------------------------
  * Preprocessor Definitions and Constants
  * -------------------------------------------------------------------------*/
@@ -93,7 +93,7 @@ when           who                what, where, why
   ------------------------------------------------------------------------*/
 
 #define       MAX_SSID_LEN                 32
-#define       MAX_ACL_MAC_ADDRESS          32
+#define       MAX_ACL_MAC_ADDRESS          16
 #define       AUTO_CHANNEL_SELECT          0
 #define       MAX_ASSOC_IND_IE_LEN         255
 
@@ -106,13 +106,6 @@ when           who                what, where, why
 #define       MAX_TEXT_SIZE                32
 
 #define       MAX_CHANNEL_LIST_LEN         256
-#ifdef WLAN_FEATURE_MBSSID
-#define       VOS_MAX_NO_OF_SAP_MODE       2 // max # of SAP
-#else
-#define       VOS_MAX_NO_OF_SAP_MODE       1 // max # of SAP
-#endif
-#define       SAP_MAX_NUM_SESSION          5
-#define       SAP_MAX_OBSS_STA_CNT         1 // max # of OBSS STA
 
 /*--------------------------------------------------------------------------
   reasonCode take form 802.11 standard Table 7-22 to be passed to WLANSAP_DisassocSta api.
@@ -201,15 +194,6 @@ typedef enum {
     eSAP_UNKNOWN_STA_JOIN, /* Event send when a STA in neither white list or black list tries to associate in softap mode */
     eSAP_MAX_ASSOC_EXCEEDED, /* Event send when a new STA is rejected association since softAP max assoc limit has reached */
     eSAP_CHANNEL_CHANGE_EVENT,
-    eSAP_DFS_CAC_START,
-    eSAP_DFS_CAC_END,
-    eSAP_DFS_RADAR_DETECT,
-    eSAP_DFS_NOL_GET,  /* Event sent when user need to get the DFS NOL from CNSS */
-    eSAP_DFS_NOL_SET,  /* Event sent when user need to set the DFS NOL to CNSS */
-    eSAP_DFS_NO_AVAILABLE_CHANNEL, /* No ch available after DFS RADAR detect */
-#ifdef FEATURE_WLAN_AP_AP_ACS_OPTIMIZE
-    eSAP_ACS_SCAN_SUCCESS_EVENT,
-#endif
 } eSapHddEvent;
 
 typedef enum {
@@ -228,11 +212,6 @@ typedef enum {
     eSAP_FALSE,
     eSAP_TRUE,
 }eSapBool;
-
-typedef enum {
-    eSAP_DFS_NOL_CLEAR,
-    eSAP_DFS_NOL_RANDOMIZE,
-}eSapDfsNolType;
 
 /*---------------------------------------------------------------------------
 SAP PAL "status" and "reason" error code defines
@@ -310,7 +289,6 @@ typedef struct sap_StationAssocReassocCompleteEvent_s {
     tANI_U32     assocRespLength;
     tANI_U8*     assocRespPtr;
     tANI_U8      timingMeasCap;
-    tSirSmeChanInfo chan_info;
 } tSap_StationAssocReassocCompleteEvent;
 
 typedef struct sap_StationDisassocCompleteEvent_s {
@@ -401,12 +379,6 @@ typedef struct sap_MaxAssocExceededEvent_s {
 typedef struct sap_OperatingChannelChangeEvent_s {
    tANI_U8 operatingChannel;
 } tSap_OperatingChannelChangeEvent;
-
-typedef struct sap_DfsNolInfo_s {
-   v_U16_t   sDfsList;       /* size of pDfsList in byte */
-   v_PVOID_t pDfsList;       /* pointer to pDfsList buffer */
-} tSap_DfsNolInfo;
-
 /*
    This struct will be filled in and passed to tpWLAN_SAPEventCB that is provided during WLANSAP_StartBss call
    The event id corresponding to structure  in the union is defined in comment next to the structure
@@ -431,7 +403,6 @@ typedef struct sap_Event_s {
         tSap_UnknownSTAJoinEvent                  sapUnknownSTAJoin; /* eSAP_UNKNOWN_STA_JOIN */
         tSap_MaxAssocExceededEvent                sapMaxAssocExceeded; /* eSAP_MAX_ASSOC_EXCEEDED */
         tSap_OperatingChannelChangeEvent          sapChannelChange; /* eSAP_CHANNEL_CHANGE_EVENT */
-        tSap_DfsNolInfo                           sapDfsNolInfo;    /*eSAP_DFS_NOL_XXX */
     } sapevt;
 } tSap_Event, *tpSap_Event;
 
@@ -462,8 +433,8 @@ typedef struct sap_Config {
     v_U8_t          dtim_period;     /* dtim interval */
     v_U8_t          num_accept_mac;
     v_U8_t          num_deny_mac;
-    /* Max ie length 255 * 2(WPA+RSN) + 2 bytes(vendor specific ID) * 2 */
-    v_U8_t          RSNWPAReqIE[(SIR_MAC_MAX_IE_LENGTH * 2) + 4];
+    v_U8_t          *pRSNWPAReqIE;   //If not null, it has the IE byte stream for RSN /WPA
+
     v_U8_t          countryCode[WNI_CFG_COUNTRY_CODE_LEN];  //it is ignored if [0] is 0.
     v_U8_t          RSNAuthType;
     v_U8_t          RSNEncryptType;
@@ -487,48 +458,15 @@ typedef struct sap_Config {
     v_BOOL_t        enOverLapCh;
     char            acsAllowedChnls[MAX_CHANNEL_LIST_LEN];
     v_U16_t         acsBandSwitchThreshold;
-    v_BOOL_t        apAutoChannelSelection;
-    v_U8_t          apStartChannelNum;
-    v_U8_t          apEndChannelNum;
-    v_U8_t          apOperatingBand;
-
-#ifdef FEATURE_WLAN_AP_AP_ACS_OPTIMIZE
-    v_U8_t          skip_acs_scan_status;
-    v_U8_t          skip_acs_scan_range1_stch;
-    v_U8_t          skip_acs_scan_range1_endch;
-    v_U8_t          skip_acs_scan_range2_stch;
-    v_U8_t          skip_acs_scan_range2_endch;
-#endif
 
 #ifdef WLAN_FEATURE_11W
     v_BOOL_t        mfpRequired;
     v_BOOL_t        mfpCapable;
 #endif
-#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
-    v_U8_t          cc_switch_mode;
-#endif
-
-    v_U16_t    probeRespIEsBufferLen;
-    v_PVOID_t  pProbeRespIEsBuffer; /* buffer for addn ies comes from hostapd*/
-
-    v_U16_t    assocRespIEsLen;
-    v_PVOID_t  pAssocRespIEsBuffer; /* buffer for addn ies comes from hostapd*/
-
-    v_U16_t    probeRespBcnIEsLen;
-    v_PVOID_t  pProbeRespBcnIEsBuffer; /* buffer for addn ies comes from hostapd*/
-
 } tsap_Config_t;
 
-#ifdef FEATURE_WLAN_AP_AP_ACS_OPTIMIZE
 typedef enum {
-    eSAP_DO_NEW_ACS_SCAN,
-    eSAP_DO_PAR_ACS_SCAN,
-    eSAP_SKIP_ACS_SCAN
-} tSap_skip_acs_scan;
-#endif
-
-typedef enum {
-     eSAP_WPS_PROBE_RSP_IE,
+    eSAP_WPS_PROBE_RSP_IE,
     eSAP_WPS_BEACON_IE,
     eSAP_WPS_ASSOC_RSP_IE
 } eSapWPSIE_CODE;
@@ -542,99 +480,6 @@ typedef struct sSapText {
     v_U8_t num_text;
     v_U8_t text[MAX_TEXT_SIZE];
 } tSapText;
-
-typedef enum
-{
-    eSAP_DFS_DO_NOT_SKIP_CAC,
-    eSAP_DFS_SKIP_CAC
-} eSapDfsCACState_t;
-
-typedef enum
-{
-    eSAP_DFS_CHANNEL_USABLE,
-    eSAP_DFS_CHANNEL_AVAILABLE,
-    eSAP_DFS_CHANNEL_UNAVAILABLE
-} eSapDfsChanStatus_t;
-
-typedef struct sSapDfsNolInfo
-{
-    v_U8_t              dfs_channel_number;
-    eSapDfsChanStatus_t radar_status_flag;
-    v_U64_t             radar_found_timestamp;
-} tSapDfsNolInfo;
-
-typedef struct sSapDfsInfo
-{
-    vos_timer_t         sap_dfs_cac_timer;
-    v_U8_t              sap_radar_found_status;
-    /*
-     * New channel to move to when a  Radar is
-     * detected on current Channel
-     */
-    v_U8_t              target_channel;
-    v_U8_t              last_radar_found_channel;
-    v_U8_t              ignore_cac;
-    eSapDfsCACState_t   cac_state;
-    v_U8_t              user_provided_target_channel;
-
-    /* Requests for Channel Switch Announcement IE
-     * generation and transmission
-     */
-    v_U8_t              csaIERequired;
-    v_U8_t              numCurrentRegDomainDfsChannels;
-    tSapDfsNolInfo      sapDfsChannelNolList[NUM_5GHZ_CHANNELS];
-    v_U8_t              is_dfs_cac_timer_running;
-    /*
-     * New channel width and new channel bonding mode
-     * will only be updated via channel fallback mechanism
-     */
-    tANI_U8             orig_cbMode;
-    tANI_U8             orig_chanWidth;
-    tANI_U8             new_chanWidth;
-    tANI_U8             new_cbMode;
-
-    /*
-     * INI param to enable/disable SAP W53
-     * channel operation.
-     */
-    v_U8_t              is_dfs_w53_disabled;
-
-    /*
-     * sap_operating_channel_location holds SAP indoor,
-     * outdoor location information. Currently, if this
-     * param is  set this Indoor/outdoor channel interop
-     * restriction will only be implemented for JAPAN
-     * regulatory domain.
-     *
-     * 0 - Indicates that location unknown
-     * (or) SAP Indoor/outdoor interop is allowed
-     *
-     * 1 - Indicates device is operating on Indoor channels
-     * and SAP cannot pick next random channel from outdoor
-     * list of channels when a radar is found on current operating
-     * DFS channel.
-     *
-     * 2 - Indicates device is operating on Outdoor Channels
-     * and SAP cannot pick next random channel from indoor
-     * list of channels when a radar is found on current
-     * operating DFS channel.
-     */
-    v_U8_t              sap_operating_chan_preferred_location;
-} tSapDfsInfo;
-
-typedef struct tagSapCtxList
-{
-    v_U8_t              sessionID;
-    v_VOID_t*           pSapContext;
-    tVOS_CON_MODE       sapPersona;
-} tSapCtxList, tpSapCtxList;
-
-typedef struct tagSapStruct
-{
-    //Information Required for SAP DFS Master mode
-    tSapDfsInfo         SapDfsInfo;
-    tSapCtxList         sapCtxList[SAP_MAX_NUM_SESSION];
-} tSapStruct, *tpSapStruct;
 
 #define WPS_PROBRSP_VER_PRESENT                          0x00000001
 #define WPS_PROBRSP_STATE_PRESENT                        0x00000002
@@ -742,17 +587,8 @@ typedef struct sap_SoftapStats_s {
 #endif
 } tSap_SoftapStats, *tpSap_SoftapStats;
 
-int sapSetPreferredChannel
-(
-#ifdef WLAN_FEATURE_MBSSID
-    v_PVOID_t sapContext,
-#endif
-    tANI_U8* ptr
-);
 
-/* Channel/Frequency table */
-extern const tRfChannelProps rfChannels[NUM_RF_CHANNELS];
-
+int sapSetPreferredChannel(tANI_U8* ptr);
 #ifdef FEATURE_WLAN_CH_AVOID
 /* Store channel safety information */
 typedef struct
@@ -762,12 +598,7 @@ typedef struct
 } sapSafeChannelType;
 #endif //FEATURE_WLAN_CH_AVOID
 
-#ifdef WLAN_FEATURE_MBSSID
-void sapCleanupChannelList(v_PVOID_t sapContext);
-#else
 void sapCleanupChannelList(void);
-#endif
-
 void sapCleanupAllChannelList(void);
 
 /*==========================================================================
@@ -795,8 +626,7 @@ void sapCleanupAllChannelList(void);
 VOS_STATUS
 WLANSAP_Set_WpsIe
 (
-    v_PVOID_t pvosGCtx,
-    tSap_WPSIE *pWPSIe
+    v_PVOID_t pvosGCtx, tSap_WPSIE *pWPSIe
 );
 
 /*==========================================================================
@@ -880,8 +710,7 @@ pbWPSState: Pointer to variable to indicate if it is in WPS Registration state
 VOS_STATUS
 WLANSAP_Get_WPS_State
 (
-    v_PVOID_t pvosGCtx,
-    v_BOOL_t * pbWPSState
+    v_PVOID_t pvosGCtx, v_BOOL_t * pbWPSState
 );
 
 /*----------------------------------------------------------------------------
@@ -919,11 +748,7 @@ typedef v_PVOID_t tSapHandle, *ptSapHandle;
 
   SIDE EFFECTS
 ============================================================================*/
-#ifdef WLAN_FEATURE_MBSSID
-v_PVOID_t
-#else
 VOS_STATUS
-#endif
 WLANSAP_Open
 (
     v_PVOID_t  pvosGCtx
@@ -1066,10 +891,7 @@ typedef VOS_STATUS (*tpWLAN_SAPEventCB)( tpSap_Event pSapEvent, v_PVOID_t  pUsrC
     Returns the SAP FSM state.
 ============================================================================*/
 
-v_U8_t WLANSAP_getState
-(
-    v_PVOID_t pvosGCtx
-);
+v_U8_t WLANSAP_getState ( v_PVOID_t  pvosGCtx);
 
 /*==========================================================================
   FUNCTION    WLANSAP_StartBss
@@ -1100,30 +922,11 @@ usrDataForCallback: Parameter that will be passed back in all the SAP callback e
 VOS_STATUS
 WLANSAP_StartBss
 (
-    v_PVOID_t pvosGCtx,
+    v_PVOID_t  pvosGCtx,
     tpWLAN_SAPEventCB pSapEventCallback,
-    tsap_Config_t *pConfig,
-    v_PVOID_t  pUsrContext
+    tsap_Config_t *pConfig, v_PVOID_t  pUsrContext
 );
 
-#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
-/*==========================================================================
-  FUNCTION    WLANSAP_CheckCCIntf
-
-  DESCRIPTION Restart SAP if Concurrent Channel interfering
-
-  DEPENDENCIES NA.
-
-  PARAMETERS
-  IN
-  Ctx: Pointer to vos Context or Sap Context based on MBSSID
-
-  RETURN VALUE Interference channel value
-
-  SIDE EFFECTS
-============================================================================*/
-v_U16_t WLANSAP_CheckCCIntf(v_PVOID_t Ctx);
-#endif
 /*==========================================================================
   FUNCTION    WLANSAP_SetMacACL
 
@@ -1152,7 +955,7 @@ pConfig:  Pointer to configuration structure passed down from
 VOS_STATUS
 WLANSAP_SetMacACL
 (
-    v_PVOID_t pvosGCtx,
+    v_PVOID_t  pvosGCtx,
     tsap_Config_t *pConfig
 );
 
@@ -1181,7 +984,7 @@ stopping BSS
 VOS_STATUS
 WLANSAP_StopBss
 (
-    v_PVOID_t pvosGCtx
+    v_PVOID_t  pvosGCtx
 );
 
 /*==========================================================================
@@ -1209,8 +1012,7 @@ WLANSAP_StopBss
 VOS_STATUS
 WLANSAP_DisassocSta
 (
-    v_PVOID_t pvosGCtx,
-    v_U8_t *pPeerStaMac
+    v_PVOID_t  pvosGCtx, v_U8_t *pPeerStaMac
 );
 
 /*==========================================================================
@@ -1238,36 +1040,8 @@ WLANSAP_DisassocSta
 VOS_STATUS
 WLANSAP_DeauthSta
 (
-    v_PVOID_t pvosGCtx,
-    v_U8_t *pPeerStaMac
+    v_PVOID_t  pvosGCtx, v_U8_t *pPeerStaMac
 );
-
-/*==========================================================================
-  FUNCTION    WLANSAP_SetChannelChangeWithCsa
-
-  DESCRIPTION
-      This api function does a channel change to the target channel specified
-      through an iwpriv. CSA IE is included in the beacons before doing a
-      channel change.
-
-  DEPENDENCIES
-    NA.
-
-  PARAMETERS
-
-    IN
-    pvosGCtx             : Pointer to vos global context structure
-    targetChannel        : New target channel to change to.
-
-  RETURN VALUE
-    The VOS_STATUS code associated with performing the operation
-
-    VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_SetChannelChangeWithCsa(v_PVOID_t pvosGCtx, v_U32_t targetChannel);
 
 /*==========================================================================
   FUNCTION    WLANSAP_SetChannelRange
@@ -1321,8 +1095,7 @@ pSetKeyInfo: tCsrRoamSetKey structure for the station
 VOS_STATUS
 WLANSAP_SetKeySta
 (
-    v_PVOID_t pvosGCtx,
-    tCsrRoamSetKey *pSetKeyInfo
+    v_PVOID_t pvosGCtx, tCsrRoamSetKey *pSetKeyInfo
 );
 
 /*==========================================================================
@@ -1350,9 +1123,9 @@ pSetKeyInfo: tCsrRoamSetKey structure for the station
 VOS_STATUS
 WLANSAP_DelKeySta
 (
-    v_PVOID_t pvosGCtx,
-    tCsrRoamRemoveKey *pDelKeyInfo
+    v_PVOID_t pvosGCtx, tCsrRoamRemoveKey *pDelKeyInfo
 );
+
 
 
 /*==========================================================================
@@ -1385,8 +1158,7 @@ NOTE:- The memory for this list will be allocated by the caller of this API
 VOS_STATUS
 WLANSAP_GetAssocStations
 (
-    v_PVOID_t pvosGCtx,
-    VOS_MODULE_ID module,
+    v_PVOID_t pvosGCtx, VOS_MODULE_ID module,
     tpSap_AssocMacAddr pAssocStas
 );
 /*==========================================================================
@@ -1483,8 +1255,7 @@ will come out of this state.
 VOS_STATUS
 WLANSAP_SetCounterMeasure
 (
-    v_PVOID_t pvosGCtx,
-    v_BOOL_t bEnable
+    v_PVOID_t pvosGCtx, v_BOOL_t bEnable
 );
 
 /*==========================================================================
@@ -1511,13 +1282,16 @@ WLANSAP_SetCounterMeasure
   SIDE EFFECTS
 ============================================================================*/
 VOS_STATUS
-WLANSap_getstationIE_information
-(
-    v_PVOID_t pvosGCtx,
-    v_U32_t   *pLen,
-    v_U8_t    *pBuf
-);
+WLANSap_getstationIE_information(v_PVOID_t pvosGCtx,
+                                 v_U32_t   *pLen,
+                                 v_U8_t    *pBuf);
 
+
+VOS_STATUS
+WLANSAP_getWpsSessionOverlap
+(
+    v_PVOID_t pvosGCtx
+);
 /*==========================================================================
   FUNCTION    WLANSAP_ClearACL
 
@@ -1542,69 +1316,7 @@ WLANSap_getstationIE_information
 VOS_STATUS
 WLANSAP_ClearACL
 (
-    v_PVOID_t pvosGCtx
-);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_GetACLAcceptList
-
-  DESCRIPTION
-    This api function to get ACL accept list.
-
-  DEPENDENCIES
-    NA.
-
-  PARAMETERS
-
-    IN
-        pvosGCtx: Pointer to vos global context structure
-        pAcceptList: ACL Accept list entries
-        nAcceptList: Number of entries in ACL Accept list
-
-  RETURN VALUE
-    The VOS_STATUS code associated with performing the operation
-
-    VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_GetACLAcceptList
-(
-    v_PVOID_t pvosGCtx,
-    v_MACADDR_t *pAcceptList,
-    v_U8_t *nAcceptList
-);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_GetACLDenyList
-
-  DESCRIPTION
-    This api function to get ACL Deny list.
-
-  DEPENDENCIES
-    NA.
-
-  PARAMETERS
-
-    IN
-        pvosGCtx: Pointer to vos global context structure
-        pAcceptList: ACL Deny list entries
-        nAcceptList: Number of entries in ACL Deny list
-
-  RETURN VALUE
-    The VOS_STATUS code associated with performing the operation
-
-    VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_GetACLDenyList
-(
-   v_PVOID_t pCtx,
-   v_MACADDR_t *pDenyList,
-   v_U8_t *nDenyList
+    v_PVOID_t  pvosGCtx
 );
 
 /*==========================================================================
@@ -1631,37 +1343,8 @@ WLANSAP_GetACLDenyList
 VOS_STATUS
 WLANSAP_SetMode
 (
-    v_PVOID_t pvosGCtx,
+    v_PVOID_t  pvosGCtx,
     v_U32_t mode
-);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_GetACLMode
-
-  DESCRIPTION
-    This api is used to get mode for ACL
-
-  DEPENDENCIES
-    NA.
-
-  PARAMETERS
-
-    IN
-        pvosGCtx: Pointer to vos global context structure
-        mode: Current Mode of the ACL
-
-  RETURN VALUE
-    The VOS_STATUS code associated with performing the operation
-
-    VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_GetACLMode
-(
-    v_PVOID_t pvosGCtx,
-    eSapMacAddrACL *mode
 );
 
 /*==========================================================================
@@ -1690,7 +1373,7 @@ WLANSAP_GetACLMode
 VOS_STATUS
 WLANSAP_ModifyACL
 (
-    v_PVOID_t pvosGCtx,
+    v_PVOID_t  pvosGCtx,
     v_U8_t *pPeerStaMac,
     eSapACLType listType,
     eSapACLCmdType cmd
@@ -1719,12 +1402,7 @@ WLANSAP_ModifyACL
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_Set_WPARSNIes
-(
-    v_PVOID_t pvosGCtx,
-    v_U8_t *pWPARSNIEs,
-    v_U32_t WPARSNIEsLen
-);
+VOS_STATUS WLANSAP_Set_WPARSNIes(v_PVOID_t pvosGCtx, v_U8_t *pWPARSNIEs, v_U32_t WPARSNIEsLen);
 
 /*==========================================================================
   FUNCTION    WLANSAP_GetStatistics
@@ -1750,12 +1428,7 @@ VOS_STATUS WLANSAP_Set_WPARSNIes
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_GetStatistics
-(
-    v_PVOID_t pvosGCtx,
-    tSap_SoftapStats *statBuf,
-    v_BOOL_t bReset
-);
+VOS_STATUS WLANSAP_GetStatistics(v_PVOID_t pvosGCtx, tSap_SoftapStats *statBuf, v_BOOL_t bReset);
 
 /*==========================================================================
 
@@ -1781,13 +1454,8 @@ VOS_STATUS WLANSAP_GetStatistics
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_SendAction
-(
-    v_PVOID_t pvosGCtx,
-    const tANI_U8 *pBuf,
-    tANI_U32 len,
-    tANI_U16 wait
-);
+VOS_STATUS WLANSAP_SendAction( v_PVOID_t pvosGCtx, const tANI_U8 *pBuf,
+                               tANI_U32 len, tANI_U16 wait );
 
 /*==========================================================================
 
@@ -1816,14 +1484,10 @@ VOS_STATUS WLANSAP_SendAction
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_RemainOnChannel
-(
-    v_PVOID_t pvosGCtx,
-    tANI_U8 channel,
-    tANI_U32 duration,
-    remainOnChanCallback callback,
-    void *pContext
-);
+VOS_STATUS WLANSAP_RemainOnChannel( v_PVOID_t pvosGCtx,
+                                    tANI_U8 channel, tANI_U32 duration,
+                                    remainOnChanCallback callback,
+                                    void *pContext );
 
 /*==========================================================================
 
@@ -1847,10 +1511,7 @@ VOS_STATUS WLANSAP_RemainOnChannel
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_CancelRemainOnChannel
-(
-    v_PVOID_t pvosGCtx
-);
+VOS_STATUS WLANSAP_CancelRemainOnChannel( v_PVOID_t pvosGCtx );
 
 
 /*==========================================================================
@@ -1879,13 +1540,8 @@ VOS_STATUS WLANSAP_CancelRemainOnChannel
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_RegisterMgmtFrame
-(
-    v_PVOID_t pvosGCtx,
-    tANI_U16 frameType,
-    tANI_U8* matchData,
-    tANI_U16 matchLen
-);
+VOS_STATUS WLANSAP_RegisterMgmtFrame( v_PVOID_t pvosGCtx, tANI_U16 frameType,
+                                      tANI_U8* matchData, tANI_U16 matchLen );
 
 /*==========================================================================
 
@@ -1912,13 +1568,8 @@ VOS_STATUS WLANSAP_RegisterMgmtFrame
 
   SIDE EFFECTS
 ============================================================================*/
-VOS_STATUS WLANSAP_DeRegisterMgmtFrame
-(
-    v_PVOID_t pvosGCtx,
-    tANI_U16 frameType,
-    tANI_U8* matchData,
-    tANI_U16 matchLen
-);
+VOS_STATUS WLANSAP_DeRegisterMgmtFrame( v_PVOID_t pvosGCtx, tANI_U16 frameType,
+                                      tANI_U8* matchData, tANI_U16 matchLen );
 
 /*==========================================================================
 
@@ -2003,300 +1654,6 @@ VOS_STATUS WLANSAP_StartBeaconReq(v_PVOID_t pSapCtx);
 VOS_STATUS
 WLANSAP_DfsSendCSAIeRequest(v_PVOID_t pSapCtx);
 
-/*==========================================================================
-  FUNCTION    WLANSAP_Get_Dfs_Ignore_CAC
-
-  DESCRIPTION
-   This API is used to get ignore_cac flag.
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN
-  pvosGCtx: Pointer to vos global context structure
-
-  PARAMETERS
-  OUT
-  pIgnore_cac: pointer to variable
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-
-VOS_STATUS
-WLANSAP_Get_Dfs_Ignore_CAC(tHalHandle hHal, v_U8_t *pIgnore_cac);
-
-
-/*==========================================================================
-  FUNCTION    WLANSAP_Set_Dfs_Ignore_CAC
-
-  DESCRIPTION
-   This API is used to set ignore_cac flag, used for ignoring the CAC operation for DFS channel.
-   If the flag set to 1 or TRUE then it will avoid CAC.
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN
-  pvosGCtx: Pointer to vos global context structure
-
-  PARAMETERS
-  IN
-  ignore_cac: value to be set
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-
-VOS_STATUS
-WLANSAP_Set_Dfs_Ignore_CAC(tHalHandle hHal, v_U8_t ignore_cac);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_set_Dfs_Restrict_JapanW53
-
-  DESCRIPTION
-   This API is used to enable or disable Japan W53 Band
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN
-  hHal : HAL pointer
-  disable_Dfs_JapanW3 :Indicates if Japan W53 is disabled when set to 1
-                       Indicates if Japan W53 is enabled when set to 0
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_set_Dfs_Restrict_JapanW53(tHalHandle hHal, v_U8_t disable_Dfs_JapanW3);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_set_Dfs_Preferred_Channel_location
-
-  DESCRIPTION
-   This API is used to set sap preferred channels location
-   to resetrict the DFS random channel selection algorithm
-   either Indoor/Outdoor channels only.
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN
-  hHal : HAL pointer
-  dfs_Preferred_Channels_location :
-                       0 - Indicates No preferred channel location restrictions
-                       1 - Indicates SAP Indoor Channels operation only.
-                       2 - Indicates SAP Outdoor Channels operation only.
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_set_Dfs_Preferred_Channel_location(tHalHandle hHal,
-                                   v_U8_t dfs_Preferred_Channels_location);
-
-/*==========================================================================
-  FUNCTION   WLANSAP_Set_Dfs_Target_Chnl
-
-  DESCRIPTION
-   This API is used to set next target chnl as provided channel.
-   you can provide any valid channel to this API.
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN
-  hHal: Pointer to HAL
-
-  PARAMETERS
-  IN
-  target_channel: target channel number
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-
-VOS_STATUS
-WLANSAP_Set_Dfs_Target_Chnl(tHalHandle hHal,
-                            v_U8_t target_channel);
-
-
-
-/*==========================================================================
-  FUNCTION    WLANSAP_UpdateSapConfigAddIE
-
-  DESCRIPTION
-   This API is used to set sap config parameter.
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN OUT
-  pConfig:  Pointer to sap config
-
-  PARAMETERS
-  IN
-  additionIEBuffer - buffer containing addition IE from hostapd
-
-  PARAMETERS
-  IN
-  additionIELength - length of buffer
-
-  PARAMETERS
-  IN
-  updateType - Type of buffer
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-
-VOS_STATUS WLANSAP_UpdateSapConfigAddIE(tsap_Config_t *pConfig,
-                         const tANI_U8 *pAdditionIEBuffer,
-                         tANI_U16 additionIELength,
-                         eUpdateIEsType updateType);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_ResetSapConfigAddIE
-
-  DESCRIPTION
-   This API is used to reset and clear the buffer in sap config.
-
-  DEPENDENCIES
-   NA.
-
-  PARAMETERS
-  IN OUT
-  pConfig:  Pointer to sap config
-  PARAMETERS
-  IN
-  updateType:  type buffer
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-
-VOS_STATUS
-WLANSAP_ResetSapConfigAddIE(tsap_Config_t *pConfig,
-                            eUpdateIEsType updateType);
-
-
-
-/*==========================================================================
-FUNCTION  sapConvertSapPhyModeToCsrPhyMode
-
-DESCRIPTION Function to implement selection of CSR PhyMode using SAP PhyMode
-
-DEPENDENCIES PARAMETERS
-
-IN sapPhyMode : SAP Phy Module
-
-RETURN VALUE If SUCCESS or FAILURE
-
-SIDE EFFECTS
-============================================================================*/
-eCsrPhyMode sapConvertSapPhyModeToCsrPhyMode( eSapPhyMode sapPhyMode );
-
-/*==========================================================================
-FUNCTION  WLANSAP_extend_to_acs_range
-
-DESCRIPTION Function extends give channel range to consider ACS chan bonding
-
-DEPENDENCIES PARAMETERS
-
-IN /OUT
-*startChannelNum : ACS extend start ch
-*endChannelNum   : ACS extended End ch
-*bandStartChannel: Band start ch
-*bandEndChannel  : Band end ch
-
-RETURN VALUE NONE
-
-SIDE EFFECTS
-============================================================================*/
-v_VOID_t WLANSAP_extend_to_acs_range(v_U8_t operatingBand,
-                                  v_U8_t *startChannelNum,
-                                  v_U8_t *endChannelNum,
-                                  v_U8_t *bandStartChannel,
-                                  v_U8_t *bandEndChannel);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_Get_DfsNol
-
-  DESCRIPTION
-  This API is used to dump the dfs nol
-  DEPENDENCIES
-  NA.
-
-  PARAMETERS
-  IN
-  sapContext: Pointer to vos global context structure
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_Get_DfsNol(v_PVOID_t pSapCtx);
-
-/*==========================================================================
-  FUNCTION    WLANSAP_Set_DfsNol
-
-  DESCRIPTION
-  This API is used to set the dfs nol
-  DEPENDENCIES
-  NA.
-
-  PARAMETERS
-  IN
-  sapContext: Pointer to vos global context structure
-  conf: set type
-
-  RETURN VALUE
-  The VOS_STATUS code associated with performing the operation
-
-  VOS_STATUS_SUCCESS:  Success
-
-  SIDE EFFECTS
-============================================================================*/
-VOS_STATUS
-WLANSAP_Set_DfsNol(v_PVOID_t pSapCtx, eSapDfsNolType conf);
 
 #ifdef __cplusplus
  }

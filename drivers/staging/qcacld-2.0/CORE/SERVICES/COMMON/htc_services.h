@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -45,9 +45,7 @@ typedef enum {
     NMI_SERVICE_GROUP   = 2,
     HTT_SERVICE_GROUP   = 3,
     CFG_NV_SERVICE_GROUP = 4,
-#ifdef IPA_UC_OFFLOAD
-    WDI_IPA_SERVICE_GROUP = 5,
-#endif /* IPA_UC_OFFLOAD */
+
     HTC_TEST_GROUP = 254,
     HTC_SERVICE_GROUP_LAST = 255
 }HTC_SERVICE_GROUP_IDS;
@@ -68,15 +66,12 @@ typedef enum {
 #define NMI_DATA_SVC      MAKE_SERVICE_ID(NMI_SERVICE_GROUP,1)
 
 #define HTT_DATA_MSG_SVC  MAKE_SERVICE_ID(HTT_SERVICE_GROUP,0)
-#define HTT_DATA2_MSG_SVC MAKE_SERVICE_ID(HTT_SERVICE_GROUP,1)
 
 /* raw stream service (i.e. flash, tcmd, calibration apps) */
 #define HTC_RAW_STREAMS_SVC MAKE_SERVICE_ID(HTC_TEST_GROUP,0)
 
 #define CFG_NV_SVC  MAKE_SERVICE_ID(CFG_NV_SERVICE_GROUP,0)
-#ifdef IPA_UC_OFFLOAD
-#define WDI_IPA_TX_SVC MAKE_SERVICE_ID(WDI_IPA_SERVICE_GROUP,0)
-#endif /* IPA_UC_OFFLOAD */
+
 /*
  * Directions for interconnect pipe configuration.
  * These definitions may be used during configuration and are shared

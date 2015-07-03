@@ -41,9 +41,6 @@
 #include <stdarg.h>
 #include "sirMacPropExts.h"
 #include "dot11f.h"
-#ifdef WLAN_FEATURE_VOWIFI_11R
-#include "limFTDefs.h"
-#endif
 #include "limSession.h"
 
 #define COUNTRY_STRING_LENGTH    (  3 )
@@ -69,7 +66,7 @@ typedef struct sSirCountryInformation
 } tSirCountryInformation,*tpSirCountryInformation;
 
 
-/* Structure common to Beacons & Probe Responses */
+/// Structure common to Beaons & Probe Responses
 typedef struct sSirProbeRespBeacon
 {
     tSirMacTimeStamp          timeStamp;
@@ -146,7 +143,6 @@ typedef struct sSirProbeRespBeacon
     tANI_U8                   Vendor1IEPresent;
     tANI_U8                   Vendor2IEPresent;
     tANI_U8                   Vendor3IEPresent;
-    tDot11fIEIBSSParams       IBSSParams;
 
 } tSirProbeRespBeacon, *tpSirProbeRespBeacon;
 
@@ -185,7 +181,6 @@ typedef struct sSirAssocReq
     tSirAddtsReqInfo          addtsReq;
     tSirMacQosCapabilityStaIE qosCapability;
 
-    tSirMacWapiInfo           wapi;
     tSirMacWpaInfo            wpa;
     tSirMacRsnInfo            rsn;
     tSirAddie                 addIE;
@@ -206,15 +201,14 @@ typedef struct sSirAssocReq
     tANI_U8                   addtsPresent;
     tANI_U8                   wsmCapablePresent;
 
-    tANI_U8                   wapiPresent;
     tANI_U8                   wpaPresent;
     tANI_U8                   rsnPresent;
     tANI_U8                   addIEPresent;
 
     tANI_U8                   powerCapabilityPresent;
     tANI_U8                   supportedChannelsPresent;
-    /* keeping copy of association request received, this is
-       required for indicating the frame to upper layers */
+    // keeing copy of assoction request received, this is
+    // required for indicating the frame to upper layers
     tANI_U32                  assocReqFrameLength;
     tANI_U8*                  assocReqFrame;
 #ifdef WLAN_FEATURE_11AC
@@ -274,10 +268,6 @@ typedef struct sSirAssocRsp
     tDot11fIEVHTOperation     VHTOperation;
 #endif
     tDot11fIEExtCap           ExtCap;
-    tSirQosMapSet             QosMapSet;
-#ifdef WLAN_FEATURE_11W
-    tDot11fIETimeoutInterval  TimeoutInterval;
-#endif
 } tSirAssocRsp, *tpSirAssocRsp;
 
 #if defined(FEATURE_WLAN_ESE_UPLOAD)
@@ -306,6 +296,9 @@ typedef struct sSirEseBcnReportMandatoryIe
 
 tANI_U8
 sirIsPropCapabilityEnabled(struct sAniSirGlobal *pMac, tANI_U32 bitnum);
+
+tSirRetStatus
+sirGetCfgPropCaps(struct sAniSirGlobal *, tANI_U16 *);
 
 void dot11fLog(tpAniSirGlobal pMac, int nSev, const char *lpszFormat, ...);
 
@@ -433,12 +426,16 @@ sirConvertDeltsReq2Struct(struct sAniSirGlobal *pMac,
                           tANI_U8 *frame,
                           tANI_U32 len,
                           tSirDeltsReqInfo *delTs);
-tSirRetStatus
-sirConvertQosMapConfigureFrame2Struct(tpAniSirGlobal    pMac,
-                          tANI_U8               *pFrame,
-                          tANI_U32               nFrame,
-                          tSirQosMapSet      *pQosMapSet);
 
+#ifdef ANI_SUPPORT_11H
+tSirRetStatus
+sirConvertTpcReqFrame2Struct(struct sAniSirGlobal *, tANI_U8 *,
+                             tpSirMacTpcReqActionFrame, tANI_U32);
+
+tSirRetStatus
+sirConvertMeasReqFrame2Struct(struct sAniSirGlobal *, tANI_U8 *,
+                              tpSirMacMeasReqActionFrame, tANI_U32);
+#endif
 
 
 /**
@@ -447,7 +444,7 @@ sirConvertQosMapConfigureFrame2Struct(tpAniSirGlobal    pMac,
  * \sa PopulatedDot11fCapabilities2
  *
  *
- * \param pMac Pointer to the global MAC data structure
+ * \param pMac Pointer to the global MAC datastructure
  *
  * \param pDot11f Address of a tDot11fFfCapabilities to be filled in
  *
@@ -469,7 +466,7 @@ PopulateDot11fCapabilities(tpAniSirGlobal         pMac,
  * \sa PopulatedDot11fCapabilities2
  *
  *
- * \param pMac Pointer to the global MAC data structure
+ * \param pMac Pointer to the global MAC datastructure
  *
  * \param pDot11f Address of a tDot11fFfCapabilities to be filled in
  *
@@ -496,11 +493,11 @@ PopulateDot11fChanSwitchAnn(tpAniSirGlobal          pMac,
                             tDot11fIEChanSwitchAnn *pDot11f,
                             tpPESession psessionEntry);
 
-/// Populate a tDot11fIEChannelSwitchWrapper
+/// Populate a tDot11fIEChanSwitchAnn
 void
-PopulateDot11fChanSwitchWrapper(tpAniSirGlobal             pMac,
-                            tDot11fIEChannelSwitchWrapper *pDot11f,
-                            tpPESession                    psessionEntry);
+PopulateDot11fExtChanSwitchAnn(tpAniSirGlobal          pMac,
+                             tDot11fIEExtChanSwitchAnn *pDot11f,
+                             tpPESession psessionEntry);
 
 /// Populate a tDot11fIECountry
 tSirRetStatus
@@ -540,7 +537,7 @@ PopulateDot11fBeaconReport(tpAniSirGlobal       pMac,
  * \brief Populate a tDot11fIEExtSuppRates
  *
  *
- * \param pMac Pointer to the global MAC data structure
+ * \param pMac Pointer to the global MAC datastructure
  *
  * \param nChannelNum Channel on which the enclosing frame will be going out
  *
@@ -558,6 +555,11 @@ PopulateDot11fExtSuppRates1(tpAniSirGlobal         pMac,
                             tDot11fIEExtSuppRates *pDot11f);
 
 tSirRetStatus
+PopulateDot11fHCF(tpAniSirGlobal  pMac,
+                  tANI_U32        capEnable,
+                  tDot11fIEHCF   *pDot11f);
+
+tSirRetStatus
 PopulateDot11fHTCaps(tpAniSirGlobal           pMac,
                            tpPESession      psessionEntry,
                            tDot11fIEHTCaps *pDot11f);
@@ -570,6 +572,24 @@ PopulateDot11fHTInfo(tpAniSirGlobal   pMac,
 void PopulateDot11fIBSSParams(tpAniSirGlobal  pMac,
        tDot11fIEIBSSParams *pDot11f, tpPESession psessionEntry);
 
+#ifdef ANI_SUPPORT_11H
+tSirRetStatus
+PopulateDot11fMeasurementReport0(tpAniSirGlobal              pMac,
+                                 tpSirMacMeasReqActionFrame  pReq,
+                                 tDot11fIEMeasurementReport *pDot11f);
+
+/// Populate a tDot11fIEMeasurementReport when the report type is CCA
+tSirRetStatus
+PopulateDot11fMeasurementReport1(tpAniSirGlobal              pMac,
+                                 tpSirMacMeasReqActionFrame  pReq,
+                                 tDot11fIEMeasurementReport *pDot11f);
+
+/// Populate a tDot11fIEMeasurementReport when the report type is RPI Hist
+tSirRetStatus
+PopulateDot11fMeasurementReport2(tpAniSirGlobal              pMac,
+                                 tpSirMacMeasReqActionFrame  pReq,
+                                 tDot11fIEMeasurementReport *pDot11f);
+#endif  //ANI_SUPPORT_11H
 
 /// Populate a tDot11fIEPowerCaps
 void
@@ -581,6 +601,26 @@ PopulateDot11fPowerCaps(tpAniSirGlobal  pMac,
 tSirRetStatus
 PopulateDot11fPowerConstraints(tpAniSirGlobal             pMac,
                                tDot11fIEPowerConstraints *pDot11f);
+
+tSirRetStatus
+PopulateDot11fPropCapability(tpAniSirGlobal           pMac,
+                             tANI_U32                      capEnable,
+                             tDot11fIEPropCapability *pDot11f);
+
+void
+PopulateDot11fPropChannSwitchAnn(tpAniSirGlobal               pMac,
+                                 tANI_U32                          capEnable,
+                                 tDot11fIEPropChannSwitchAnn *pDot11f);
+
+void
+PopulateDot11fPropEDCAParams(tpAniSirGlobal           pMac,
+                             tANI_U16                      caps,
+                             tDot11fIEPropEDCAParams *pDot11f);
+
+tSirRetStatus
+PopulateDot11fPropSuppRates(tpAniSirGlobal          pMac,
+                            tANI_U32                     capEnable,
+                            tDot11fIEPropSuppRates *pDot11f);
 
 void
 PopulateDot11fQOSCapsAp(tpAniSirGlobal      pMac,
@@ -651,7 +691,7 @@ PopulateDot11fSuppChannels(tpAniSirGlobal         pMac,
  * \brief Populated a tDot11fIESuppRates
  *
  *
- * \param pMac Pointer to the global MAC data structure
+ * \param pMac Pointer to the global MAC datastructure
  *
  * \param nChannelNum Channel the enclosing frame will be going out on; see
  * below
@@ -836,9 +876,7 @@ PopulateDot11fVHTCaps(tpAniSirGlobal  pMac, tpPESession psessionEntry,
                       tDot11fIEVHTCaps *pDot11f);
 
 tSirRetStatus
-PopulateDot11fVHTOperation(tpAniSirGlobal  pMac,
-                           tpPESession psessionEntry,
-                           tDot11fIEVHTOperation  *pDot11f);
+PopulateDot11fVHTOperation(tpAniSirGlobal  pMac, tDot11fIEVHTOperation  *pDot11f);
 
 tSirRetStatus
 PopulateDot11fVHTExtBssLoad(tpAniSirGlobal  pMac, tDot11fIEVHTExtBssLoad   *pDot11f);

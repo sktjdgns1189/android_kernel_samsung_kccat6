@@ -86,20 +86,10 @@
 #define WLAN_BTC_SOFTAP_BSS_START   0x11
 #define WLAN_SVC_FW_CRASHED_IND     0x100
 #define WLAN_SVC_LTE_COEX_IND       0x101
-#define WLAN_SVC_WLAN_AUTO_SHUTDOWN_IND 0x102
-#define WLAN_SVC_DFS_CAC_START_IND      0x103
-#define WLAN_SVC_DFS_CAC_END_IND        0x104
-#define WLAN_SVC_DFS_RADAR_DETECT_IND   0x105
 #define WLAN_SVC_WLAN_STATUS_IND    0x106
 #define WLAN_SVC_WLAN_VERSION_IND   0x107
-#define WLAN_SVC_DFS_ALL_CHANNEL_UNAVAIL_IND 0x108
 #define WLAN_SVC_WLAN_TP_IND        0x109
 
-#define WLAN_SVC_MAX_SSID_LEN    32
-#define WLAN_SVC_MAX_BSSID_LEN   6
-#define WLAN_SVC_MAX_STR_LEN     16
-#define WLAN_SVC_MAX_NUM_CHAN    128
-#define WLAN_SVC_COUNTRY_CODE_LEN 3
 
 // Event data for WLAN_BTC_QUERY_STATE_RSP & WLAN_STA_ASSOC_DONE_IND
 typedef struct
@@ -116,7 +106,6 @@ typedef enum eAniNlModuleTypes {
    WLAN_NL_MSG_OEM,
    WLAN_NL_MSG_SVC,
    WLAN_NL_MSG_CNSS_DIAG = ANI_NL_MSG_BASE + 0x0B,//Value needs to be 27
-   ANI_NL_MSG_LOG,
    ANI_NL_MSG_MAX
 } tAniNlModTypes, tWlanNlModTypes;
 
@@ -128,34 +117,5 @@ typedef struct sAniHdr {
    unsigned short type;
    unsigned short length;
 } tAniHdr, tAniMsgHdr;
-
-struct wlan_status_data {
-   uint8_t lpss_support;
-   uint8_t is_on;
-   uint8_t vdev_id;
-   uint8_t is_connected;
-   int8_t rssi;
-   uint8_t ssid_len;
-   uint8_t country_code[WLAN_SVC_COUNTRY_CODE_LEN];
-   uint32_t vdev_mode;
-   uint32_t freq;
-   uint32_t numChannels;
-   uint8_t channel_list[WLAN_SVC_MAX_NUM_CHAN];
-   uint8_t ssid[WLAN_SVC_MAX_SSID_LEN];
-   uint8_t bssid[WLAN_SVC_MAX_BSSID_LEN];
-};
-
-struct wlan_version_data {
-   uint32_t chip_id;
-   char chip_name[WLAN_SVC_MAX_STR_LEN];
-   char chip_from[WLAN_SVC_MAX_STR_LEN];
-   char host_version[WLAN_SVC_MAX_STR_LEN];
-   char fw_version[WLAN_SVC_MAX_STR_LEN];
-};
-
-struct wlan_dfs_info {
-   uint16_t channel;
-   uint8_t country_code[WLAN_SVC_COUNTRY_CODE_LEN];
-};
 
 #endif //WLAN_NLINK_COMMON_H__

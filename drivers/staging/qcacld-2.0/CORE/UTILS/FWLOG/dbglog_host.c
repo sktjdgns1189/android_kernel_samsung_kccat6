@@ -36,8 +36,7 @@
 #include "wma.h"
 #include "ol_defines.h"
 #include <wlan_nlink_srv.h>
-#include "vos_diag_core_event.h"
-#include "qwlan_version.h"
+
 #include <net/sock.h>
 #include <linux/netlink.h>
 
@@ -55,12 +54,9 @@
 
 #if defined(DEBUG)
 
-static bool appstarted = FALSE;
-static bool senddriverstatus = FALSE;
-static bool kd_nl_init = FALSE;
-static int cnss_diag_pid = 0;
-static int get_version = 0;
-static int gprint_limiter = 0;
+bool appstarted = FALSE;
+bool kd_nl_init = FALSE;
+int cnss_diag_pid = 0;
 
 static ATH_DEBUG_MASK_DESCRIPTION g_fwlogDebugDescription[] = {
     {FWLOG_DEBUG,"fwlog"},
@@ -147,16 +143,6 @@ const char *dbglog_get_module_str(A_UINT32 module_id)
         return "P2P";
     case WLAN_MODULE_WOW:
         return "WoW";
-    case WLAN_MODULE_IBSS_PWRSAVE:
-        return "IBSS PS";
-    case WLAN_MODULE_EXTSCAN:
-        return "ExtScan";
-    case WLAN_MODULE_UNIT_TEST:
-        return "UNIT_TEST";
-    case WLAN_MODULE_MLME:
-        return "MLME";
-    case WLAN_MODULE_SUPPL:
-        return "SUPPLICANT";
     default:
         return "UNKNOWN";
     }
@@ -567,22 +553,6 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "ROAM_CANCEL_LOW_PRIO_SCAN",
         "ROAM_FINAL_BMISS_RECVD",
         "ROAM_CONFIG_SCAN_MODE",
-        "ROAM_BMISS_FINAL_SCAN_ENABLE",
-        "ROAM_SUITABLE_AP_EVENT",
-        "ROAM_RSN_IE_PARSE_ERROR",
-        "ROAM_WPA_IE_PARSE_ERROR",
-        "ROAM_SCAN_CMD_FROM_HOST",
-        "ROAM_HO_SORT_CANDIDATE",
-        "ROAM_HO_SAVE_CANDIDATE",
-        "ROAM_HO_GET_CANDIDATE",
-        "ROAM_HO_OFFLOAD_SET_PARAM",
-        "ROAM_HO_SM",
-        "ROAM_HO_HTT_SAVED",
-        "ROAM_HO_SYNC_START",
-        "ROAM_HO_START",
-        "ROAM_HO_COMPLETE",
-        "ROAM_HO_STOP",
-        "ROAM_HO_HTT_FORWARD",
         "ROAM_DBGID_DEFINITION_END"
     },
     {
@@ -1062,16 +1032,6 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "TDLS_DBGID_PEER_EVT_DRP_RSSI",
         "TDLS_DBGID_PEER_EVT_DISCOVER",
         "TDLS_DBGID_PEER_EVT_DELETE",
-        "TDLS_DBGID_PEER_CAP_UPDATE",
-        "TDLS_DBGID_UAPSD_SEND_PTI_FRAME",
-        "TDLS_DBGID_UAPSD_SEND_PTI_FRAME2PEER",
-        "TDLS_DBGID_UAPSD_START_PTR_TIMER",
-        "TDLS_DBGID_UAPSD_CANCEL_PTR_TIMER",
-        "TDLS_DBGID_UAPSD_PTR_TIMER_TIMEOUT",
-        "TDLS_DBGID_UAPSD_STA_PS_EVENT_HANDLER",
-        "TDLS_DBGID_UAPSD_PEER_EVENT_HANDLER",
-        "TDLS_DBGID_UAPSD_PS_DEFAULT_SETTINGS",
-        "TDLS_DBGID_UAPSD_GENERIC",
     },
     {   /* HB */
         "WLAN_HB_DBGID_DEFINITION_START",
@@ -1139,129 +1099,6 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "RMC_SET_ACTION_PERIOD",
         "RMC_ACRION_FRAME_RX",
         "RMC_DBGID_DEFINITION_END",
-    },
-    {
-        /* WLAN_MODULE_STATS */
-        "WLAN_STATS_DBGID_DEFINITION_START",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_VDEV_EN_DIS",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_CHAN_TIME_START",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_CHAN_TIME_END",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_CALC",
-        "WLAN_STATS_DBGID_EST_LINKSPEED_UPDATE_HOME_CHAN",
-        "WLAN_STATS_DBGID_DEFINITION_END",
-    },
-    {
-	    /* WLAN_MODULE_NAN */
-    },
-    {
-       /* WLAN_MODULE_IBSS_PWRSAVE */
-       "IBSS_PS_DBGID_DEFINITION_START",
-       "IBSS_PS_DBGID_PEER_CREATE",
-       "IBSS_PS_DBGID_PEER_DELETE",
-       "IBSS_PS_DBGID_VDEV_CREATE",
-       "IBSS_PS_DBGID_VDEV_DELETE",
-       "IBSS_PS_DBGID_VDEV_EVENT",
-       "IBSS_PS_DBGID_PEER_EVENT",
-       "IBSS_PS_DBGID_DELIVER_CAB",
-       "IBSS_PS_DBGID_DELIVER_UC_DATA",
-       "IBSS_PS_DBGID_DELIVER_UC_DATA_ERROR",
-       "IBSS_PS_DBGID_UC_INACTIVITY_TMR_RESTART",
-       "IBSS_PS_DBGID_MC_INACTIVITY_TMR_RESTART",
-       "IBSS_PS_DBGID_NULL_TX_COMPLETION",
-       "IBSS_PS_DBGID_ATIM_TIMER_START",
-       "IBSS_PS_DBGID_UC_ATIM_SEND",
-       "IBSS_PS_DBGID_BC_ATIM_SEND",
-       "IBSS_PS_DBGID_UC_TIMEOUT",
-       "IBSS_PS_DBGID_PWR_COLLAPSE_ALLOWED",
-       "IBSS_PS_DBGID_PWR_COLLAPSE_NOT_ALLOWED",
-       "IBSS_PS_DBGID_SET_PARAM",
-       "IBSS_PS_DBGID_HOST_TX_PAUSE",
-       "IBSS_PS_DBGID_HOST_TX_UNPAUSE",
-       "IBSS_PS_DBGID_PS_DESC_BIN_HWM",
-       "IBSS_PS_DBGID_PS_DESC_BIN_LWM",
-       "IBSS_PS_DBGID_PS_KICKOUT_PEER",
-       "IBSS_PS_DBGID_SET_PEER_PARAM",
-       "IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH",
-       "IBSS_PS_DBGID_RX_CHAINMASK_CHANGE",
-    },
-    {
-       /* HIF UART Interface DBGIDs */
-       "HIF_UART_DBGID_START",
-       "HIF_UART_DBGID_POWER_STATE",
-       "HIF_UART_DBGID_TXRX_FLOW",
-       "HIF_UART_DBGID_TXRX_CTRL_CHAR",
-       "HIF_UART_DBGID_TXRX_BUF_DUMP",
-    },
-    {
-       /* LPI */
-       ""
-    },
-    {
-       /* EXTSCAN DBGIDs */
-       "EXTSCAN_START",
-       "EXTSCAN_STOP",
-       "EXTSCAN_CLEAR_ENTRY_CONTENT",
-       "EXTSCAN_GET_FREE_ENTRY_SUCCESS",
-       "EXTSCAN_GET_FREE_ENTRY_INCONSISTENT",
-       "EXTSCAN_GET_FREE_ENTRY_NO_MORE_ENTRIES",
-       "EXTSCAN_CREATE_ENTRY_SUCCESS",
-       "EXTSCAN_CREATE_ENTRY_ERROR",
-       "EXTSCAN_SEARCH_SCAN_ENTRY_QUEUE",
-       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_FOUND",
-       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_NOT_FOUND",
-       "EXTSCAN_ADD_ENTRY",
-       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT",
-       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT_FAILED",
-       "EXTSCAN_BUCKET_START_SCAN_CYCLE",
-       "EXTSCAN_BUCKET_PERIODIC_TIMER",
-       "EXTSCAN_SEND_START_STOP_EVENT",
-       "EXTSCAN_NOTIFY_WLAN_CHANGE",
-       "EXTSCAN_NOTIFY_WLAN_HOTLIST_MATCH",
-       "EXTSCAN_MAIN_RECEIVED_FRAME",
-       "EXTSCAN_MAIN_NO_SSID_IE",
-       "EXTSCAN_MAIN_MALFORMED_FRAME",
-       "EXTSCAN_FIND_BSSID_BY_REFERENCE",
-       "EXTSCAN_FIND_BSSID_BY_REFERENCE_ERROR",
-       "EXTSCAN_NOTIFY_TABLE_USAGE",
-       "EXTSCAN_FOUND_RSSI_ENTRY",
-       "EXTSCAN_BSSID_FOUND_RSSI_SAMPLE",
-       "EXTSCAN_BSSID_ADDED_RSSI_SAMPLE",
-       "EXTSCAN_BSSID_REPLACED_RSSI_SAMPLE",
-       "EXTSCAN_BSSID_TRANSFER_CURRENT_SAMPLES",
-       "EXTSCAN_BUCKET_PROCESS_SCAN_EVENT",
-       "EXTSCAN_BUCKET_CANNOT_FIND_BUCKET",
-       "EXTSCAN_START_SCAN_REQUEST_FAILED",
-       "EXTSCAN_BUCKET_STOP_CURRENT_SCANS",
-       "EXTSCAN_BUCKET_SCAN_STOP_REQUEST",
-       "EXTSCAN_BUCKET_PERIODIC_TIMER_ERROR",
-       "EXTSCAN_BUCKET_START_OPERATION",
-       "EXTSCAN_START_INTERNAL_ERROR",
-       "EXTSCAN_NOTIFY_HOTLIST_MATCH",
-       "EXTSCAN_CONFIG_HOTLIST_TABLE",
-       "EXTSCAN_CONFIG_WLAN_CHANGE_TABLE",
-    },
-    {  /* UNIT_TEST */
-       "UNIT_TEST_GEN",
-    },
-    {  /* MLME */
-       "MLME_DEBUG_CMN",
-       "MLME_IF",
-       "MLME_AUTH",
-       "MLME_REASSOC",
-       "MLME_DEAUTH",
-       "MLME_DISASSOC",
-       "MLME_ROAM",
-       "MLME_RETRY",
-       "MLME_TIMER",
-       "MLME_FRMPARSE",
-    },
-    {  /*SUPPLICANT */
-       "SUPPL_INIT",
-       "SUPPL_RECV_EAPOL",
-       "SUPPL_RECV_EAPOL_TIMEOUT",
-       "SUPPL_SEND_EAPOL",
-       "SUPPL_MIC_MISMATCH",
-       "SUPPL_FINISH",
     },
 };
 
@@ -1674,54 +1511,6 @@ send_fw_diag_nl_data(wmi_unified_t wmi_handle, const u_int8_t *buffer,
     return res;
 }
 
-static int
-send_diag_netlink_data(const u_int8_t *buffer,
-                           A_UINT32 len, A_UINT32 cmd)
-{
-    struct sk_buff *skb_out;
-    struct nlmsghdr *nlh;
-    int res = 0;
-    struct dbglog_slot *slot;
-    size_t slot_len;
-
-    if (WARN_ON(len > ATH6KL_FWLOG_PAYLOAD_SIZE))
-        return -ENODEV;
-
-    /* NL is not ready yet, WLAN KO started first */
-    if ((kd_nl_init) && (!cnss_diag_pid)) {
-        nl_srv_nl_ready_indication();
-    }
-
-    if (cnss_diag_pid) {
-        slot_len = sizeof(*slot) + ATH6KL_FWLOG_PAYLOAD_SIZE;
-
-        skb_out = nlmsg_new(slot_len, 0);
-        if (!skb_out) {
-            AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-                            ("Failed to allocate new skb\n"));
-            return -1;
-        }
-
-        nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, slot_len, 0);
-        slot = (struct dbglog_slot *) nlmsg_data(nlh);
-        slot->diag_type = cmd;
-        slot->timestamp = cpu_to_le32(jiffies);
-        slot->length = cpu_to_le32(len);
-        /* Version mapped to get_version here */
-        slot->dropped = get_version;
-        memcpy(slot->payload, buffer, len);
-        NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
-
-        res = nl_srv_ucast(skb_out, cnss_diag_pid, MSG_DONTWAIT);
-        if (res < 0) {
-            AR_DEBUG_PRINTF(ATH_DEBUG_INFO,
-                            ("nl_srv_ucast failed 0x%x \n", res));
-            return res;
-        }
-    }
-    return res;
-}
-
 
 int
 dbglog_process_netlink_data(wmi_unified_t wmi_handle, const u_int8_t *buffer,
@@ -1772,90 +1561,6 @@ dbglog_process_netlink_data(wmi_unified_t wmi_handle, const u_int8_t *buffer,
     }
     return res;
 }
-
-/*
- * WMI diag data event handler, this function invoked as a CB
- * when there DIAG_EVENT, DIAG_MSG, DIAG_DBG to be
- * forwarded from the FW. This is the new implementation for
- * replacement of fw_dbg and dbg messages
- */
-
-static int
-diag_fw_handler(ol_scn_t scn, u_int8_t *data, u_int32_t datalen)
-{
-
-    tp_wma_handle wma = (tp_wma_handle)scn;
-    wmitlv_cmd_param_info *param_buf;
-    u_int8_t *datap;
-    u_int32_t len = 0;
-    u_int32_t *buffer;
-
-    if (!wma) {
-        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NULL Pointer assigned\n"));
-        return -1;
-    }
-    /* when fw asser occurs,host can't use TLV format. */
-    if (wma->is_fw_assert) {
-        datap = data;
-        len = datalen;
-        wma->is_fw_assert = 0;
-    } else {
-        param_buf = (wmitlv_cmd_param_info *) data;
-        if (!param_buf) {
-            AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-                            ("Get NULL point message from FW\n"));
-            return -1;
-        }
-
-        param_buf = (wmitlv_cmd_param_info *) data;
-        datap = param_buf->tlv_ptr;
-        len = param_buf->num_elements;
-        if (!get_version) {
-             buffer = (u_int32_t *)datap  ;
-             buffer++; /* skip offset */
-             if (WLAN_DIAG_TYPE_CONFIG == DIAG_GET_TYPE(*buffer)) {
-                 buffer++; /* skip  */
-                 if (DIAG_VERSION_INFO == DIAG_GET_ID(*buffer)) {
-                    buffer++; /* skip  */
-                    /* get payload */
-                    get_version = *buffer;
-                 }
-             }
-        }
-    }
-    if (dbglog_process_type == DBGLOG_PROCESS_PRINT_RAW) {
-        if (!gprint_limiter) {
-            AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NOT Supported"
-                            " only supports net link socket\n"));
-            gprint_limiter = TRUE;
-        }
-        return 0;
-    }
-
-    if ( dbglog_process_type == DBGLOG_PROCESS_NET_RAW) {
-         return send_diag_netlink_data((A_UINT8 *)datap,
-                                          len, DIAG_TYPE_FW_MSG);
-    }
-
-#ifdef WLAN_OPEN_SOURCE
-    if (dbglog_process_type == DBGLOG_PROCESS_POOL_RAW) {
-        if (!gprint_limiter) {
-            AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NOT Supported"
-                            " only supports net link socket\n"));
-            gprint_limiter = TRUE;
-        }
-        return 0;
-    }
-#endif /* WLAN_OPEN_SOURCE */
-    if (!gprint_limiter) {
-        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NOT Supported"
-                        " only supports net link socket\n"));
-        gprint_limiter = TRUE;
-    }
-    /* Always returns zero */
-    return (0);
-}
-
 
 /*
  * WMI diag data event handler, this function invoked as a CB
@@ -2249,373 +1954,6 @@ dbglog_sta_powersave_print_handler(
         dbglog_printf(timestamp, vap_id,
                         "SPEC Poll Timer Stopped");
         break;
-    default:
-        return FALSE;
-    }
-
-    return TRUE;
-}
-/* IBSS PS sub modules */
-enum wlan_ibss_ps_sub_module {
-    WLAN_IBSS_PS_SUB_MODULE_IBSS_NW_SM = 0,
-    WLAN_IBSS_PS_SUB_MODULE_IBSS_SELF_PS = 1,
-    WLAN_IBSS_PS_SUB_MODULE_IBSS_PEER_PS = 2,
-    WLAN_IBSS_PS_SUB_MODULE_MAX = 3,
-};
-
-#define WLAN_IBSS_PS_SUB_MODULE_OFFSET  0x1E
-
-A_BOOL
-dbglog_ibss_powersave_print_handler(
-        A_UINT32 mod_id,
-        A_UINT16 vap_id,
-        A_UINT32 dbg_id,
-        A_UINT32 timestamp,
-        A_UINT16 numargs,
-        A_UINT32 *args)
-{
-    static const char *nw_states[] = {
-        "WAIT_FOR_TBTT",
-        "ATIM_WINDOW_PRE_BCN",
-        "ATIM_WINDOW_POST_BCN",
-        "OUT_OF_ATIM_WINDOW",
-        "PAUSE_PENDING",
-        "PAUSED",
-    };
-
-    static const char *ps_states[] = {
-        "ACTIVE",
-        "SLEEP_TX_SEND",
-        "SLEEP_DOZE_PAUSE_PENDING",
-        "SLEEP_DOZE",
-        "SLEEP_AWAKE",
-        "ACTIVE_TX_SEND",
-        "PAUSE_TX_SEND",
-        "PAUSED",
-    };
-
-    static const char *peer_ps_states[] = {
-        "ACTIVE",
-        "SLEEP_AWAKE",
-        "SLEEP_DOZE",
-        "PS_UNKNOWN",
-    };
-
-    static const char *events[] = {
-        "START",
-        "STOP",
-        "SWBA",
-        "TBTT",
-        "TX_BCN_CMP",
-        "SEND_COMPLETE",
-        "SEND_N_COMPLETE",
-        "PRE_SEND",
-        "RX",
-        "UC_INACTIVITY_TIMEOUT",
-        "BC_INACTIVITY_TIMEOUT",
-        "ATIM_WINDOW_BEGIN",
-        "ATIM_WINDOW_END",
-        "HWQ_EMPTY",
-        "UC_ATIM_RCVD",
-        "TRAFFIC_EXCHANGE_DONE",
-        "POWER_SAVE_STATE_CHANGE",
-        "NEW_PEER_JOIN",
-        "IBSS_VDEV_PAUSE_REQUEST",
-        "IBSS_VDEV_PAUSE_RESPONSE",
-        "IBSS_VDEV_PAUSE_TIMEOUT",
-        "IBSS_VDEV_UNPAUSE_REQUEST",
-        "PS_STATE_CHANGE",
-    };
-
-    enum wlan_ibss_ps_sub_module sub_module;
-
-    switch (dbg_id) {
-    case DBGLOG_DBGID_SM_FRAMEWORK_PROXY_DBGLOG_MSG:
-        sub_module = (args[1] >> WLAN_IBSS_PS_SUB_MODULE_OFFSET) & 0x3;
-        switch(sub_module)
-        {
-            case WLAN_IBSS_PS_SUB_MODULE_IBSS_NW_SM:
-                dbglog_sm_print(timestamp, vap_id, numargs, args, "IBSS PS NW",
-                                nw_states, ARRAY_LENGTH(nw_states), events,
-                                ARRAY_LENGTH(events));
-                break;
-            case WLAN_IBSS_PS_SUB_MODULE_IBSS_SELF_PS:
-                dbglog_sm_print(timestamp, vap_id, numargs, args,
-                                "IBSS PS Self", ps_states, ARRAY_LENGTH(ps_states),
-                                events, ARRAY_LENGTH(events));
-                break;
-            case WLAN_IBSS_PS_SUB_MODULE_IBSS_PEER_PS:
-                dbglog_sm_print(timestamp, vap_id, numargs, args,
-                                "IBSS PS Peer", peer_ps_states,
-                                 ARRAY_LENGTH(peer_ps_states), events,
-                                 ARRAY_LENGTH(events));
-                break;
-            default:
-                break;
-        }
-        break;
-    case IBSS_PS_DBGID_PEER_CREATE:
-        if (numargs == 2) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: peer alloc failed for peer ID:%u", args[0]);
-        } else if (numargs == 1) {
-                   dbglog_printf(timestamp, vap_id,
-                                 "IBSS PS: create peer ID=%u", args[0]);
-        }
-        break;
-    case IBSS_PS_DBGID_PEER_DELETE:
-        if (numargs == 4) {
-            dbglog_printf(timestamp, vap_id,
-                "IBSS PS: delete peer ID=%u num_peers:%d num_sleeping_peers:%d ps_enabled_for_this_peer:%d",
-                          args[0], args[1], args[2], args[3]);
-        }
-        break;
-    case IBSS_PS_DBGID_VDEV_CREATE:
-        if (numargs == 1) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: vdev alloc failed",
-                          args[0]);
-        } else if (numargs == 0) {
-                   dbglog_printf(timestamp, vap_id,
-                                 "IBSS PS: vdev created");
-        }
-        break;
-    case IBSS_PS_DBGID_VDEV_DELETE:
-        dbglog_printf(timestamp, vap_id, "IBSS PS: vdev deleted");
-        break;
-
-    case IBSS_PS_DBGID_VDEV_EVENT:
-        if (numargs == 1) {
-           if (args[0] == 5) {
-               dbglog_printf(timestamp, vap_id,
-                             "IBSS PS: vdev event for peer add");
-           } else if (args[0] == 7) {
-                      dbglog_printf(timestamp, vap_id,
-                                    "IBSS PS: vdev event for peer delete");
-            }
-            else {
-                     dbglog_printf(timestamp, vap_id,
-                                   "IBSS PS: vdev event %u", args[0]);
-            }
-        }
-        break;
-
-    case IBSS_PS_DBGID_PEER_EVENT:
-        if (numargs == 4) {
-            if (args[0] == 0xFFFF) {
-                dbglog_printf(timestamp, vap_id,
-                              "IBSS PS: pre_send for peer:%u peer_type:%u sm_event_mask:%0x",
-                              args[1], args[3], args[2]);
-            } else if (args[0] == 0x20000) {
-                dbglog_printf(timestamp, vap_id,
-                              "IBSS PS: send_complete for peer:%u peer_type:%u sm_event_mask:%0x",
-                              args[1], args[3], args[2]);
-            } else if (args[0] == 0x10) {
-                dbglog_printf(timestamp, vap_id,
-                              "IBSS PS: send_n_complete for peer:%u peer_type:%u sm_event_mask:%0x",
-                              args[1], args[3], args[2]);
-            } else if (args[0] == 0x40) {
-                dbglog_printf(timestamp, vap_id,
-                              "IBSS PS: rx event for peer:%u peer_type:%u sm_event_mask:%0x",
-                              args[1], args[3], args[2]);
-            } else if (args[0] == 0x4) {
-                dbglog_printf(timestamp, vap_id,
-                              "IBSS PS: hw_q_empty for peer:%u peer_type:%u sm_event_mask:%0x",
-                              args[1], args[3], args[2]);
-            }
-        }
-        break;
-
-    case IBSS_PS_DBGID_DELIVER_CAB:
-        if (numargs == 4) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Deliver CAB n_mpdu:%d send_flags:%0x tid_cur:%d q_depth_for_other_tid:%d",
-                          args[0], args[1], args[2], args[3]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_DELIVER_UC_DATA:
-        if (numargs == 4) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Deliver UC data peer:%d tid:%d n_mpdu:%d send_flags:%0x",
-                          args[0], args[1], args[2], args[3]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_DELIVER_UC_DATA_ERROR:
-        if (numargs == 4) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Deliver UC data error peer:%d tid:%d allowed_tidmask:%0x, pending_tidmap:%0x",
-                          args[0], args[1], args[2], args[3]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_UC_INACTIVITY_TMR_RESTART:
-        if (numargs == 2) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: UC timer restart peer:%d timer_val:%0x",
-                          args[0], args[1]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_MC_INACTIVITY_TMR_RESTART:
-        if (numargs == 1) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: MC timer restart timer_val:%0x",
-                          args[0]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_NULL_TX_COMPLETION:
-        if (numargs == 3) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: null tx completion peer:%d tx_completion_status:%d flags:%0x",
-                          args[0], args[1], args[2]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_ATIM_TIMER_START:
-        if (numargs == 4) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: ATIM timer start tsf:%0x %0x tbtt:%0x %0x",
-                          args[0], args[1], args[2], args[3]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_UC_ATIM_SEND:
-        if (numargs == 2) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Send ATIM to peer:%d",
-                          args[1]);
-        } else if (numargs == 1) {
-                   dbglog_printf(timestamp, vap_id,
-                                 "IBSS PS: no peers to send UC ATIM",
-                                 args[1]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_BC_ATIM_SEND:
-        if (numargs == 2) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: MC Data, num_of_peers:%d bc_atim_sent:%d",
-                          args[1], args[0]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_UC_TIMEOUT:
-        if (numargs == 2) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: UC timeout for peer:%d send_null:%d",
-                          args[0], args[1]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_PWR_COLLAPSE_ALLOWED:
-        dbglog_printf(timestamp, vap_id, "IBSS PS: allow power collapse");
-        break;
-
-    case IBSS_PS_DBGID_PWR_COLLAPSE_NOT_ALLOWED:
-        if (numargs == 0) {
-            dbglog_printf(timestamp, vap_id,
-                           "IBSS PS: power collapse not allowed by INI");
-        } else if(numargs == 1) {
-            dbglog_printf(timestamp, vap_id, "IBSS PS: power collapse not allowed since peer id:%d is not PS capable",
-                args[0]);
-        } else if(numargs == 2) {
-            dbglog_printf(timestamp, vap_id, "IBSS PS: power collapse not allowed - no peers in NW");
-        } else if (numargs == 3) {
-                  if (args[0] == 2) {
-                      dbglog_printf(timestamp, vap_id,
-                                    "IBSS PS: power collapse not allowed, non-zero qdepth %d %d",
-                                    args[1], args[2]);
-                  } else if (args[0] == 3) {
-                             dbglog_printf(timestamp, vap_id,
-                                           "IBSS PS: power collapse not allowed by peer:%d peer_flags:%0x",
-                                           args[1], args[2]);
-                  }
-        } else if (numargs == 5) {
-                   dbglog_printf(timestamp, vap_id,
-                                 "IBSS PS: power collapse not allowed by state m/c nw_cur_state:%d nw_next_state:%d ps_cur_state:%d flags:%0x",
-                                 args[1], args[2], args[3], args[4]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_SET_PARAM:
-        if (numargs == 2) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Set Param ID:%0x Value:%0x",
-                          args[0], args[1]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_HOST_TX_PAUSE:
-        if (numargs == 1) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Pausing host, vdev_map:%0x",
-                          args[0]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_HOST_TX_UNPAUSE:
-        if (numargs == 1) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Unpausing host, vdev_map:%0x",
-                          args[0]);
-        }
-        break;
-    case IBSS_PS_DBGID_PS_DESC_BIN_LWM:
-        if (numargs == 1) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: LWM, vdev_map:%0x",
-                          args[0]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_PS_DESC_BIN_HWM:
-        if (numargs == 1) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: HWM, vdev_map:%0x",
-                          args[0]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_PS_KICKOUT_PEER:
-        if (numargs == 3) {
-            dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: Kickout peer id:%d atim_fail_cnt:%d status:%d",
-                          args[0], args[1], args[2]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_SET_PEER_PARAM:
-        if(numargs == 3) {
-            dbglog_printf(timestamp, vap_id, "IBSS PS: Set Peer Id:%d Param ID:%0x Value:%0x",
-                args[0], args[1], args[2]);
-        }
-        break;
-
-    case IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH:
-        if(numargs == 4) {
-            if(args[0] == 0xDEAD) {
-                dbglog_printf(timestamp, vap_id, "IBSS PS: ATIM window length mismatch, our's:%d, peer id:%d, peer's:%d",
-                    args[1], args[2], args[3]);
-            } else if(args[0] == 0xBEEF) {
-                dbglog_printf(timestamp, vap_id, "IBSS PS: Peer ATIM window length changed, peer id:%d, peer recorded atim window:%d new atim window:%d",
-                    args[1], args[2], args[3]);
-            }
-        }
-        break;
-
-    case IBSS_PS_DBGID_RX_CHAINMASK_CHANGE:
-        if(numargs == 2) {
-            if(args[1] == 0x1) {
-                dbglog_printf(timestamp, vap_id, "IBSS PS: Voting for low power chainmask from :%d", args[0]);
-            } else {
-                dbglog_printf(timestamp, vap_id, "IBSS PS: Voting for high power chainmask from :%d", args[0]);
-            }
-        }
-        break;
-
     default:
         return FALSE;
     }
@@ -3016,28 +2354,28 @@ dbglog_wal_print_handler(
         dbglog_printf(timestamp, vap_id, "WAL Tx enqueue discard msdu_id=0x%x", args[0]);
         break;
     case WAL_DBGID_SET_HW_CHAINMASK:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SET_HW_CHAINMASK "
+        dbglog_printf(timestamp, vap_id, "WAL set hw chainmask "
                                          "pdev=%d, txchain=0x%x, rxchain=0x%x",
                 args[0], args[1], args[2]);
         break;
     case WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL rxstop=%d, txstop=%d",
+        dbglog_printf(timestamp, vap_id, "WAL hw chainmask tx stop fail rxstop=%d, txstop=%d",
                 args[0], args[1]);
         break;
     case WAL_DBGID_GET_HW_CHAINMASK:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_GET_HW_CHAINMASK "
+        dbglog_printf(timestamp, vap_id, "WAL get hw chainmask "
                                          "txchain=0x%x, rxchain=0x%x",
                 args[0], args[1]);
         break;
     case WAL_DBGID_SMPS_DISABLE:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SMPS_DISABLE");
+        dbglog_printf(timestamp, vap_id, "WAL smps disable");
         break;
     case WAL_DBGID_SMPS_ENABLE_HW_CNTRL:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SMPS_ENABLE_HW_CNTRL low_pwr_mask=0x%x, high_pwr_mask=0x%x",
+        dbglog_printf(timestamp, vap_id, "WAL enable hw ctrl low_pwr_mask=0x%x, high_pwr_mask=0x%x",
                 args[0], args[1]);
         break;
     case WAL_DBGID_SMPS_SWSEL_CHAINMASK:
-        dbglog_printf(timestamp, vap_id, "WAL_DBGID_SMPS_SWSEL_CHAINMASK low_pwr=0x%x, chain_mask=0x%x",
+        dbglog_printf(timestamp, vap_id, "WAL smps swsel chainmask low_pwr=0x%x, chain_mask=0x%x",
                 args[0], args[1]);
     break;
     default:
@@ -3120,7 +2458,6 @@ A_BOOL dbglog_coex_print_handler(
         "SCHED_WLAN_PAUSE",
         "SCHED_WLAN_POSTPAUSE",
         "SCHED_WLAN_UNPAUSE",
-        "COEX_SCHED_MWS",
     };
 
     static const char * coex_trf_mgmt_type[] = {
@@ -3128,15 +2465,10 @@ A_BOOL dbglog_coex_print_handler(
         "TRF_MGMT_SHAPE_PM",
         "TRF_MGMT_SHAPE_PSP",
         "TRF_MGMT_SHAPE_S_CTS",
-        "TRF_MGMT_SHAPE_OCS",
-        "TRF_MGMT_SHAPE_FIXED_TIME",
-        "TRF_MGMT_SHAPE_NOA",
-        "TRF_MGMT_SHAPE_OCS_CRITICAL",
-        "TRF_MGMT_NONE",
     };
 
     static const char * coex_system_status[] = {
-        "ALL_OFF",
+        "BT_OFF",
         "BTCOEX_NOT_REQD",
         "WLAN_IS_IDLE",
         "EXECUTE_SCHEME",
@@ -3144,7 +2476,6 @@ A_BOOL dbglog_coex_print_handler(
         "WLAN_SLEEPING",
         "WLAN_IS_PAUSED",
         "WAIT_FOR_NEXT_ACTION",
-        "SOC_WAKE",
     };
 
     static const char * wlan_rssi_type[] = {
@@ -3219,12 +2550,6 @@ A_BOOL dbglog_coex_print_handler(
         "BT_COEX_CRITICAL",
     };
 
-    static const char * wlan_power_state[] = {
-        "SLEEP",
-        "AWAKE",
-        "FULL_SLEEP",
-    };
-
     static const char * coex_psp_error_type[] = {
         "DISABLED_STATE",
         "VDEV_NULL",
@@ -3237,44 +2562,18 @@ A_BOOL dbglog_coex_print_handler(
         "SET_TIMER_PARAM",
     };
 
-    static const char * wlan_phymode[] = {
-        "A",
-        "G",
-        "B",
-        "G_ONLY",
-        "NA_HT20",
-        "NG_HT20",
-        "NA_HT40",
-        "NG_HT40",
-        "AC_VHT20",
-        "AC_VHT40",
-        "AC_VHT80",
-        "AC_VHT20_2G",
-        "AC_VHT40_2G",
-        "AC_VHT80_2G",
-        "UNKNOWN",
-    };
-
-    static const char * wlan_curr_band[] = {
-        "2G",
-        "5G",
-    };
-
     dbg_id_str = dbglog_get_msg(mod_id, dbg_id);
 
     switch (dbg_id) {
         case COEX_SYSTEM_UPDATE:
-            if (numargs == 1 && args[0] < 9) {
+            if (numargs >= 1 && args[0] < 8) {
                 dbglog_printf(timestamp, vap_id, "%s: %s", dbg_id_str, coex_system_status[args[0]]);
-            } else if (numargs >= 5 && args[0] < 9 && args[2] < 9) {
-                dbglog_printf(timestamp, vap_id, "%s: %s, WlanSysState(0x%x), %s, NumChains(%u), AggrLimit(%u)",
-                    dbg_id_str, coex_system_status[args[0]], args[1], coex_trf_mgmt_type[args[2]], args[3], args[4]);
             } else {
                 return FALSE;
             }
             break;
         case COEX_SCHED_START:
-            if (numargs >= 5 && args[0] < 5 && args[2] < 9 && args[3] < 4 && args[4] < 4) {
+           if (numargs >= 5 && args[0] < 5 && args[2] < 4 && args[3] < 4 && args[4] < 4) {
                 if (args[1] == 0xffffffff) {
                     dbglog_printf(timestamp, vap_id, "%s: %s, DETERMINE_DURATION, %s, %s, %s",
                         dbg_id_str, coex_sched_req[args[0]], coex_trf_mgmt_type[args[2]], wlan_rx_xput_status[args[3]], wlan_rssi_type[args[4]]);
@@ -3287,9 +2586,9 @@ A_BOOL dbglog_coex_print_handler(
             }
             break;
         case COEX_SCHED_RESULT:
-            if (numargs >= 5 && args[0] < 5 && args[1] < 9 && args[2] < 9) {
-                dbglog_printf(timestamp, vap_id, "%s: %s, %s, %s, CoexMgrPolicy(%u), IdleOverride(%u)",
-                    dbg_id_str, coex_sched_req[args[0]], coex_trf_mgmt_type[args[1]], coex_trf_mgmt_type[args[2]], args[3], args[4]);
+            if (numargs >= 5 && args[0] < 6) {
+                dbglog_printf(timestamp, vap_id, "%s: %s, CoexMgrPolicy(%u), WlanIsIdleOverride(%u), HidConcurTxOverride(%u), minRSSI(%u)",
+                    dbg_id_str, coex_sched_type[args[0]], args[1], args[2], args[3], args[4]);
             } else {
                 return FALSE;
             }
@@ -3302,24 +2601,17 @@ A_BOOL dbglog_coex_print_handler(
             }
             break;
         case COEX_TRF_FREERUN:
-            if (numargs >= 5 && args[0] < 7) {
+        case COEX_TRF_SHAPE_PM:
+            if (numargs >= 5 && args[0] < 6) {
                 dbglog_printf(timestamp, vap_id, "%s: %s, AllocatedBtIntvls(%u), BtIntvlCnt(%u), AllocatedWlanIntvls(%u), WlanIntvlCnt(%u)",
                     dbg_id_str, coex_sched_type[args[0]], args[1], args[2], args[3], args[4]);
             } else {
                 return FALSE;
             }
             break;
-        case COEX_TRF_SHAPE_PM: // used by ocs now
-            if (numargs >= 3) {
-                dbglog_printf(timestamp, vap_id, "%s: IntvlLength(%u), BtDuration(%u), WlanDuration(%u)",
-                    dbg_id_str, args[0], args[1], args[2]);
-            } else {
-                return FALSE;
-            }
-            break;
         case COEX_SYSTEM_MONITOR:
             if (numargs >= 5 && args[1] < 4 && args[4] < 4) {
-                dbglog_printf(timestamp, vap_id, "%s: WlanRxCritical(%u), %s, MinDirectRxRate(%u), MonitorActiveNum(%u), %s",
+                dbglog_printf(timestamp, vap_id, "%s: WlanRxCritical(%u), %s, MinDirectRxRate(%u), XputMonitorActiveNum(%u), %s",
                     dbg_id_str, args[0], wlan_rx_xput_status[args[1]], args[2], args[3], wlan_rssi_type[args[4]]);
             } else {
                 return FALSE;
@@ -3334,9 +2626,9 @@ A_BOOL dbglog_coex_print_handler(
             }
             break;
         case COEX_WLAN_INTERVAL_START:
-            if (numargs >= 5) {
-                dbglog_printf(timestamp, vap_id, "%s: WlanIntvlCnt(%u), Duration(%u), Weight(%u), BaseIdleOverride(%u), WeightMat[0](0x%x)",
-                    dbg_id_str, args[0], args[1], args[2], args[3], args[4]);
+            if (numargs >= 4) {
+                dbglog_printf(timestamp, vap_id, "%s: WlanIntvlCnt(%u), XputMonitorActiveNum(%u), Duration(%u), Weight(%u)",
+                    dbg_id_str, args[0], args[1], args[2], args[3]);
             } else {
                 return FALSE;
             }
@@ -3351,24 +2643,8 @@ A_BOOL dbglog_coex_print_handler(
             break;
         case COEX_BT_INTERVAL_START:
             if (numargs >= 5) {
-                dbglog_printf(timestamp, vap_id, "%s: BtIntvlCnt(%u), Duration(%u), Weight(%u), BaseIdleOverride(%u), WeightMat[0](0x%x), ",
+                dbglog_printf(timestamp, vap_id, "%s: BtIntvlCnt(%u), HidConcurrentTxOverride(%u), EnableBtBwLimit(%u), Duration(%u), Weight(%u)",
                     dbg_id_str, args[0], args[1], args[2], args[3], args[4]);
-            } else {
-                return FALSE;
-            }
-            break;
-        case COEX_POWER_CHANGE:
-            if (numargs >= 3 && args[1] < 3 && args[2] < 3) {
-                dbglog_printf(timestamp, vap_id, "%s: Event(0x%x) %s->%s",
-                    dbg_id_str, args[0], wlan_power_state[args[1]], wlan_power_state[args[2]]);
-            } else {
-                return FALSE;
-            }
-            break;
-        case COEX_CHANNEL_CHANGE:
-            if (numargs >= 5 && args[3] < 2 && args[4] < 15) {
-                dbglog_printf(timestamp, vap_id, "%s: %uMhz->%uMhz, WlanSysState(0x%x), CurrBand(%s), PhyMode(%s)",
-                    dbg_id_str, args[0], args[1], args[2], wlan_curr_band[args[3]], wlan_phymode[args[4]]);
             } else {
                 return FALSE;
             }
@@ -3377,48 +2653,6 @@ A_BOOL dbglog_coex_print_handler(
             if (numargs >= 5 && args[0] < 23 && args[1] < 6 && args[3] < 2) {
                 dbglog_printf(timestamp, vap_id, "%s: %s, %s, PsPollAvg(%u), %s, CurrT(%u)",
                     dbg_id_str, wlan_psp_stimulus[args[0]], coex_pspoll_state[args[1]], args[2], coex_scheduler_interval[args[3]], args[4]);
-            } else {
-                return FALSE;
-            }
-            break;
-        //Translate following into decimal
-        case COEX_SINGLECHAIN_DBG_1:
-        case COEX_SINGLECHAIN_DBG_2:
-        case COEX_SINGLECHAIN_DBG_3:
-        case COEX_MULTICHAIN_DBG_1:
-        case COEX_MULTICHAIN_DBG_2:
-        case COEX_MULTICHAIN_DBG_3:
-        case BTCOEX_DBG_MCI_1:
-        case BTCOEX_DBG_MCI_2:
-        case BTCOEX_DBG_MCI_3:
-        case BTCOEX_DBG_MCI_4:
-        case BTCOEX_DBG_MCI_5:
-        case BTCOEX_DBG_MCI_6:
-        case BTCOEX_DBG_MCI_7:
-        case BTCOEX_DBG_MCI_8:
-        case BTCOEX_DBG_MCI_9:
-        case BTCOEX_DBG_MCI_10:
-
-            if (numargs > 0) {
-                dbglog_printf_no_line_break(timestamp, vap_id, "%s: %u",
-                        dbg_id_str, args[0]);
-                for (i = 1; i < numargs; i++) {
-                    printk(", %u", args[i]);
-                }
-                printk("\n");
-            } else {
-                return FALSE;
-            }
-            break;
-        case COEX_LinkID:
-            if (numargs >= 4) {
-                if (args[0]) {  //Add profile
-                    dbglog_printf(timestamp, vap_id, "%s Alloc: LocalID(%u), RemoteID(%u), MinFreeLocalID(%u)",
-                        dbg_id_str, args[1], args[2], args[3]);
-                } else {  //Remove profile
-                    dbglog_printf(timestamp, vap_id, "%s Dealloc: LocalID(%u), RemoteID(%u), MinFreeLocalID(%u)",
-                        dbg_id_str, args[1], args[2], args[3]);
-                }
             } else {
                 return FALSE;
             }
@@ -3432,8 +2666,11 @@ A_BOOL dbglog_coex_print_handler(
             }
             break;
         case COEX_TRF_SHAPE_PSP:
-            if (numargs >= 5 && args[0] < 7 && args[1] < 7) {
-                    dbglog_printf(timestamp, vap_id, "%s: %s, %s, Dur(%u), BtTriggerRecvd(%u), PspWlanCritical(%u)",
+            if (numargs == 2 && args[0] < 6) {
+                dbglog_printf(timestamp, vap_id, "%s: %s, CurrT(%u)",
+                    dbg_id_str, coex_pspoll_state[args[0]], args[1]);
+            } else if (numargs >= 5 && args[0] < 6 && args[1] < 7) {
+                    dbglog_printf(timestamp, vap_id, "%s: %s, %s, Dur(%u), WlanOverride(%u), PrioritizeWlanDuringCollis(%u)",
                         dbg_id_str, coex_sched_type[args[0]], wlan_weight[args[1]], args[2], args[3], args[4]);
             } else {
                 return FALSE;
@@ -3449,7 +2686,7 @@ A_BOOL dbglog_coex_print_handler(
             break;
         case COEX_PSP_READY_STATE:
             if (numargs >= 5) {
-                dbglog_printf(timestamp, vap_id, "%s: T2NonWlan(%u), CoexSchedulerEndTS(%u), MoreData(%u), PSPRespExpectedTS(%u), NonWlanIdleT(%u)",
+                dbglog_printf(timestamp, vap_id, "%s: T2BT(%u), CoexSchedulerEndTS(%u), MoreData(%u), PSPRespExpectedTS(%u), NonWlanIdleT(%u)",
                     dbg_id_str, args[0], args[1], args[2], args[3], args[4]);
             } else {
                 return FALSE;
@@ -3500,6 +2737,53 @@ A_BOOL dbglog_coex_print_handler(
                     dbglog_printf(timestamp, vap_id, "%s: RsExpectedTS(%u), RespActualTS(%u), Underrun, RsUnderrunT(%u), RsRxDur(%u)",
                         dbg_id_str, args[0], args[1], args[3], args[4]);
                 }
+            } else {
+                return FALSE;
+            }
+            break;
+        //Translate following into decimal
+        case COEX_SINGLECHAIN_DBG_1:
+        case COEX_SINGLECHAIN_DBG_2:
+        case COEX_SINGLECHAIN_DBG_3:
+        case COEX_MULTICHAIN_DBG_1:
+        case COEX_MULTICHAIN_DBG_2:
+        case COEX_MULTICHAIN_DBG_3:
+            if (numargs > 0) {
+                dbglog_printf_no_line_break(timestamp, vap_id, "%s: %u",
+                        dbg_id_str, args[0]);
+                for (i = 1; i < numargs; i++) {
+                    AR_DEBUG_PRINTF(ATH_DEBUG_INFO, (", %u", args[i]));
+                }
+                AR_DEBUG_PRINTF(ATH_DEBUG_INFO, ("\n"));
+            } else {
+                return FALSE;
+            }
+            break;
+        case COEX_LinkID:
+            if (numargs >= 4) {
+                if (args[0]) {  //Add profile
+                    dbglog_printf(timestamp, vap_id, "%s Alloc: LocalID(%u), RemoteID(%u), MinFreeLocalID(%u)",
+                        dbg_id_str, args[1], args[2], args[3]);
+                } else {  //Remove profile
+                    dbglog_printf(timestamp, vap_id, "%s Dealloc: LocalID(%u), RemoteID(%u), MinFreeLocalID(%u)",
+                        dbg_id_str, args[1], args[2], args[3]);
+                }
+            } else {
+                return FALSE;
+            }
+            break;
+        case COEX_BT_DURATION:
+            if (numargs == 3) {
+                dbglog_printf(timestamp, vap_id, "%s: Result(%u), NumOfValidSchedMsgs(%u) PrioLowerLimit(%u)",
+                    dbg_id_str, args[0], args[1], args[2]);
+            } else {
+                return FALSE;
+            }
+            break;
+        case COEX_T2BT:
+            if (numargs == 3) {
+                dbglog_printf(timestamp, vap_id, "%s: Result(%u), BtTime1(%u), PrioLowerLimit(%u)",
+                    dbg_id_str, args[0], args[1], args[2]);
             } else {
                 return FALSE;
             }
@@ -3688,18 +2972,18 @@ A_BOOL dbglog_smps_print_handler(A_UINT32 mod_id,
                 args[2]);
         break;
     case STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE");
+        dbglog_printf(timestamp, vap_id, "STA_SMPS ebt event chmask update");
         break;
     case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE "
+        dbglog_printf(timestamp, vap_id, "STA_SMPS dtim chmask update "
                                          "tx_mask %#x rx_mask %#x arb_dtim_mask %#x",
                 args[0], args[1], args[2]);
         break;
     case STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE");
+        dbglog_printf(timestamp, vap_id, "STA_SMPS beacon event chmask update");
         break;
     case STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE cur_pwr_state %s new_pwr_state %s",
+        dbglog_printf(timestamp, vap_id, "STA_SMPS cur_pwr_state %s new_pwr_state %d",
                 (args[0] == 0x1 ? "SLEEP":
                  (args[0] == 0x2 ? "AWAKE":
                   (args[0] == 0x3 ? "FULL_SLEEP" : "UNKNOWN"))),
@@ -3708,12 +2992,12 @@ A_BOOL dbglog_smps_print_handler(A_UINT32 mod_id,
                   (args[1] == 0x3 ? "FULL_SLEEP" : "UNKNOWN"))));
         break;
     case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP "
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update sleep "
                                          "tx_mask %#x rx_mask %#x orig_rx %#x dtim_rx %#x",
                 args[0], args[1], args[2], args[3]);
         break;
     case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE:
-        dbglog_printf(timestamp, vap_id, "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE "
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update awake "
                                          "tx_mask %#x rx_mask %#x orig_rx %#x",
                 args[0], args[1], args[2]);
         break;
@@ -3928,58 +3212,6 @@ int dbglog_debugfs_remove(wmi_unified_t wmi_handle)
 }
 #endif /* WLAN_OPEN_SOURCE */
 
-static void
-cnss_diag_event_report(A_UINT16 event_Id, A_UINT16 length, void *pPayload)
-{
-    A_UINT8 *pBuf, *pBuf1;
-    event_report_t *pEvent_report;
-    A_UINT16 total_len;
-    total_len = sizeof(event_report_t) + length;
-    pBuf = vos_mem_malloc(total_len);
-    if (!pBuf){
-        AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-                        ("%s: vos_mem_malloc failed \n", __func__));
-        return;
-    }
-    pBuf1 = pBuf;
-    pEvent_report = (event_report_t*)pBuf;
-    pEvent_report->diag_type = DIAG_TYPE_EVENTS;
-    pEvent_report->event_id = event_Id;
-    pEvent_report->length = length;
-    pBuf += sizeof(event_report_t);
-    memcpy(pBuf, pPayload, length);
-    send_diag_netlink_data((A_UINT8 *) pBuf1, total_len, DIAG_TYPE_HOST_MSG);
-    vos_mem_free((v_VOID_t*)pBuf1);
-    return;
-
-}
-
-static void cnss_diag_send_driver_loaded(void)
-{
-    if (appstarted) {
-        vos_event_wlan_bringup_status_payload_type wlan_bringup_status;
-         /* Send Driver up command */
-        strlcpy(&wlan_bringup_status.driverVersion[0], QWLAN_VERSIONSTR,
-                    sizeof(wlan_bringup_status.driverVersion));
-        wlan_bringup_status.wlanStatus = DIAG_WLAN_DRIVER_LOADED;
-        cnss_diag_event_report(EVENT_WLAN_BRINGUP_STATUS,
-                      sizeof(wlan_bringup_status), &wlan_bringup_status);
-        senddriverstatus = FALSE;
-    }
-    else
-        senddriverstatus = TRUE;
-}
-
-static void cnss_diag_send_driver_unloaded(void)
-{
-    vos_event_wlan_bringup_status_payload_type wlan_bringup_status;
-     /* Send Driver down command */
-    memset(&wlan_bringup_status, 0,
-           sizeof(vos_event_wlan_bringup_status_payload_type));
-    wlan_bringup_status.wlanStatus = DIAG_WLAN_DRIVER_UNLOADED;
-    cnss_diag_event_report(EVENT_WLAN_BRINGUP_STATUS,
-        sizeof(wlan_bringup_status), &wlan_bringup_status);
-}
 /**---------------------------------------------------------------------------
   \brief cnss_diag_msg_callback() - Call back invoked by netlink service
 
@@ -3994,8 +3226,7 @@ static void cnss_diag_send_driver_unloaded(void)
 int cnss_diag_msg_callback(struct sk_buff *skb)
 {
     struct nlmsghdr *nlh;
-    struct dbglog_slot *slot;
-    A_UINT8 *msg;
+    tAniMsgHdr *msg_hdr;
 
     nlh = (struct nlmsghdr *)skb->data;
     if (!nlh)
@@ -4004,27 +3235,12 @@ int cnss_diag_msg_callback(struct sk_buff *skb)
        return -1;
     }
 
-    msg = NLMSG_DATA(nlh);
+    msg_hdr = NLMSG_DATA(nlh);
 
-    /* This check added for backward compatability */
-    if (!memcmp(msg, "Hello", 5)) {
-         appstarted = TRUE;
-         cnss_diag_pid = nlh->nlmsg_pid;
-         AR_DEBUG_PRINTF(ATH_DEBUG_INFO,
+    appstarted = TRUE;
+    cnss_diag_pid = nlh->nlmsg_pid;
+    AR_DEBUG_PRINTF(ATH_DEBUG_INFO,
                    ("%s: registered pid %d \n", __func__, cnss_diag_pid));
-         if (senddriverstatus)
-             cnss_diag_send_driver_loaded();
-         return 0;
-    }
-    else
-       slot = (struct dbglog_slot *)msg;
-    switch (slot->diag_type) {
-    case DIAG_TYPE_CRASH_INJECT:
-         process_wma_set_command(0,(int)GEN_PARAM_CRASH_INJECT, 0, GEN_CMD);
-    break;
-    default:
-    break;
-    }
     return 0;
 
 }
@@ -4043,7 +3259,6 @@ int cnss_diag_notify_wlan_close()
     /* Send nl msg about the wlan close */
     if (0 != cnss_diag_pid)
     {
-        cnss_diag_send_driver_unloaded();
         nl_srv_nl_close_indication(cnss_diag_pid);
         cnss_diag_pid = 0;
     }
@@ -4175,7 +3390,6 @@ int dbglog_parser_type_init(wmi_unified_t wmi_handle, int type)
     }
 
     dbglog_process_type = type;
-    gprint_limiter = FALSE;
 
     return A_OK;
 }
@@ -4199,29 +3413,20 @@ dbglog_init(wmi_unified_t wmi_handle)
     dbglog_reg_modprint(WLAN_MODULE_STA_SMPS, dbglog_smps_print_handler);
     dbglog_reg_modprint(WLAN_MODULE_P2P, dbglog_p2p_print_handler);
     dbglog_reg_modprint(WLAN_MODULE_PCIELP, dbglog_pcielp_print_handler);
-    dbglog_reg_modprint(WLAN_MODULE_IBSS_PWRSAVE,
-                        dbglog_ibss_powersave_print_handler);
 
     /* Register handler for F3 or debug messages */
     res = wmi_unified_register_event_handler(wmi_handle, WMI_DEBUG_MESG_EVENTID,
                        dbglog_parse_debug_logs);
-    if (res != 0)
+    if(res != 0)
         return res;
 
     /* Register handler for FW diag events */
     res = wmi_unified_register_event_handler(wmi_handle,
                      WMI_DIAG_DATA_CONTAINER_EVENTID,
                      fw_diag_data_event_handler);
-    if (res != 0)
+    if(res != 0)
         return res;
 
-    /* Register handler for new FW diag  Event, LOG, MSG combined */
-    res = wmi_unified_register_event_handler(wmi_handle, WMI_DIAG_EVENTID,
-                                   diag_fw_handler);
-    if (res != 0)
-       return res;
-
-    cnss_diag_send_driver_loaded();
 #ifdef WLAN_OPEN_SOURCE
     /* Initialize the fw debug log queue */
     skb_queue_head_init(&wmi_handle->dbglog.fwlog_queue);
