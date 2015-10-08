@@ -7248,7 +7248,7 @@ static int wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
  */
 int wlan_hdd_disconnect( hdd_adapter_t *pAdapter, u16 reason )
 {
-    int status, result = 0;
+    int status;
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     long ret;
@@ -7288,8 +7288,7 @@ int wlan_hdd_disconnect( hdd_adapter_t *pAdapter, u16 reason )
                "%s csrRoamDisconnect failure, returned %d",
                __func__, (int)status );
         pHddStaCtx->staDebugState = status;
-        result = -EINVAL;
-        goto disconnected;
+        return -EINVAL;
     }
     ret = wait_for_completion_timeout(
                 &pAdapter->disconnect_comp_var,
@@ -7299,21 +7298,18 @@ int wlan_hdd_disconnect( hdd_adapter_t *pAdapter, u16 reason )
     {
        hddLog(VOS_TRACE_LEVEL_ERROR,
               "%s: Failed to disconnect, timed out", __func__);
-       result = -ETIMEDOUT;
-       goto disconnected;
+       return -ETIMEDOUT;
     } else if (ret == -ERESTARTSYS)
     {
         hddLog(VOS_TRACE_LEVEL_ERROR,
                "%s: Failed to disconnect, wait interrupted", __func__);
-        result = -ERESTARTSYS;
+        return ret;
     }
-
-disconnected:
     VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
              FL("Set HDD connState to eConnectionState_NotConnected"));
     pHddStaCtx->conn_info.connState = eConnectionState_NotConnected;
 
-    return result;
+    return 0;
 }
 
 
