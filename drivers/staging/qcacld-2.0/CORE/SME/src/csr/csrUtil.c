@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -43,9 +43,9 @@
 #include "smsDebug.h"
 #include "smeQosInternal.h"
 #include "wlan_qct_wda.h"
+#include "vos_utils.h"
 
 #if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
-#include "vos_utils.h"
 #include "csrEse.h"
 #endif /* FEATURE_WLAN_ESE && !FEATURE_WLAN_ESE_UPLOAD*/
 
@@ -347,820 +347,6 @@ static tCsrIELenInfo gCsrIELengthTable[] = {
 /* 255 */ { SIR_MAC_ANI_WORKAROUND_EID_MIN, SIR_MAC_ANI_WORKAROUND_EID_MAX }
 };
 
-#if 0
-//Don't not insert entry into the table, put it to the end. If you have to insert, make sure it is also
-//reflected in eCsrCountryIndex
-static tCsrCountryInfo gCsrCountryInfo[eCSR_NUM_COUNTRY_INDEX] =
-{
-    {REG_DOMAIN_FCC, {'U', 'S', ' '}},       //USA/******The "US" MUST be at index 0*******/
-    {REG_DOMAIN_WORLD, {'A', 'D', ' '}},     //ANDORRA
-    {REG_DOMAIN_WORLD, {'A', 'E', ' '}},       //UAE
-    {REG_DOMAIN_WORLD, {'A', 'F', ' '}},     //AFGHANISTAN
-    {REG_DOMAIN_WORLD, {'A', 'G', ' '}},     //ANTIGUA AND BARBUDA
-    {REG_DOMAIN_WORLD, {'A', 'I', ' '}},     //ANGUILLA
-    {REG_DOMAIN_HI_5GHZ, {'A', 'L', ' '}},     //ALBANIA
-    {REG_DOMAIN_WORLD, {'A', 'M', ' '}},     //ARMENIA
-    {REG_DOMAIN_WORLD, {'A', 'N', ' '}},     //NETHERLANDS ANTILLES
-    {REG_DOMAIN_WORLD, {'A', 'O', ' '}},     //ANGOLA
-    {REG_DOMAIN_WORLD, {'A', 'Q', ' '}},     //ANTARCTICA
-    {REG_DOMAIN_HI_5GHZ, {'A', 'R', ' '}},    //ARGENTINA
-    {REG_DOMAIN_FCC, {'A', 'S', ' '}},     //AMERICAN SOMOA
-    {REG_DOMAIN_ETSI, {'A', 'T', ' '}},      //AUSTRIA
-    {REG_DOMAIN_ETSI, {'A', 'U', ' '}},      //AUSTRALIA
-    {REG_DOMAIN_WORLD, {'A', 'W', ' '}},     //ARUBA
-    {REG_DOMAIN_WORLD, {'A', 'X', ' '}},     //ALAND ISLANDS
-    {REG_DOMAIN_WORLD, {'A', 'Z', ' '}},     //AZERBAIJAN
-    {REG_DOMAIN_WORLD, {'B', 'A', ' '}},     //BOSNIA AND HERZEGOVINA
-    {REG_DOMAIN_WORLD, {'B', 'B', ' '}},     //BARBADOS
-    {REG_DOMAIN_WORLD, {'B', 'D', ' '}},     //BANGLADESH
-    {REG_DOMAIN_ETSI, {'B', 'E', ' '}},      //BELGIUM
-    {REG_DOMAIN_WORLD, {'B', 'F', ' '}},     //BURKINA FASO
-    {REG_DOMAIN_HI_5GHZ, {'B', 'G', ' '}},      //BULGARIA
-    {REG_DOMAIN_WORLD, {'B', 'H', ' '}},     //BAHRAIN
-    {REG_DOMAIN_WORLD, {'B', 'I', ' '}},     //BURUNDI
-    {REG_DOMAIN_WORLD, {'B', 'J', ' '}},     //BENIN
-    {REG_DOMAIN_WORLD, {'B', 'L', ' '}},     //SAINT BARTHELEMY
-    {REG_DOMAIN_ETSI, {'B', 'M', ' '}},     //BERMUDA
-    {REG_DOMAIN_WORLD, {'B', 'N', ' '}},     //BRUNEI DARUSSALAM
-    {REG_DOMAIN_WORLD, {'B', 'O', ' '}},     //BOLIVIA
-    {REG_DOMAIN_WORLD, {'B', 'R', ' '}},       //BRAZIL
-    {REG_DOMAIN_WORLD, {'B', 'S', ' '}},     //BAHAMAS
-    {REG_DOMAIN_WORLD, {'B', 'T', ' '}},     //BHUTAN
-    {REG_DOMAIN_WORLD, {'B', 'V', ' '}},     //BOUVET ISLAND
-    {REG_DOMAIN_WORLD, {'B', 'W', ' '}},     //BOTSWANA
-    {REG_DOMAIN_WORLD, {'B', 'Y', ' '}},     //BELARUS
-    {REG_DOMAIN_WORLD, {'B', 'Z', ' '}},     //BELIZE
-    {REG_DOMAIN_FCC, {'C', 'A', ' '}},       //CANADA
-    {REG_DOMAIN_WORLD, {'C', 'C', ' '}},     //COCOS (KEELING) ISLANDS
-    {REG_DOMAIN_WORLD, {'C', 'D', ' '}},     //CONGO, THE DEMOCRATIC REPUBLIC OF THE
-    {REG_DOMAIN_WORLD, {'C', 'F', ' '}},     //CENTRAL AFRICAN REPUBLIC
-    {REG_DOMAIN_WORLD, {'C', 'G', ' '}},     //CONGO
-    {REG_DOMAIN_ETSI, {'C', 'H', ' '}},      //SWITZERLAND
-    {REG_DOMAIN_WORLD, {'C', 'I', ' '}},     //COTE D'IVOIRE
-    {REG_DOMAIN_WORLD, {'C', 'K', ' '}},     //COOK ISLANDS
-    {REG_DOMAIN_WORLD, {'C', 'L', ' '}},       //CHILE
-    {REG_DOMAIN_WORLD, {'C', 'M', ' '}},     //CAMEROON
-    {REG_DOMAIN_HI_5GHZ, {'C', 'N', ' '}},   //CHINA
-    {REG_DOMAIN_WORLD, {'C', 'O', ' '}},       //COLOMBIA
-    {REG_DOMAIN_WORLD, {'C', 'R', ' '}},       //COSTA RICA
-    {REG_DOMAIN_WORLD, {'C', 'U', ' '}},     //CUBA
-    {REG_DOMAIN_WORLD, {'C', 'V', ' '}},     //CAPE VERDE
-    {REG_DOMAIN_WORLD, {'C', 'X', ' '}},     //CHRISTMAS ISLAND
-    {REG_DOMAIN_WORLD, {'C', 'Y', ' '}},      //CYPRUS
-    {REG_DOMAIN_HI_5GHZ, {'C', 'Z', ' '}},      //CZECH REPUBLIC
-    {REG_DOMAIN_ETSI, {'D', 'E', ' '}},      //GERMANY
-    {REG_DOMAIN_WORLD, {'D', 'J', ' '}},     //DJIBOUTI
-    {REG_DOMAIN_ETSI, {'D', 'K', ' '}},      //DENMARK
-    {REG_DOMAIN_WORLD, {'D', 'M', ' '}},     //DOMINICA
-    {REG_DOMAIN_WORLD, {'D', 'O', ' '}},       //DOMINICAN REPUBLIC
-    {REG_DOMAIN_WORLD, {'D', 'Z', ' '}},     //ALGERIA
-    {REG_DOMAIN_WORLD, {'E', 'C', ' '}},       //ECUADOR
-    {REG_DOMAIN_HI_5GHZ, {'E', 'E', ' '}},      //ESTONIA
-    {REG_DOMAIN_WORLD, {'E', 'G', ' '}},     //EGYPT
-    {REG_DOMAIN_WORLD, {'E', 'H', ' '}},     //WESTERN SAHARA
-    {REG_DOMAIN_WORLD, {'E', 'R', ' '}},     //ERITREA
-    {REG_DOMAIN_ETSI, {'E', 'S', ' '}},      //SPAIN
-    {REG_DOMAIN_WORLD, {'E', 'T', ' '}},     //ETHIOPIA
-    {REG_DOMAIN_WORLD, {'F', 'I', ' '}},      //FINLAND
-    {REG_DOMAIN_WORLD, {'F', 'J', ' '}},     //FIJI
-    {REG_DOMAIN_WORLD, {'F', 'K', ' '}},     //FALKLAND ISLANDS (MALVINAS)
-    {REG_DOMAIN_WORLD, {'F', 'M', ' '}},     //MICRONESIA, FEDERATED STATES OF
-    {REG_DOMAIN_WORLD, {'F', 'O', ' '}},     //FAROE ISLANDS
-    {REG_DOMAIN_ETSI, {'F', 'R', ' '}},      //FRANCE
-    {REG_DOMAIN_WORLD, {'G', 'A', ' '}},     //GABON
-    {REG_DOMAIN_ETSI, {'G', 'B', ' '}},      //UNITED KINGDOM
-    {REG_DOMAIN_WORLD, {'G', 'D', ' '}},     //GRENADA
-    {REG_DOMAIN_HI_5GHZ, {'G', 'E', ' '}},     //GEORGIA
-    {REG_DOMAIN_WORLD, {'G', 'F', ' '}},     //FRENCH GUIANA
-    {REG_DOMAIN_ETSI, {'G', 'G', ' '}},      //GUERNSEY
-    {REG_DOMAIN_WORLD, {'G', 'H', ' '}},     //GHANA
-    {REG_DOMAIN_WORLD, {'G', 'I', ' '}},      //GIBRALTAR
-    {REG_DOMAIN_WORLD, {'G', 'L', ' '}},     //GREENLAND
-    {REG_DOMAIN_WORLD, {'G', 'M', ' '}},     //GAMBIA
-    {REG_DOMAIN_WORLD, {'G', 'N', ' '}},     //GUINEA
-    {REG_DOMAIN_WORLD, {'G', 'P', ' '}},     //GUADELOUPE
-    {REG_DOMAIN_WORLD, {'G', 'Q', ' '}},     //EQUATORIAL GUINEA
-    {REG_DOMAIN_ETSI, {'G', 'R', ' '}},      //GREECE
-    {REG_DOMAIN_WORLD, {'G', 'S', ' '}},     //SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS
-    {REG_DOMAIN_WORLD, {'G', 'T', ' '}},       //GUATEMALA
-    {REG_DOMAIN_WORLD, {'G', 'U', ' '}},     //GUAM
-    {REG_DOMAIN_WORLD, {'G', 'W', ' '}},     //GUINEA-BISSAU
-    {REG_DOMAIN_WORLD, {'G', 'Y', ' '}},     //GUYANA
-    {REG_DOMAIN_WORLD, {'H', 'K', ' '}},      //HONGKONG
-    {REG_DOMAIN_WORLD, {'H', 'M', ' '}},     //HEARD ISLAND AND MCDONALD ISLANDS
-    {REG_DOMAIN_WORLD, {'H', 'N', ' '}},       //HONDURAS
-    {REG_DOMAIN_HI_5GHZ, {'H', 'R', ' '}},      //CROATIA
-    {REG_DOMAIN_WORLD, {'H', 'T', ' '}},     //HAITI
-    {REG_DOMAIN_HI_5GHZ, {'H', 'U', ' '}},      //HUNGARY
-    {REG_DOMAIN_APAC, {'I', 'D', ' '}},     //INDONESIA
-    {REG_DOMAIN_ETSI, {'I', 'E', ' '}},     //IRELAND
-    {REG_DOMAIN_WORLD, {'I', 'L', ' '}},        //ISREAL
-    {REG_DOMAIN_ETSI, {'I', 'M', ' '}},      //ISLE OF MAN
-    {REG_DOMAIN_WORLD, {'I', 'N', ' '}},      //INDIA
-    {REG_DOMAIN_ETSI, {'I', 'O', ' '}},     //BRITISH INDIAN OCEAN TERRITORY
-    {REG_DOMAIN_WORLD, {'I', 'Q', ' '}},     //IRAQ
-    {REG_DOMAIN_WORLD, {'I', 'R', ' '}},     //IRAN, ISLAMIC REPUBLIC OF
-    {REG_DOMAIN_WORLD, {'I', 'S', ' '}},      //ICELAND
-    {REG_DOMAIN_ETSI, {'I', 'T', ' '}},      //ITALY
-    {REG_DOMAIN_ETSI, {'J', 'E', ' '}},      //JERSEY
-    {REG_DOMAIN_WORLD, {'J', 'M', ' '}},     //JAMAICA
-    {REG_DOMAIN_WORLD, {'J', 'O', ' '}},     //JORDAN
-    {REG_DOMAIN_JAPAN, {'J', 'P', ' '}},     //JAPAN
-    {REG_DOMAIN_WORLD, {'K', 'E', ' '}},     //KENYA
-    {REG_DOMAIN_WORLD, {'K', 'G', ' '}},     //KYRGYZSTAN
-    {REG_DOMAIN_WORLD, {'K', 'H', ' '}},     //CAMBODIA
-    {REG_DOMAIN_WORLD, {'K', 'I', ' '}},     //KIRIBATI
-    {REG_DOMAIN_WORLD, {'K', 'M', ' '}},     //COMOROS
-    {REG_DOMAIN_WORLD, {'K', 'N', ' '}},     //SAINT KITTS AND NEVIS
-    {REG_DOMAIN_KOREA, {'K', 'P', ' '}},     //KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF
-    {REG_DOMAIN_KOREA, {'K', 'R', ' '}},     //KOREA, REPUBLIC OF
-    {REG_DOMAIN_WORLD, {'K', 'W', ' '}},     //KUWAIT
-    {REG_DOMAIN_WORLD, {'K', 'Y', ' '}},     //CAYMAN ISLANDS
-    {REG_DOMAIN_WORLD, {'K', 'Z', ' '}},     //KAZAKHSTAN
-    {REG_DOMAIN_WORLD, {'L', 'A', ' '}},     //LAO PEOPLE'S DEMOCRATIC REPUBLIC
-    {REG_DOMAIN_WORLD, {'L', 'B', ' '}},     //LEBANON
-    {REG_DOMAIN_WORLD, {'L', 'C', ' '}},     //SAINT LUCIA
-    {REG_DOMAIN_ETSI, {'L', 'I', ' '}},      //LIECHTENSTEIN
-    {REG_DOMAIN_WORLD, {'L', 'K', ' '}},     //SRI LANKA
-    {REG_DOMAIN_WORLD, {'L', 'R', ' '}},     //LIBERIA
-    {REG_DOMAIN_WORLD, {'L', 'S', ' '}},     //LESOTHO
-    {REG_DOMAIN_HI_5GHZ, {'L', 'T', ' '}},      //LITHUANIA
-    {REG_DOMAIN_ETSI, {'L', 'U', ' '}},      //LUXEMBOURG
-    {REG_DOMAIN_HI_5GHZ, {'L', 'V', ' '}},      //LATVIA
-    {REG_DOMAIN_WORLD, {'L', 'Y', ' '}},     //LIBYAN ARAB JAMAHIRIYA
-    {REG_DOMAIN_WORLD, {'M', 'A', ' '}},     //MOROCCO
-    {REG_DOMAIN_ETSI, {'M', 'C', ' '}},      //MONACO
-    {REG_DOMAIN_WORLD, {'M', 'D', ' '}},     //MOLDOVA, REPUBLIC OF
-    {REG_DOMAIN_WORLD, {'M', 'E', ' '}},     //MONTENEGRO
-    {REG_DOMAIN_WORLD, {'M', 'G', ' '}},     //MADAGASCAR
-    {REG_DOMAIN_WORLD, {'M', 'H', ' '}},     //MARSHALL ISLANDS
-    {REG_DOMAIN_WORLD, {'M', 'K', ' '}},     //MACEDONIA, THE FORMER YUGOSLAV REPUBLIC OF
-    {REG_DOMAIN_WORLD, {'M', 'L', ' '}},     //MALI
-    {REG_DOMAIN_WORLD, {'M', 'M', ' '}},     //MYANMAR
-    {REG_DOMAIN_HI_5GHZ, {'M', 'N', ' '}},     //MONGOLIA
-    {REG_DOMAIN_WORLD, {'M', 'O', ' '}},     //MACAO
-    {REG_DOMAIN_WORLD, {'M', 'P', ' '}},     //NORTHERN MARIANA ISLANDS
-    {REG_DOMAIN_WORLD, {'M', 'Q', ' '}},     //MARTINIQUE
-    {REG_DOMAIN_WORLD, {'M', 'R', ' '}},     //MAURITANIA
-    {REG_DOMAIN_WORLD, {'M', 'S', ' '}},     //MONTSERRAT
-    {REG_DOMAIN_WORLD, {'M', 'T', ' '}},      //MALTA
-    {REG_DOMAIN_WORLD, {'M', 'U', ' '}},     //MAURITIUS
-    {REG_DOMAIN_WORLD, {'M', 'V', ' '}},     //MALDIVES
-    {REG_DOMAIN_WORLD, {'M', 'W', ' '}},     //MALAWI
-    {REG_DOMAIN_WORLD, {'M', 'X', ' '}},       //MEXICO
-    {REG_DOMAIN_HI_5GHZ, {'M', 'Y', ' '}},       //MALAYSIA
-    {REG_DOMAIN_WORLD, {'M', 'Z', ' '}},     //MOZAMBIQUE
-    {REG_DOMAIN_WORLD, {'N', 'A', ' '}},     //NAMIBIA
-    {REG_DOMAIN_WORLD, {'N', 'C', ' '}},     //NEW CALEDONIA
-    {REG_DOMAIN_WORLD, {'N', 'E', ' '}},     //NIGER
-    {REG_DOMAIN_WORLD, {'N', 'F', ' '}},     //NORFOLD ISLAND
-    {REG_DOMAIN_WORLD, {'N', 'G', ' '}},     //NIGERIA
-    {REG_DOMAIN_WORLD, {'N', 'I', ' '}},       //NICARAGUA
-    {REG_DOMAIN_ETSI, {'N', 'L', ' '}},      //NETHERLANDS
-    {REG_DOMAIN_WORLD, {'N', 'O', ' '}},      //NORWAY
-    {REG_DOMAIN_WORLD, {'N', 'P', ' '}},     //NEPAL
-    {REG_DOMAIN_WORLD, {'N', 'R', ' '}},     //NAURU
-    {REG_DOMAIN_WORLD, {'N', 'U', ' '}},     //NIUE
-    {REG_DOMAIN_ETSI, {'N', 'Z', ' '}},      //NEW ZEALAND
-    {REG_DOMAIN_WORLD, {'O', 'M', ' '}},     //OMAN
-    {REG_DOMAIN_WORLD, {'P', 'A', ' '}},       //PANAMA
-    {REG_DOMAIN_WORLD, {'P', 'E', ' '}},       //PERU
-    {REG_DOMAIN_WORLD, {'P', 'F', ' '}},     //FRENCH POLYNESIA
-    {REG_DOMAIN_WORLD, {'P', 'G', ' '}},     //PAPUA NEW GUINEA
-    {REG_DOMAIN_WORLD, {'P', 'H', ' '}},      //PHILIPPINES
-    {REG_DOMAIN_WORLD, {'P', 'K', ' '}},     //PAKISTAN
-    {REG_DOMAIN_WORLD, {'P', 'L', ' '}},      //POLAND
-    {REG_DOMAIN_WORLD, {'P', 'M', ' '}},     //SAINT PIERRE AND MIQUELON
-    {REG_DOMAIN_WORLD, {'P', 'N', ' '}},     //PITCAIRN
-    {REG_DOMAIN_FCC, {'P', 'R', ' '}},       //PUERTO RICO
-    {REG_DOMAIN_WORLD, {'P', 'S', ' '}},        //PALESTINIAN TERRITORY, OCCUPIED
-    {REG_DOMAIN_ETSI, {'P', 'T', ' '}},      //PORTUGAL
-    {REG_DOMAIN_WORLD, {'P', 'W', ' '}},     //PALAU
-    {REG_DOMAIN_WORLD, {'P', 'Y', ' '}},     //PARAGUAY
-    {REG_DOMAIN_WORLD, {'Q', 'A', ' '}},     //QATAR
-    {REG_DOMAIN_WORLD, {'R', 'E', ' '}},     //REUNION
-    {REG_DOMAIN_HI_5GHZ, {'R', 'O', ' '}},      //ROMANIA
-    {REG_DOMAIN_HI_5GHZ, {'R', 'S', ' '}},      //SERBIA
-    {REG_DOMAIN_WORLD, {'R', 'U', ' '}},       //RUSSIA
-    {REG_DOMAIN_WORLD, {'R', 'W', ' '}},     //RWANDA
-    {REG_DOMAIN_WORLD, {'S', 'A', ' '}},      //SAUDI ARABIA
-    {REG_DOMAIN_WORLD, {'S', 'B', ' '}},     //SOLOMON ISLANDS
-    {REG_DOMAIN_ETSI, {'S', 'C', ' '}},      //SEYCHELLES
-    {REG_DOMAIN_WORLD, {'S', 'D', ' '}},     //SUDAN
-    {REG_DOMAIN_ETSI, {'S', 'E', ' '}},      //SWEDEN
-    {REG_DOMAIN_APAC, {'S', 'G', ' '}},      //SINGAPORE
-    {REG_DOMAIN_WORLD, {'S', 'H', ' '}},     //SAINT HELENA
-    {REG_DOMAIN_HI_5GHZ, {'S', 'I', ' '}},      //SLOVENNIA
-    {REG_DOMAIN_WORLD, {'S', 'J', ' '}},     //SVALBARD AND JAN MAYEN
-    {REG_DOMAIN_HI_5GHZ, {'S', 'K', ' '}},      //SLOVAKIA
-    {REG_DOMAIN_WORLD, {'S', 'L', ' '}},     //SIERRA LEONE
-    {REG_DOMAIN_WORLD, {'S', 'M', ' '}},     //SAN MARINO
-    {REG_DOMAIN_WORLD, {'S', 'N', ' '}},     //SENEGAL
-    {REG_DOMAIN_WORLD, {'S', 'O', ' '}},     //SOMALIA
-    {REG_DOMAIN_WORLD, {'S', 'R', ' '}},     //SURINAME
-    {REG_DOMAIN_WORLD, {'S', 'T', ' '}},     //SAO TOME AND PRINCIPE
-    {REG_DOMAIN_WORLD, {'S', 'V', ' '}},       //EL SALVADOR
-    {REG_DOMAIN_WORLD, {'S', 'Y', ' '}},     //SYRIAN ARAB REPUBLIC
-    {REG_DOMAIN_WORLD, {'S', 'Z', ' '}},     //SWAZILAND
-    {REG_DOMAIN_WORLD, {'T', 'C', ' '}},     //TURKS AND CAICOS ISLANDS
-    {REG_DOMAIN_WORLD, {'T', 'D', ' '}},     //CHAD
-    {REG_DOMAIN_WORLD, {'T', 'F', ' '}},     //FRENCH SOUTHERN TERRITORIES
-    {REG_DOMAIN_WORLD, {'T', 'G', ' '}},     //TOGO
-    {REG_DOMAIN_WORLD, {'T', 'H', ' '}},       //THAILAND
-    {REG_DOMAIN_WORLD, {'T', 'J', ' '}},     //TAJIKISTAN
-    {REG_DOMAIN_WORLD, {'T', 'K', ' '}},     //TOKELAU
-    {REG_DOMAIN_WORLD, {'T', 'L', ' '}},     //TIMOR-LESTE
-    {REG_DOMAIN_WORLD, {'T', 'M', ' '}},     //TURKMENISTAN
-    {REG_DOMAIN_WORLD, {'T', 'N', ' '}},     //TUNISIA
-    {REG_DOMAIN_WORLD, {'T', 'O', ' '}},     //TONGA
-    {REG_DOMAIN_WORLD, {'T', 'R', ' '}},      //TURKEY
-    {REG_DOMAIN_WORLD, {'T', 'T', ' '}},     //TRINIDAD AND TOBAGO
-    {REG_DOMAIN_WORLD, {'T', 'V', ' '}},     //TUVALU
-    {REG_DOMAIN_HI_5GHZ, {'T', 'W', ' '}},       //TAIWAN, PROVINCE OF CHINA
-    {REG_DOMAIN_WORLD, {'T', 'Z', ' '}},     //TANZANIA, UNITED REPUBLIC OF
-    {REG_DOMAIN_HI_5GHZ, {'U', 'A', ' '}},       //UKRAINE
-    {REG_DOMAIN_WORLD, {'U', 'G', ' '}},     //UGANDA
-    {REG_DOMAIN_FCC, {'U', 'M', ' '}},       //UNITED STATES MINOR OUTLYING ISLANDS
-    {REG_DOMAIN_WORLD, {'U', 'Y', ' '}},       //URUGUAY
-    {REG_DOMAIN_HI_5GHZ, {'U', 'Z', ' '}},     //UZBEKISTAN
-    {REG_DOMAIN_ETSI, {'V', 'A', ' '}},      //HOLY SEE (VATICAN CITY STATE)
-    {REG_DOMAIN_WORLD, {'V', 'C', ' '}},     //SAINT VINCENT AND THE GRENADINES
-    {REG_DOMAIN_HI_5GHZ, {'V', 'E', ' '}},       //VENEZUELA
-    {REG_DOMAIN_ETSI, {'V', 'G', ' '}},       //VIRGIN ISLANDS, BRITISH
-    {REG_DOMAIN_FCC, {'V', 'I', ' '}},       //VIRGIN ISLANDS, US
-    {REG_DOMAIN_WORLD, {'V', 'N', ' '}},      //VIET NAM
-    {REG_DOMAIN_WORLD, {'V', 'U', ' '}},     //VANUATU
-    {REG_DOMAIN_WORLD, {'W', 'F', ' '}},     //WALLIS AND FUTUNA
-    {REG_DOMAIN_WORLD, {'W', 'S', ' '}},     //SOMOA
-    {REG_DOMAIN_WORLD, {'Y', 'E', ' '}},     //YEMEN
-    {REG_DOMAIN_WORLD, {'Y', 'T', ' '}},     //MAYOTTE
-    {REG_DOMAIN_WORLD, {'Z', 'A', ' '}},      //SOUTH AFRICA
-    {REG_DOMAIN_WORLD, {'Z', 'M', ' '}},     //ZAMBIA
-    {REG_DOMAIN_WORLD, {'Z', 'W', ' '}},     //ZIMBABWE
-
-    {REG_DOMAIN_KOREA, {'K', '1', ' '}},    //Korea alternate 1
-    {REG_DOMAIN_KOREA, {'K', '2', ' '}},    //Korea alternate 2
-    {REG_DOMAIN_KOREA, {'K', '3', ' '}},    //Korea alternate 3
-    {REG_DOMAIN_KOREA, {'K', '4', ' '}},    //Korea alternate 4
-};
-
-
-//The channels listed here doesn't mean they are valid channels for certain domain. They are here only to present
-//whether they should be passive scanned.
-tCsrDomainChnInfo gCsrDomainChnInfo[NUM_REG_DOMAINS] =
-{
-    //REG_DOMAIN_FCC
-    {
-        REG_DOMAIN_FCC,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_PASSIVE_SCAN},
-            {56, eSIR_PASSIVE_SCAN},
-            {60, eSIR_PASSIVE_SCAN},
-            {64, eSIR_PASSIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_PASSIVE_SCAN},
-            {104, eSIR_PASSIVE_SCAN},
-            {108, eSIR_PASSIVE_SCAN},
-            {112, eSIR_PASSIVE_SCAN},
-            {116, eSIR_PASSIVE_SCAN},
-            {120, eSIR_PASSIVE_SCAN},
-            {124, eSIR_PASSIVE_SCAN},
-            {128, eSIR_PASSIVE_SCAN},
-            {132, eSIR_PASSIVE_SCAN},
-            {136, eSIR_PASSIVE_SCAN},
-            {140, eSIR_PASSIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_ETSI
-    {
-        REG_DOMAIN_ETSI,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_PASSIVE_SCAN},
-            {56, eSIR_PASSIVE_SCAN},
-            {60, eSIR_PASSIVE_SCAN},
-            {64, eSIR_PASSIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_PASSIVE_SCAN},
-            {104, eSIR_PASSIVE_SCAN},
-            {108, eSIR_PASSIVE_SCAN},
-            {112, eSIR_PASSIVE_SCAN},
-            {116, eSIR_PASSIVE_SCAN},
-            {120, eSIR_PASSIVE_SCAN},
-            {124, eSIR_PASSIVE_SCAN},
-            {128, eSIR_PASSIVE_SCAN},
-            {132, eSIR_PASSIVE_SCAN},
-            {136, eSIR_PASSIVE_SCAN},
-            {140, eSIR_PASSIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_JAPAN
-    {
-        REG_DOMAIN_JAPAN,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_PASSIVE_SCAN},
-            {56, eSIR_PASSIVE_SCAN},
-            {60, eSIR_PASSIVE_SCAN},
-            {64, eSIR_PASSIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_PASSIVE_SCAN},
-            {104, eSIR_PASSIVE_SCAN},
-            {108, eSIR_PASSIVE_SCAN},
-            {112, eSIR_PASSIVE_SCAN},
-            {116, eSIR_PASSIVE_SCAN},
-            {120, eSIR_PASSIVE_SCAN},
-            {124, eSIR_PASSIVE_SCAN},
-            {128, eSIR_PASSIVE_SCAN},
-            {132, eSIR_PASSIVE_SCAN},
-            {136, eSIR_PASSIVE_SCAN},
-            {140, eSIR_PASSIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_WORLD
-    {
-        REG_DOMAIN_WORLD,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_ACTIVE_SCAN},
-            {56, eSIR_ACTIVE_SCAN},
-            {60, eSIR_ACTIVE_SCAN},
-            {64, eSIR_ACTIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_ACTIVE_SCAN},
-            {104, eSIR_ACTIVE_SCAN},
-            {108, eSIR_ACTIVE_SCAN},
-            {112, eSIR_ACTIVE_SCAN},
-            {116, eSIR_ACTIVE_SCAN},
-            {120, eSIR_ACTIVE_SCAN},
-            {124, eSIR_ACTIVE_SCAN},
-            {128, eSIR_ACTIVE_SCAN},
-            {132, eSIR_ACTIVE_SCAN},
-            {136, eSIR_ACTIVE_SCAN},
-            {140, eSIR_ACTIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_N_AMER_EXC_FCC
-    {
-        REG_DOMAIN_N_AMER_EXC_FCC,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_PASSIVE_SCAN},
-            {56, eSIR_PASSIVE_SCAN},
-            {60, eSIR_PASSIVE_SCAN},
-            {64, eSIR_PASSIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_ACTIVE_SCAN},
-            {104, eSIR_ACTIVE_SCAN},
-            {108, eSIR_ACTIVE_SCAN},
-            {112, eSIR_ACTIVE_SCAN},
-            {116, eSIR_ACTIVE_SCAN},
-            {120, eSIR_ACTIVE_SCAN},
-            {124, eSIR_ACTIVE_SCAN},
-            {128, eSIR_ACTIVE_SCAN},
-            {132, eSIR_ACTIVE_SCAN},
-            {136, eSIR_ACTIVE_SCAN},
-            {140, eSIR_ACTIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_APAC
-    {
-        REG_DOMAIN_APAC,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_PASSIVE_SCAN},
-            {56, eSIR_PASSIVE_SCAN},
-            {60, eSIR_PASSIVE_SCAN},
-            {64, eSIR_PASSIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_ACTIVE_SCAN},
-            {104, eSIR_ACTIVE_SCAN},
-            {108, eSIR_ACTIVE_SCAN},
-            {112, eSIR_ACTIVE_SCAN},
-            {116, eSIR_ACTIVE_SCAN},
-            {120, eSIR_ACTIVE_SCAN},
-            {124, eSIR_ACTIVE_SCAN},
-            {128, eSIR_ACTIVE_SCAN},
-            {132, eSIR_ACTIVE_SCAN},
-            {136, eSIR_ACTIVE_SCAN},
-            {140, eSIR_ACTIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_KOREA
-    {
-        REG_DOMAIN_KOREA,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_PASSIVE_SCAN},
-            {56, eSIR_PASSIVE_SCAN},
-            {60, eSIR_PASSIVE_SCAN},
-            {64, eSIR_PASSIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_PASSIVE_SCAN},
-            {104, eSIR_PASSIVE_SCAN},
-            {108, eSIR_PASSIVE_SCAN},
-            {112, eSIR_PASSIVE_SCAN},
-            {116, eSIR_PASSIVE_SCAN},
-            {120, eSIR_PASSIVE_SCAN},
-            {124, eSIR_PASSIVE_SCAN},
-            {128, eSIR_PASSIVE_SCAN},
-            {132, eSIR_PASSIVE_SCAN},
-            {136, eSIR_PASSIVE_SCAN},
-            {140, eSIR_PASSIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_HI_5GHZ
-    {
-        REG_DOMAIN_HI_5GHZ,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_ACTIVE_SCAN},
-            {56, eSIR_ACTIVE_SCAN},
-            {60, eSIR_ACTIVE_SCAN},
-            {64, eSIR_ACTIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_ACTIVE_SCAN},
-            {104, eSIR_ACTIVE_SCAN},
-            {108, eSIR_ACTIVE_SCAN},
-            {112, eSIR_ACTIVE_SCAN},
-            {116, eSIR_ACTIVE_SCAN},
-            {120, eSIR_ACTIVE_SCAN},
-            {124, eSIR_ACTIVE_SCAN},
-            {128, eSIR_ACTIVE_SCAN},
-            {132, eSIR_ACTIVE_SCAN},
-            {136, eSIR_ACTIVE_SCAN},
-            {140, eSIR_ACTIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-    //REG_DOMAIN_NO_5GHZ
-    {
-        REG_DOMAIN_NO_5GHZ,
-        45, //Num channels
-        //Channels
-        {
-            //5GHz
-            //5180 - 5240
-            {36, eSIR_ACTIVE_SCAN},
-            {40, eSIR_ACTIVE_SCAN},
-            {44, eSIR_ACTIVE_SCAN},
-            {48, eSIR_ACTIVE_SCAN},
-            //5250 to 5350
-            {52, eSIR_ACTIVE_SCAN},
-            {56, eSIR_ACTIVE_SCAN},
-            {60, eSIR_ACTIVE_SCAN},
-            {64, eSIR_ACTIVE_SCAN},
-            //5470 to 5725
-            {100, eSIR_ACTIVE_SCAN},
-            {104, eSIR_ACTIVE_SCAN},
-            {108, eSIR_ACTIVE_SCAN},
-            {112, eSIR_ACTIVE_SCAN},
-            {116, eSIR_ACTIVE_SCAN},
-            {120, eSIR_ACTIVE_SCAN},
-            {124, eSIR_ACTIVE_SCAN},
-            {128, eSIR_ACTIVE_SCAN},
-            {132, eSIR_ACTIVE_SCAN},
-            {136, eSIR_ACTIVE_SCAN},
-            {140, eSIR_ACTIVE_SCAN},
-            //5745 - 5825
-            {149, eSIR_ACTIVE_SCAN},
-            {153, eSIR_ACTIVE_SCAN},
-            {157, eSIR_ACTIVE_SCAN},
-            {161, eSIR_ACTIVE_SCAN},
-            {165, eSIR_ACTIVE_SCAN},
-            //4.9GHz
-            //4920 - 5080
-            {240, eSIR_ACTIVE_SCAN},
-            {244, eSIR_ACTIVE_SCAN},
-            {248, eSIR_ACTIVE_SCAN},
-            {252, eSIR_ACTIVE_SCAN},
-            {208, eSIR_ACTIVE_SCAN},
-            {212, eSIR_ACTIVE_SCAN},
-            {216, eSIR_ACTIVE_SCAN},
-            //2,4GHz
-            {1, eSIR_ACTIVE_SCAN},
-            {2, eSIR_ACTIVE_SCAN},
-            {3, eSIR_ACTIVE_SCAN},
-            {4, eSIR_ACTIVE_SCAN},
-            {5, eSIR_ACTIVE_SCAN},
-            {6, eSIR_ACTIVE_SCAN},
-            {7, eSIR_ACTIVE_SCAN},
-            {8, eSIR_ACTIVE_SCAN},
-            {9, eSIR_ACTIVE_SCAN},
-            {10, eSIR_ACTIVE_SCAN},
-            {11, eSIR_ACTIVE_SCAN},
-            {12, eSIR_ACTIVE_SCAN},
-            {13, eSIR_ACTIVE_SCAN},
-            {14, eSIR_ACTIVE_SCAN},
-        }
-    },
-};
-#endif
-
 extern const tRfChannelProps rfChannels[NUM_RF_CHANNELS];
 
 ////////////////////////////////////////////////////////////////////////
@@ -1432,6 +618,21 @@ tANI_U8 csrGetInfraOperationChannel( tpAniSirGlobal pMac, tANI_U8 sessionId)
     return channel;
 }
 
+tANI_BOOLEAN csrIsSessionClientAndConnected(tpAniSirGlobal pMac, tANI_U8 sessionId)
+{
+    tCsrRoamSession *pSession = NULL;
+    if (CSR_IS_SESSION_VALID( pMac, sessionId) && csrIsConnStateInfra( pMac, sessionId))
+    {
+        pSession = CSR_GET_SESSION( pMac, sessionId);
+        if (NULL != pSession->pCurRoamProfile)
+        {
+            if ((pSession->pCurRoamProfile->csrPersona == VOS_STA_MODE) ||
+                (pSession->pCurRoamProfile->csrPersona == VOS_P2P_CLIENT_MODE))
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
 //This routine will return operating channel on FIRST BSS that is active/operating to be used for concurrency mode.
 //If other BSS is not up or not connected it will return 0
 
@@ -1464,6 +665,230 @@ tANI_U8 csrGetConcurrentOperationChannel( tpAniSirGlobal pMac )
   }
   return 0;
 }
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
+
+#define HALF_BW_OF(eCSR_bw_val) ((eCSR_bw_val)/2)
+
+/* calculation of center channel based on V/HT BW and WIFI channel bw=5MHz) */
+
+#define CSR_GET_HT40_PLUS_CCH(och) ((och)+2)
+#define CSR_GET_HT40_MINUS_CCH(och) ((och)-2)
+
+#define CSR_GET_HT80_PLUS_LL_CCH(och) ((och)+6)
+#define CSR_GET_HT80_PLUS_HL_CCH(och) ((och)+2)
+#define CSR_GET_HT80_MINUS_LH_CCH(och) ((och)-2)
+#define CSR_GET_HT80_MINUS_HH_CCH(och) ((och)-6)
+
+void csrGetChFromHTProfile (tpAniSirGlobal pMac, tCsrRoamHTProfile *htp,
+                            tANI_U16 och, tANI_U16 *cfreq, tANI_U16 *hbw)
+{
+    tANI_U16 cch, ch_bond;
+
+    if (och > 14)
+        ch_bond = pMac->roam.configParam.channelBondingMode5GHz;
+    else
+        ch_bond = pMac->roam.configParam.channelBondingMode24GHz;
+
+    cch = och;
+    *hbw = HALF_BW_OF(eCSR_BW_20MHz_VAL);
+
+    if (!ch_bond) {
+        goto ret;
+    }
+    smsLog(pMac, LOG1,
+        FL("##HTC: %d scbw: %d rcbw: %d sco: %d"
+#ifdef WLAN_FEATURE_11AC
+           "VHTC: %d apc: %d apbw: %d"
+#endif
+        ),
+        htp->htCapability, htp->htSupportedChannelWidthSet,
+        htp->htRecommendedTxWidthSet, htp->htSecondaryChannelOffset,
+#ifdef WLAN_FEATURE_11AC
+        htp->vhtCapability, htp->apCenterChan, htp->apChanWidth
+#endif
+        );
+
+#ifdef WLAN_FEATURE_11AC
+    if (htp->vhtCapability) {
+        cch = htp->apCenterChan;
+        if (htp->apChanWidth == WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ)
+            *hbw = HALF_BW_OF(eCSR_BW_80MHz_VAL);
+        else if (htp->apChanWidth == WNI_CFG_VHT_CHANNEL_WIDTH_160MHZ)
+            *hbw = HALF_BW_OF(eCSR_BW_160MHz_VAL);
+
+        if (!*hbw && htp->htCapability) {
+            if (htp->htSupportedChannelWidthSet == eHT_CHANNEL_WIDTH_40MHZ)
+                *hbw = HALF_BW_OF(eCSR_BW_40MHz_VAL);
+            else
+                *hbw = HALF_BW_OF(eCSR_BW_20MHz_VAL);
+        }
+     } else
+#endif
+    if (htp->htCapability) {
+        if (htp->htSupportedChannelWidthSet == eHT_CHANNEL_WIDTH_40MHZ) {
+            *hbw = HALF_BW_OF(eCSR_BW_40MHz_VAL);
+            if (htp->htSecondaryChannelOffset == PHY_DOUBLE_CHANNEL_LOW_PRIMARY)
+                cch = CSR_GET_HT40_PLUS_CCH(och);
+            else if (htp->htSecondaryChannelOffset ==
+                                                PHY_DOUBLE_CHANNEL_HIGH_PRIMARY)
+                cch = CSR_GET_HT40_MINUS_CCH(och);
+        } else {
+            cch = och;
+            *hbw = HALF_BW_OF(eCSR_BW_20MHz_VAL);
+        }
+    }
+
+ret:
+    *cfreq = vos_chan_to_freq(cch);
+    return;
+}
+
+v_U16_t csrCheckConcurrentChannelOverlap(tpAniSirGlobal pMac, v_U16_t sap_ch,
+                                eCsrPhyMode sap_phymode, v_U8_t cc_switch_mode)
+{
+    tCsrRoamSession *pSession = NULL;
+    v_U8_t i = 0,  chb = PHY_SINGLE_CHANNEL_CENTERED;
+    v_U16_t intf_ch=0, sap_hbw = 0, intf_hbw = 0, intf_cfreq = 0, sap_cfreq = 0;
+    v_U16_t sap_lfreq, sap_hfreq, intf_lfreq, intf_hfreq, sap_cch;
+
+    if (pMac->roam.configParam.cc_switch_mode == VOS_MCC_TO_SCC_SWITCH_DISABLE)
+        return 0;
+
+    if (sap_ch !=0) {
+
+        sap_cch = sap_ch;
+        sap_hbw = HALF_BW_OF(eCSR_BW_20MHz_VAL);
+
+        if (sap_ch > 14)
+            chb = pMac->roam.configParam.channelBondingMode5GHz;
+        else
+            chb = pMac->roam.configParam.channelBondingMode24GHz;
+
+        if (chb) {
+            if (sap_phymode == eCSR_DOT11_MODE_11n ||
+                sap_phymode == eCSR_DOT11_MODE_11n_ONLY) {
+
+                sap_hbw = HALF_BW_OF(eCSR_BW_40MHz_VAL);
+                if (chb == PHY_DOUBLE_CHANNEL_LOW_PRIMARY)
+                    sap_cch = CSR_GET_HT40_PLUS_CCH(sap_ch);
+                else if (chb == PHY_DOUBLE_CHANNEL_HIGH_PRIMARY)
+                    sap_cch = CSR_GET_HT40_MINUS_CCH(sap_ch);
+
+            }
+#ifdef WLAN_FEATURE_11AC
+            else if (sap_phymode == eCSR_DOT11_MODE_11ac ||
+                     sap_phymode == eCSR_DOT11_MODE_11ac_ONLY) {
+                /*11AC only 80/40/20 Mhz supported in Rome */
+                if (pMac->roam.configParam.nVhtChannelWidth ==
+                                        (WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ + 1)) {
+                    sap_hbw = HALF_BW_OF(eCSR_BW_80MHz_VAL);
+                    if (chb == (PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW-1))
+                        sap_cch = CSR_GET_HT80_PLUS_LL_CCH(sap_ch);
+                    else if (chb ==
+                                 (PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW-1))
+                        sap_cch = CSR_GET_HT80_PLUS_HL_CCH(sap_ch);
+                    else if (chb ==
+                                 (PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH-1))
+                        sap_cch = CSR_GET_HT80_MINUS_LH_CCH(sap_ch);
+                    else if (chb ==
+                                (PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH-1))
+                        sap_cch = CSR_GET_HT80_MINUS_HH_CCH(sap_ch);
+                } else {
+                    sap_hbw = HALF_BW_OF(eCSR_BW_40MHz_VAL);
+                    if (chb == (PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW-1))
+                        sap_cch = CSR_GET_HT40_PLUS_CCH(sap_ch);
+                    else if (chb ==
+                                 (PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW-1))
+                        sap_cch = CSR_GET_HT40_MINUS_CCH(sap_ch);
+                    else if (chb ==
+                                 (PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH-1))
+                        sap_cch = CSR_GET_HT40_PLUS_CCH(sap_ch);
+                    else if (chb ==
+                                (PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH-1))
+                        sap_cch = CSR_GET_HT40_MINUS_CCH(sap_ch);
+                }
+            }
+#endif
+        }
+        sap_cfreq = vos_chan_to_freq(sap_cch);
+    }
+
+    for( i = 0; i < CSR_ROAM_SESSION_MAX; i++ ) {
+        if( !CSR_IS_SESSION_VALID( pMac, i ) )
+            continue;
+
+        pSession = CSR_GET_SESSION( pMac, i );
+
+        if (NULL != pSession->pCurRoamProfile) {
+            if (((pSession->pCurRoamProfile->csrPersona == VOS_STA_MODE) ||
+                       (pSession->pCurRoamProfile->csrPersona ==
+                            VOS_P2P_CLIENT_MODE)) &&
+                       (pSession->connectState ==
+                            eCSR_ASSOC_STATE_TYPE_INFRA_ASSOCIATED)) {
+                intf_ch = pSession->connectedProfile.operationChannel;
+                csrGetChFromHTProfile(pMac,
+                        &pSession->connectedProfile.HTProfile, intf_ch,
+                        &intf_cfreq, &intf_hbw);
+            } else if(((pSession->pCurRoamProfile->csrPersona ==
+                            VOS_P2P_GO_MODE) ||
+                       (pSession->pCurRoamProfile->csrPersona ==
+                            VOS_STA_SAP_MODE)) &&
+                       (pSession->connectState !=
+                             eCSR_ASSOC_STATE_TYPE_NOT_CONNECTED)) {
+                if (sap_ch  == 0) {
+                    sap_ch = pSession->connectedProfile.operationChannel;
+                    csrGetChFromHTProfile(pMac,
+                        &pSession->connectedProfile.HTProfile, sap_ch,
+                        &sap_cfreq, &sap_hbw);
+                } else if (sap_ch !=
+                               pSession->connectedProfile.operationChannel) {
+                    intf_ch = pSession->connectedProfile.operationChannel;
+                    csrGetChFromHTProfile(pMac,
+                               &pSession->connectedProfile.HTProfile, intf_ch,
+                                      &intf_cfreq, &intf_hbw);
+                }
+            }
+        }
+    }
+
+
+    if (intf_ch && sap_ch != intf_ch &&
+       cc_switch_mode != VOS_MCC_TO_SCC_SWITCH_FORCE) {
+         sap_lfreq = sap_cfreq - sap_hbw;
+         sap_hfreq = sap_cfreq + sap_hbw;
+         intf_lfreq = intf_cfreq -intf_hbw;
+         intf_hfreq = intf_cfreq +intf_hbw;
+
+         smsLog(pMac, LOGE,
+         FL("\nSAP:  OCH: %03d OCF: %d CCH: %03d CF: %d BW: %d LF: %d HF: %d\n"
+            "INTF: OCH: %03d OCF: %d CCH: %03d CF: %d BW: %d LF: %d HF: %d"),
+                 sap_ch, vos_chan_to_freq(sap_ch), vos_freq_to_chan(sap_cfreq),
+                 sap_cfreq, sap_hbw*2, sap_lfreq, sap_hfreq,
+                 intf_ch, vos_chan_to_freq(intf_ch),
+                 vos_freq_to_chan(intf_cfreq),
+                 intf_cfreq, intf_hbw*2, intf_lfreq, intf_hfreq);
+
+         if (!(
+                ((sap_lfreq > intf_lfreq && sap_lfreq < intf_hfreq) ||
+                   (sap_hfreq > intf_lfreq && sap_hfreq < intf_hfreq))
+             || ((intf_lfreq > sap_lfreq && intf_lfreq < sap_hfreq) ||
+                   (intf_hfreq > sap_lfreq && intf_hfreq < sap_hfreq))
+            )) {
+             intf_ch = 0;
+         }
+    }
+    else if (intf_ch && sap_ch!= intf_ch &&
+             cc_switch_mode == VOS_MCC_TO_SCC_SWITCH_FORCE) {
+         if (!((intf_ch < 14 && sap_ch < 14) || (intf_ch > 14 && sap_ch > 14)))
+             intf_ch = 0;
+    }else if (intf_ch == sap_ch)
+         intf_ch = 0;
+
+   smsLog(pMac, LOGE, FL("##Concurrent Channels %s Interfering"), intf_ch == 0 ?
+                         "Not" : "Are" );
+  return intf_ch;
+}
+#endif
 
 tANI_BOOLEAN csrIsAllSessionDisconnected( tpAniSirGlobal pMac )
 {
@@ -1521,6 +946,7 @@ tANI_BOOLEAN csrIsP2pSessionConnected( tpAniSirGlobal pMac )
     tCsrRoamSession *pSession = NULL;
     tANI_U32 countP2pCli = 0;
     tANI_U32 countP2pGo = 0;
+    tANI_U32 countSAP = 0;
 
     for( i = 0; i < CSR_ROAM_SESSION_MAX; i++ )
     {
@@ -1537,6 +963,11 @@ tANI_BOOLEAN csrIsP2pSessionConnected( tpAniSirGlobal pMac )
                 if (pSession->pCurRoamProfile->csrPersona == VOS_P2P_GO_MODE) {
                     countP2pGo++;
                 }
+                if (pSession->pCurRoamProfile->csrPersona ==
+                                                   VOS_STA_SAP_MODE) {
+                    countSAP++;
+                }
+
             }
         }
     }
@@ -1545,7 +976,7 @@ tANI_BOOLEAN csrIsP2pSessionConnected( tpAniSirGlobal pMac )
      * - at least one P2P CLI session is connected
      * - at least one P2P GO session is connected
      */
-    if ( (countP2pCli > 0) || (countP2pGo > 0 ) ) {
+    if ((countP2pCli > 0) || (countP2pGo > 0 ) || (countSAP > 0)) {
         fRc = eANI_BOOLEAN_TRUE;
     }
 
@@ -2230,14 +1661,13 @@ eHalStatus csrGetPhyModeFromBss(tpAniSirGlobal pMac, tSirBssDescription *pBSSDes
         if(pIes->HTCaps.present && (eCSR_DOT11_MODE_TAURUS != phyMode))
         {
             phyMode = eCSR_DOT11_MODE_11n;
+#ifdef WLAN_FEATURE_11AC
+            if (IS_BSS_VHT_CAPABLE(pIes->VHTCaps)) {
+                 phyMode = eCSR_DOT11_MODE_11ac;
+            }
+#endif
         }
 
-#ifdef WLAN_FEATURE_11AC
-        if ( pIes->VHTCaps.present && (eCSR_DOT11_MODE_TAURUS != phyMode))
-        {
-             phyMode = eCSR_DOT11_MODE_11ac;
-        }
-#endif
         *pPhyMode = phyMode;
     }
 
@@ -2752,21 +2182,11 @@ csrIsconcurrentsessionValid(tpAniSirGlobal pMac,tANI_U32 cursessionId,
             switch (currBssPersona)
             {
                 case VOS_STA_MODE:
-#ifndef QCA_WIFI_2_0
-                    if(pMac->roam.roamSession[sessionId].pCurRoamProfile &&
-                      (pMac->roam.roamSession[sessionId].pCurRoamProfile->csrPersona
-                                      == VOS_STA_MODE)) //check for P2P client mode
-                    {
-                        smsLog(pMac, LOGE, FL(" ****STA mode already exists ****"));
-                        return eHAL_STATUS_FAILURE;
-                    }
-                    break;
-#else
                     smsLog(pMac, LOG1, FL(" **** STA session ****"));
                     return eHAL_STATUS_SUCCESS;
-#endif
 
                 case VOS_STA_SAP_MODE:
+#ifndef WLAN_FEATURE_MBSSID
                     if((pMac->roam.roamSession[sessionId].bssParams.bssPersona
                                       == VOS_STA_SAP_MODE)&&
                        (pMac->roam.roamSession[sessionId].connectState
@@ -2775,7 +2195,9 @@ csrIsconcurrentsessionValid(tpAniSirGlobal pMac,tANI_U32 cursessionId,
                         smsLog(pMac, LOGE, FL(" ****SoftAP mode already exists ****"));
                         return eHAL_STATUS_FAILURE;
                     }
-                    else if( (pMac->roam.roamSession[sessionId].bssParams.bssPersona
+                    else
+#endif
+                        if( (pMac->roam.roamSession[sessionId].bssParams.bssPersona
                                       == VOS_P2P_GO_MODE &&
                               pMac->roam.roamSession[sessionId].connectState
                                       != eCSR_ASSOC_STATE_TYPE_NOT_CONNECTED) ||
@@ -2831,11 +2253,9 @@ csrIsconcurrentsessionValid(tpAniSirGlobal pMac,tANI_U32 cursessionId,
                         return eHAL_STATUS_FAILURE;
                     }
                     break;
-#ifdef QCA_WIFI_2_0
                 case VOS_P2P_CLIENT_MODE:
                     smsLog(pMac, LOG1, FL(" **** P2P-Client session ****"));
                     return eHAL_STATUS_SUCCESS;
-#endif
                 default :
                     smsLog(pMac, LOGE, FL("***Persona not handled = %d*****"),currBssPersona);
                     break;
@@ -2978,13 +2398,8 @@ eHalStatus csrValidateMCCBeaconInterval(tpAniSirGlobal pMac, tANI_U8 channelId,
                         if (pMac->roam.roamSession[sessionId].bssParams.operationChn
                                                         != channelId )
                         {
-#ifndef QCA_WIFI_2_0
-                            smsLog(pMac, LOGE, FL("***MCC is not enabled for SAP +STA****"));
-                            return eHAL_STATUS_FAILURE;
-#else
                             smsLog(pMac, LOGE, FL("*** MCC with SAP+STA sessions ****"));
                             return eHAL_STATUS_SUCCESS;
-#endif
                         }
                     }
                     else if (pMac->roam.roamSession[sessionId].bssParams.bssPersona
@@ -3295,62 +2710,6 @@ static tANI_BOOLEAN csrMatchWPAOUIIndex( tpAniSirGlobal pMac, tANI_U8 AllCyphers
 
 }
 
-#if 0
-static tANI_BOOLEAN csrIsRSNUnicastNone( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_RSN_OUI_SIZE],
-                                            tANI_U8 cAllCyphers,
-                                            tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui00, Oui ) );
-}
-
-static tANI_BOOLEAN csrIsRSNMulticastWep( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_RSN_OUI_SIZE],
-                                           tANI_U8 cAllCyphers,
-                                           tANI_U8 Oui[] )
-{
-    tANI_BOOLEAN fYes = FALSE;
-
-    // Check Wep 104 first, if fails, then check Wep40.
-    fYes = csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui05, Oui );
-
-    if ( !fYes )
-    {
-        // if not Wep-104, check Wep-40
-        fYes = csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui01, Oui );
-    }
-
-    return( fYes );
-}
-
-
-static tANI_BOOLEAN csrIsRSNUnicastTkip( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_RSN_OUI_SIZE],
-                                    tANI_U8 cAllCyphers,
-                                    tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui02, Oui ) );
-}
-
-
-static tANI_BOOLEAN csrIsRSNMulticastTkip( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_RSN_OUI_SIZE],
-                                              tANI_U8 cAllCyphers,
-                                              tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui02, Oui ) );
-}
-
-static tANI_BOOLEAN csrIsRSNUnicastAes( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_RSN_OUI_SIZE],
-                                              tANI_U8 cAllCyphers,
-                                              tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui04, Oui ) );
-}
-
-static tANI_BOOLEAN csrIsRSNMulticastAes( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_RSN_OUI_SIZE],
-                                              tANI_U8 cAllCyphers,
-                                              tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrRSNOui04, Oui ) );
-}
-#endif
 #ifdef FEATURE_WLAN_WAPI
 static tANI_BOOLEAN csrIsAuthWapiCert( tpAniSirGlobal pMac, tANI_U8 AllSuites[][CSR_WAPI_OUI_SIZE],
                                   tANI_U8 cAllSuites,
@@ -3453,79 +2812,12 @@ static tANI_BOOLEAN csrIsAuthWpa( tpAniSirGlobal pMac, tANI_U8 AllSuites[][CSR_W
     return( csrIsOuiMatch( pMac, AllSuites, cAllSuites, csrWpaOui[01], Oui ) );
 }
 
-#ifdef NOT_CURRENTLY_USED
-static tANI_BOOLEAN csrIsAuth802_1x( tpAniSirGlobal pMac, tANI_U8 AllSuites[][CSR_WPA_OUI_SIZE],
-                                tANI_U8 cAllSuites,
-                                tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllSuites, cAllSuites, csrWpaOui[00], Oui ) );
-}
-#endif // NOT_CURRENTLY_USED
-
 static tANI_BOOLEAN csrIsAuthWpaPsk( tpAniSirGlobal pMac, tANI_U8 AllSuites[][CSR_WPA_OUI_SIZE],
                                 tANI_U8 cAllSuites,
                                 tANI_U8 Oui[] )
 {
     return( csrIsOuiMatch( pMac, AllSuites, cAllSuites, csrWpaOui[02], Oui ) );
 }
-#if 0
-static tANI_BOOLEAN csrIsUnicastNone( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_WPA_OUI_SIZE],
-                                      tANI_U8 cAllCyphers,
-                                      tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui00, Oui ) );
-}
-
-static tANI_BOOLEAN csrIsUnicastTkip( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_WPA_OUI_SIZE],
-                                      tANI_U8 cAllCyphers,
-                                      tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui02, Oui ) );
-}
-
-static tANI_BOOLEAN csrIsUnicastAes( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_WPA_OUI_SIZE],
-                                      tANI_U8 cAllCyphers,
-                                      tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui04, Oui ) );
-}
-
-
-static tANI_BOOLEAN csrIsMulticastWep( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_WPA_OUI_SIZE],
-                                          tANI_U8 cAllCyphers,
-                                          tANI_U8 Oui[] )
-{
-    tANI_BOOLEAN fYes = FALSE;
-
-    // Check Wep 104 first, if fails, then check Wep40.
-    fYes = csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui05, Oui );
-
-    if ( !fYes )
-    {
-        // if not Wep-104, check Wep-40
-        fYes = csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui01, Oui );
-    }
-
-    return( fYes );
-}
-
-
-static tANI_BOOLEAN csrIsMulticastTkip( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_WPA_OUI_SIZE],
-                                          tANI_U8 cAllCyphers,
-                                          tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui02, Oui ) );
-}
-
-
-static tANI_BOOLEAN csrIsMulticastAes( tpAniSirGlobal pMac, tANI_U8 AllCyphers[][CSR_WPA_OUI_SIZE],
-                                          tANI_U8 cAllCyphers,
-                                          tANI_U8 Oui[] )
-{
-    return( csrIsOuiMatch( pMac, AllCyphers, cAllCyphers, csrWpaOui04, Oui ) );
-}
-
-#endif
 
 tANI_U8 csrGetOUIIndexFromCipher( eCsrEncryptionType enType )
 {
@@ -3844,21 +3136,12 @@ tANI_BOOLEAN csrLookupPMKID( tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U8 *p
         smsLog(pMac, LOGE, FL("  session %d not found "), sessionId);
         return FALSE;
     }
-   /* to force the AP initiate fresh 802.1x authentication after re-association should not
-    * fill the PMKID from cache  this is needed
-    * by the HS 2.0 passpoint certification 5.2.a and b testcases */
-
-    if(pSession->fIgnorePMKIDCache)
-    {
-        pSession->fIgnorePMKIDCache = FALSE;
-        return fRC;
-    }
 
     do
     {
-        for( Index=0; Index < pSession->NumPmkidCache; Index++ )
+        for (Index = 0; Index < CSR_MAX_PMKID_ALLOWED; Index++)
         {
-            smsLog(pMac, LOGW, "match PMKID "MAC_ADDRESS_STR " to ",
+            smsLog(pMac, LOG1, "match PMKID "MAC_ADDRESS_STR " to ",
                    MAC_ADDR_ARRAY(pBSSId));
             if( vos_mem_compare(pBSSId, pSession->PmkidCacheInfo[Index].BSSID, sizeof(tCsrBssid)) )
             {
@@ -3940,8 +3223,14 @@ tANI_U8 csrConstructRSNIe( tHalHandle hHal, tANI_U32 sessionId, tCsrRoamProfile 
         // For another, we should use the Management Frame Protection values given by the supplicant
         RSNCapabilities.PreAuthSupported = 0;
 #ifdef WLAN_FEATURE_11W
-        RSNCapabilities.MFPRequired = pProfile->MFPRequired;
-        RSNCapabilities.MFPCapable = pProfile->MFPCapable;
+        if (RSNCapabilities.MFPCapable && pProfile->MFPCapable) {
+            RSNCapabilities.MFPCapable = pProfile->MFPCapable;
+            RSNCapabilities.MFPRequired = pProfile->MFPRequired;
+        }
+        else {
+            RSNCapabilities.MFPCapable = 0;
+            RSNCapabilities.MFPRequired = 0;
+        }
 #endif
         *(tANI_U16 *)( &pAuthSuite->AuthOui[ 1 ] ) = *((tANI_U16 *)(&RSNCapabilities));
 
@@ -5158,13 +4447,24 @@ tANI_BOOLEAN csrIsSsidMatch( tpAniSirGlobal pMac, tANI_U8 *ssid1, tANI_U8 ssid1L
     tANI_BOOLEAN fMatch = FALSE;
 
     do {
+        /*
+         * Check for the specification of the Broadcast SSID at the beginning
+         * of the list. If specified, then all SSIDs are matches
+         * (broadcast SSID means accept all SSIDs).
+         */
+        if (ssid1Len == 0) {
+            fMatch = TRUE;
+            break;
+        }
 
-        // There are a few special cases.  If the Bss description has a Broadcast SSID,
-        // then our Profile must have a single SSID without Wildcards so we can program
-        // the SSID.
-        // SSID could be suppressed in beacons. In that case SSID IE has valid length
-        // but the SSID value is all NULL characters. That condition is trated same
-        // as NULL SSID
+        /*
+         * There are a few special cases. If the Bss description has a
+         * Broadcast SSID, then our Profile must have a single SSID without
+         * Wild cards so we can program the SSID.
+         * SSID could be suppressed in beacons. In that case SSID IE has valid
+         * length but the SSID value is all NULL characters.
+         * That condition is treated same as NULL SSID.
+         */
         if ( csrIsNULLSSID( bssSsid, bssSsidLen ) )
         {
             if ( eANI_BOOLEAN_FALSE == fSsidRequired )
@@ -5172,14 +4472,6 @@ tANI_BOOLEAN csrIsSsidMatch( tpAniSirGlobal pMac, tANI_U8 *ssid1, tANI_U8 ssid1L
                 fMatch = TRUE;
                 break;
             }
-        }
-
-        // Check for the specification of the Broadcast SSID at the beginning of the list.
-        // If specified, then all SSIDs are matches (broadcast SSID means accept all SSIDs).
-        if ( ssid1Len == 0 )
-        {
-            fMatch = TRUE;
-            break;
         }
 
         if(ssid1Len != bssSsidLen) break;
@@ -5221,17 +4513,17 @@ tANI_BOOLEAN csrIsSsidInList( tHalHandle hHal, tSirMacSSid *pSsid, tCsrSSIDs *pS
 //like to use sirCompareMacAddr
 tANI_BOOLEAN csrIsMacAddressZero( tpAniSirGlobal pMac, tCsrBssid *pMacAddr )
 {
-    tANI_U8 bssid[WNI_CFG_BSSID_LEN] = {0, 0, 0, 0, 0, 0};
+    tANI_U8 bssid[VOS_MAC_ADDR_SIZE] = {0, 0, 0, 0, 0, 0};
 
-    return (vos_mem_compare(bssid, pMacAddr, WNI_CFG_BSSID_LEN));
+    return (vos_mem_compare(bssid, pMacAddr, VOS_MAC_ADDR_SIZE));
 }
 
 //like to use sirCompareMacAddr
 tANI_BOOLEAN csrIsMacAddressBroadcast( tpAniSirGlobal pMac, tCsrBssid *pMacAddr )
 {
-    tANI_U8 bssid[WNI_CFG_BSSID_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    tANI_U8 bssid[VOS_MAC_ADDR_SIZE] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-    return(vos_mem_compare(bssid, pMacAddr, WNI_CFG_BSSID_LEN));
+    return(vos_mem_compare(bssid, pMacAddr, VOS_MAC_ADDR_SIZE));
 }
 
 
@@ -5623,11 +4915,14 @@ tANI_BOOLEAN csrMatchBSS( tHalHandle hHal, tSirBssDescription *pBssDesc, tCsrSca
                           tDot11fBeaconIEs **ppIes)
 {
     tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
-    tANI_BOOLEAN fRC = eANI_BOOLEAN_FALSE, fCheck;
+    tANI_BOOLEAN fRC = eANI_BOOLEAN_FALSE, fCheck, blacklist_check;
     tANI_U32 i;
     tDot11fBeaconIEs *pIes = NULL;
     tANI_U8 *pb;
+    tCsrBssid *blacklist_bssid = NULL;
+    struct roam_ext_params *roam_params;
 
+    roam_params = &pMac->roam.configParam.roam_params;
     do {
         if( ( NULL == ppIes ) || ( *ppIes ) == NULL )
         {
@@ -5647,7 +4942,24 @@ tANI_BOOLEAN csrMatchBSS( tHalHandle hHal, tSirBssDescription *pBssDesc, tCsrSca
         fCheck = (!pFilter->p2pResult || pIes->P2PBeaconProbeRes.present);
         if(!fCheck) break;
 
-        if(pIes->SSID.present)
+        /* Check for Blacklist BSSID's and avoid connections */
+        blacklist_check = false;
+        blacklist_bssid = (tCsrBssid *)&roam_params->bssid_avoid_list;
+        for (i = 0; i < roam_params->num_bssid_avoid_list; i++) {
+          if (csrIsMacAddressEqual(pMac, blacklist_bssid,
+               (tCsrBssid *)pBssDesc->bssId)) {
+                 blacklist_check = true;
+                 break;
+          }
+          blacklist_bssid++;
+        }
+        if(blacklist_check) {
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+              "Do not Attempt connection to blacklist bssid");
+            break;
+        }
+
+	if(pIes->SSID.present)
         {
             for(i = 0; i < pFilter->SSIDs.numOfSSIDs; i++)
             {
@@ -5673,7 +4985,6 @@ tANI_BOOLEAN csrMatchBSS( tHalHandle hHal, tSirBssDescription *pBssDesc, tCsrSca
             }
         }
         if(!fCheck) break;
-
         fCheck = eANI_BOOLEAN_TRUE;
         for(i = 0; i < pFilter->ChannelInfo.numOfChannels; i++)
         {
@@ -5691,7 +5002,7 @@ tANI_BOOLEAN csrMatchBSS( tHalHandle hHal, tSirBssDescription *pBssDesc, tCsrSca
         }
 #endif
         if ( !csrIsPhyModeMatch( pMac, pFilter->phyMode, pBssDesc, NULL, NULL, pIes ) ) break;
-        if ( (!pFilter->bWPSAssociation) &&
+        if ( (!pFilter->bWPSAssociation) && (!pFilter->bOSENAssociation) &&
 #ifdef WLAN_FEATURE_11W
              !csrIsSecurityMatch( pMac, &pFilter->authType,
                                   &pFilter->EncryptionType,
@@ -5820,7 +5131,98 @@ tANI_BOOLEAN csrMatchBSSToConnectProfile( tHalHandle hHal, tCsrRoamConnectedProf
     return( fRC );
 }
 
+void csrAddRateBitmap(tANI_U8 rate, tANI_U16 *pRateBitmap)
+{
+    tANI_U16 rateBitmap;
+    tANI_U16 n = BITS_OFF( rate, CSR_DOT11_BASIC_RATE_MASK );
+    rateBitmap = *pRateBitmap;
+    switch(n)
+    {
+       case SIR_MAC_RATE_1:
+            rateBitmap |= SIR_MAC_RATE_1_BITMAP;
+            break;
+        case SIR_MAC_RATE_2:
+            rateBitmap |= SIR_MAC_RATE_2_BITMAP;
+            break;
+        case SIR_MAC_RATE_5_5:
+            rateBitmap |= SIR_MAC_RATE_5_5_BITMAP;
+            break;
+        case SIR_MAC_RATE_11:
+            rateBitmap |= SIR_MAC_RATE_11_BITMAP;
+            break;
+        case SIR_MAC_RATE_6:
+            rateBitmap |= SIR_MAC_RATE_6_BITMAP;
+            break;
+        case SIR_MAC_RATE_9:
+            rateBitmap |= SIR_MAC_RATE_9_BITMAP;
+            break;
+        case SIR_MAC_RATE_12:
+            rateBitmap |= SIR_MAC_RATE_12_BITMAP;
+            break;
+        case SIR_MAC_RATE_18:
+            rateBitmap |= SIR_MAC_RATE_18_BITMAP;
+            break;
+        case SIR_MAC_RATE_24:
+            rateBitmap |= SIR_MAC_RATE_24_BITMAP;
+            break;
+        case SIR_MAC_RATE_36:
+            rateBitmap |= SIR_MAC_RATE_36_BITMAP;
+            break;
+        case SIR_MAC_RATE_48:
+            rateBitmap |= SIR_MAC_RATE_48_BITMAP;
+            break;
+        case SIR_MAC_RATE_54:
+            rateBitmap |= SIR_MAC_RATE_54_BITMAP;
+            break;
+    }
+    *pRateBitmap = rateBitmap;
+}
 
+tANI_BOOLEAN csrCheckRateBitmap(tANI_U8 rate, tANI_U16 rateBitmap)
+{
+    tANI_U16 n = BITS_OFF( rate, CSR_DOT11_BASIC_RATE_MASK );
+
+    switch(n)
+    {
+        case SIR_MAC_RATE_1:
+            rateBitmap &= SIR_MAC_RATE_1_BITMAP;
+            break;
+        case SIR_MAC_RATE_2:
+            rateBitmap &= SIR_MAC_RATE_2_BITMAP;
+            break;
+        case SIR_MAC_RATE_5_5:
+            rateBitmap &= SIR_MAC_RATE_5_5_BITMAP;
+            break;
+        case SIR_MAC_RATE_11:
+            rateBitmap &= SIR_MAC_RATE_11_BITMAP;
+            break;
+        case SIR_MAC_RATE_6:
+            rateBitmap &= SIR_MAC_RATE_6_BITMAP;
+            break;
+        case SIR_MAC_RATE_9:
+            rateBitmap &= SIR_MAC_RATE_9_BITMAP;
+            break;
+        case SIR_MAC_RATE_12:
+            rateBitmap &= SIR_MAC_RATE_12_BITMAP;
+            break;
+        case SIR_MAC_RATE_18:
+            rateBitmap &= SIR_MAC_RATE_18_BITMAP;
+            break;
+        case SIR_MAC_RATE_24:
+            rateBitmap &= SIR_MAC_RATE_24_BITMAP;
+            break;
+        case SIR_MAC_RATE_36:
+            rateBitmap &= SIR_MAC_RATE_36_BITMAP;
+            break;
+        case SIR_MAC_RATE_48:
+            rateBitmap &= SIR_MAC_RATE_48_BITMAP;
+            break;
+        case SIR_MAC_RATE_54:
+            rateBitmap &= SIR_MAC_RATE_54_BITMAP;
+            break;
+    }
+    return !!rateBitmap;
+}
 
 tANI_BOOLEAN csrRatesIsDot11RateSupported( tHalHandle hHal, tANI_U8 rate )
 {
@@ -6079,25 +5481,6 @@ tSirResultCodes csrGetDeAuthRspStatusCode( tSirSmeDeauthRsp *pSmeRsp )
 
     return( ( tSirResultCodes )ret );
 }
-
-#if 0
-tSirScanType csrGetScanType(tANI_U8 chnId, eRegDomainId domainId, tANI_U8 *countryCode)
-{
-    tSirScanType scanType = eSIR_PASSIVE_SCAN;
-    tANI_U8 cc = 0;
-
-    while (cc++ < gCsrDomainChnInfo[domainId].numChannels)
-    {
-        if(chnId == gCsrDomainChnInfo[domainId].chnInfo[cc].chnId)
-        {
-            scanType = gCsrDomainChnInfo[domainId].chnInfo[cc].scanType;
-            break;
-        }
-    }
-
-    return (scanType);
-}
-#endif
 
 tSirScanType csrGetScanType(tpAniSirGlobal pMac, tANI_U8 chnId)
 {
@@ -6406,111 +5789,6 @@ tANI_BOOLEAN csrMatchCountryCode( tpAniSirGlobal pMac, tANI_U8 *pCountry, tDot11
     return (fRet);
 }
 
-#if 0
-eHalStatus csrSetCountryDomainMapping(tpAniSirGlobal pMac, tCsrCountryDomainMapping *pCountryDomainMapping)
-{
-    eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
-    tANI_U32 i, j;
-    tANI_BOOLEAN fDomainChanged = eANI_BOOLEAN_FALSE;
-    tANI_U8 countryCode[WNI_CFG_COUNTRY_CODE_LEN];
-
-    i = WNI_CFG_COUNTRY_CODE_LEN;
-    //Get the currently used country code
-    status = ccmCfgGetStr(pMac, WNI_CFG_COUNTRY_CODE, countryCode, &i);
-    if(HAL_STATUS_SUCCESS(status))
-    {
-        if(pCountryDomainMapping && pCountryDomainMapping->numEntry)
-        {
-            for(i = 0; i < pCountryDomainMapping->numEntry; i++)
-            {
-                for(j = 0; j < eCSR_NUM_COUNTRY_INDEX; j++)
-                {
-                    if (vos_mem_compare(gCsrCountryInfo[j].countryCode,
-                                        pCountryDomainMapping->pCountryInfo[i].countryCode,
-                                        2))
-                    {
-                        if(gCsrCountryInfo[j].domainId != pCountryDomainMapping->pCountryInfo[i].domainId)
-                        {
-                            gCsrCountryInfo[j].domainId = pCountryDomainMapping->pCountryInfo[i].domainId;
-                            //Check whether it matches the currently used country code
-                            //If matching, need to update base on the new domain setting.
-                            if (vos_mem_compare(countryCode,
-                                                pCountryDomainMapping->pCountryInfo[i].countryCode,
-                                                2))
-                            {
-                                fDomainChanged = eANI_BOOLEAN_TRUE;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            status = eHAL_STATUS_SUCCESS;
-            if(fDomainChanged)
-            {
-                tCsrChannel *pChannelList;
-
-                if(pMac->scan.f11dInfoApplied)
-                {
-                    //11d info already applied. Let's reapply with the new domain setting
-                    if(pMac->scan.channels11d.numChannels)
-                    {
-                        pChannelList = &pMac->scan.channels11d;
-                    }
-                    else
-                    {
-                        pChannelList = &pMac->scan.base20MHzChannels;
-                    }
-                }
-                else
-                {
-                    //no 11d so we use the base channelist from EEPROM
-                    pChannelList = &pMac->scan.base20MHzChannels;
-                }
-                //set the new domain's scan requirement to CFG
-                csrSetCfgScanControlList(pMac, countryCode, pChannelList);
-            }
-        }
-    }
-
-    return (status);
-}
-
-eHalStatus csrSetDomainScanSetting(tpAniSirGlobal pMac, tCsrDomainFreqInfo *pDomainFreqInfo)
-{
-    eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
-    tANI_U32 i, j;
-    tANI_U16 freq;
-
-    if(pDomainFreqInfo && pDomainFreqInfo->numEntry && (pDomainFreqInfo->domainId < NUM_REG_DOMAINS))
-    {
-        tCsrDomainChnInfo *pDomainChnInfo = &gCsrDomainChnInfo[pDomainFreqInfo->domainId];
-
-        for(j = 0; j < pDomainChnInfo->numChannels; j++)
-        {
-            if(HAL_STATUS_SUCCESS(halPhyChIdToFreqConversion(pDomainChnInfo->chnInfo[j].chnId, &freq)))
-            {
-                for(i = 0; i < pDomainFreqInfo->numEntry; i++)
-                {
-                    if((pDomainFreqInfo->pCsrScanFreqInfo[i].nStartFreq <= freq) &&
-                        (freq <= pDomainFreqInfo->pCsrScanFreqInfo[i].nEndFreq))
-                    {
-                        pDomainChnInfo->chnInfo[j].scanType = pDomainFreqInfo->pCsrScanFreqInfo[i].scanType;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                smsLog(pMac, LOGW, "   Failed to get frequency of channel %d", pDomainChnInfo->chnInfo[j].chnId);
-            }
-        }
-        status = eHAL_STATUS_SUCCESS;
-    }
-
-    return (status);
-}
-#endif
 
 eHalStatus csrGetModifyProfileFields(tpAniSirGlobal pMac, tANI_U32 sessionId,
                                      tCsrRoamModifyProfileFields *pModifyProfileFields)
@@ -6541,47 +5819,6 @@ eHalStatus csrSetModifyProfileFields(tpAniSirGlobal pMac, tANI_U32 sessionId,
 }
 
 
-#if 0
-/* ---------------------------------------------------------------------------
-    \fn csrGetSupportedCountryCode
-    \brief this function is to get a list of the country code current being supported
-    \param pBuf - Caller allocated buffer with at least 3 bytes, upon success return,
-    this has the country code list. 3 bytes for each country code. This may be NULL if
-    caller wants to know the needed bytes.
-    \param pbLen - Caller allocated, as input, it indicates the length of pBuf. Upon success return,
-    this contains the length of the data in pBuf
-    \return eHalStatus
-  -------------------------------------------------------------------------------*/
-eHalStatus csrGetSupportedCountryCode(tpAniSirGlobal pMac, tANI_U8 *pBuf, tANI_U32 *pbLen)
-{
-    tANI_U32 numOfCountry = sizeof( gCsrCountryInfo ) / sizeof( gCsrCountryInfo[0] );
-    tANI_U32 numBytes = 0;
-    eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
-
-    if( pbLen )
-    {
-        numBytes = *pbLen;
-        //Consider it ok, at least we can return the number of bytes needed;
-        *pbLen = numOfCountry * WNI_CFG_COUNTRY_CODE_LEN;
-        status = eHAL_STATUS_SUCCESS;
-        if( pBuf && ( numBytes >= *pbLen ) )
-        {
-            //The ugly part starts.
-            //We may need to alter the data structure and find a way to make this faster.
-            tANI_U32 i;
-
-            for ( i = 0; i < numOfCountry; i++ )
-            {
-                vos_mem_copy(pBuf + ( i * WNI_CFG_COUNTRY_CODE_LEN ),
-                             gCsrCountryInfo[i].countryCode,
-                             WNI_CFG_COUNTRY_CODE_LEN);
-            }
-        }
-    }
-
-    return ( status );
-}
-#endif
 
 /* ---------------------------------------------------------------------------
     \fn csrGetSupportedCountryCode
@@ -6768,5 +6005,37 @@ VOS_STATUS csrAddToChannelListFront(
     pChannelList[0] = channel;
 
     return eHAL_STATUS_SUCCESS;
+}
+#endif
+#ifdef FEATURE_WLAN_DIAG_SUPPORT
+/**
+ * csr_diag_event_report() - send PE diag event
+ * @pmac:        pointer to global MAC context.
+ * @event_typev: sub event type for DIAG event.
+ * @status:      status of the event
+ * @reasoncode:  reasoncode for the given status
+ *
+ * This function is called to send diag event
+ *
+ * Return:   NA
+ */
+
+void csr_diag_event_report(tpAniSirGlobal pmac, uint16_t event_type,
+			   uint16_t status, uint16_t reasoncode)
+{
+	tSirMacAddr nullbssid = { 0, 0, 0, 0, 0, 0 };
+	WLAN_VOS_DIAG_EVENT_DEF(diag_event, vos_event_wlan_pe_payload_type);
+
+	vos_mem_set(&diag_event, sizeof(vos_event_wlan_pe_payload_type), 0);
+
+	vos_mem_copy(diag_event.bssid, nullbssid, sizeof(tSirMacAddr));
+	diag_event.sme_state = (tANI_U16)pmac->lim.gLimSmeState;
+	diag_event.mlm_state = (tANI_U16)pmac->lim.gLimMlmState;
+	diag_event.event_type = event_type;
+	diag_event.status = status;
+	diag_event.reason_code = reasoncode;
+
+	WLAN_VOS_DIAG_EVENT_REPORT(&diag_event, EVENT_WLAN_PE);
+	return;
 }
 #endif

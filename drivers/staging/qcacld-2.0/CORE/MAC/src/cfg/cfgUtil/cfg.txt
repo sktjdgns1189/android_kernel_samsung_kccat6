@@ -673,15 +673,6 @@ NONE
 * In IBSS, this can be changed for coalescing, should SME go into IDLE state?
 *
 
-WNI_CFG_BSSID    S    6    7
-V    RW    NP RESTART
-NONE
-6    0x22 0x22 0x11 0x11 0x33 0x33
-V    RW    NP RESTART
-NONE
-6    0x22 0x22 0x11 0x11 0x33 0x33
-
-
 *
 * Listen Interval
 *
@@ -2840,10 +2831,10 @@ LIM
 WNI_CFG_VHT_CSN_BEAMFORMEE_ANT_SUPPORTED  I    4    19
 V    RW    NP
 LIM
-0    3    0
+0    4    0
 V    RW    NP
 LIM
-0    3    0
+0    4    0
 
 *
 * Number of Sounding Dimensions indicates Number
@@ -4306,10 +4297,10 @@ HAL
 WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD   I    4    7
 V    RW    NP
 HAL
-0    65535    0
+0    1000     0
 V    RW    NP
 HAL
-0    65535    0
+0    1000     0
 
 * Limit on number of associated stations
 * (applies to peer stations in IBSS, SoftAP, BT-AMP AP, & P2P-GO modes)
@@ -4560,10 +4551,10 @@ NONE
 WNI_CFG_PMF_SA_QUERY_RETRY_INTERVAL    I    4    1
 V    RW   NP RESTART
 NONE
-0    2000 200
+10    2000 200
 V    RW   NP RESTART
 NONE
-0    2000 200
+10    2000 200
 
 
 *
@@ -4625,10 +4616,10 @@ HAL
 WNI_CFG_RMC_ACTION_PERIOD_FREQUENCY    I    4    7
 V    RW    NP
 HAL
-10   0xFFFFFFFF    300
+100   1000    300
 V    RW    NP
 HAL
-10   0xFFFFFFFF    300
+100   1000    300
 *
 *
 
@@ -4652,6 +4643,35 @@ V    RW    NP
 NONE
 0    1    1
 
+* Debug p2p remain on channel
+*
+WNI_CFG_DEBUG_P2P_REMAIN_ON_CHANNEL    I    4    7
+V    RW    NP
+NONE
+0    1    0
+V    RW    NP
+NONE
+0    1    0
+
+*
+* TDLS Off Channel Implementation
+*
+WNI_CFG_TDLS_OFF_CHANNEL_ENABLED    I    4    7
+V    RW    NP
+LIM
+0    1     0
+V    RW    NP
+LIM
+0    1     0
+
+WNI_CFG_IBSS_ATIM_WIN_SIZE I    4    7
+V    RW    NP
+NONE
+0   100    0
+V    RW    NP
+NONE
+0   100    0
+
 *
 * DFS Master capability (11h) enable/disable
 *
@@ -4670,4 +4690,16 @@ NONE
 0    1    0
 V    RW    NP
 NONE
+0    1    0
+
+*
+*TDLS WMM Mode
+*
+*
+WNI_CFG_TDLS_WMM_MODE_ENABLED   I   4   7
+V    RW    NP
+LIM
+0    1    0
+V    RW    NP
+LIM
 0    1    0

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -67,15 +67,13 @@
   ------------------------------------------------------------------------*/
 #include <vos_event.h>
 #include "i_vos_types.h"
-#include "i_vos_packet.h"
 #include <linux/wait.h>
-#ifdef WLAN_OPEN_SOURCE
+#if defined(WLAN_OPEN_SOURCE) && defined(CONFIG_HAS_WAKELOCK)
 #include <linux/wakelock.h>
 #endif
-#include <vos_power.h>
-#ifdef QCA_WIFI_2_0
+#include <vos_mq.h>
 #include <adf_os_types.h>
-#endif
+#include <vos_lock.h>
 
 #define TX_POST_EVENT_MASK               0x001
 #define TX_SUSPEND_EVENT_MASK            0x002
@@ -101,8 +99,10 @@
 ** worst-case scenario.  Must be able to handle all
 ** incoming frames, as well as overhead for internal
 ** messaging
+**
+** Increased to 8000 to handle more RX frames
 */
-#define VOS_CORE_MAX_MESSAGES           (VPKT_NUM_RX_RAW_PACKETS + 32)
+#define VOS_CORE_MAX_MESSAGES 8000
 
 #ifdef QCA_CONFIG_SMP
 /*
@@ -179,15 +179,6 @@ typedef struct _VosSchedContext
    /* SYS Message queue on the Main thread */
    VosMqType           sysMcMq;
 
-  /* WDI Message queue on the Main thread*/
-   VosMqType           wdiMcMq;
-
-   /* WDI Message queue on the Tx Thread*/
-   VosMqType           wdiTxMq;
-
-   /* WDI Message queue on the Rx Thread*/
-   VosMqType           wdiRxMq;
-
    /* TL Message queue on the Tx thread */
    VosMqType           tlTxMq;
 
@@ -195,10 +186,6 @@ typedef struct _VosSchedContext
    VosMqType           sysTxMq;
 
    VosMqType           sysRxMq;
-#if defined (QCA_WIFI_2_0) && \
-    defined (QCA_WIFI_ISOC)
-   VosMqType           htcMcMq;
-#endif
 
    /* Handle of Event for MC thread to signal startup */
    struct completion   McStartEvent;
@@ -296,6 +283,15 @@ typedef struct _VosSchedContext
 
    /* cpu hotplug notifier */
    struct notifier_block *cpuHotPlugNotifier;
+
+   /* affinity lock */
+   vos_lock_t affinity_lock;
+
+   /* rx thread affinity cpu */
+   unsigned long rx_thread_cpu;
+
+   /* high throughput required */
+   bool high_throughput_required;
 #endif
 } VosSchedContext, *pVosSchedContext;
 
@@ -330,8 +326,6 @@ typedef struct _VosWatchdogContext
 
    v_BOOL_t resetInProgress;
 
-   vos_chip_reset_reason_type reason;
-
    /* Lock for preventing multiple reset being triggered simultaneously */
    spinlock_t wdLock;
 
@@ -352,7 +346,21 @@ typedef struct _VosMsgWrapper
 
 } VosMsgWrapper, *pVosMsgWrapper;
 
-
+/**
+ * struct vos_log_complete - Log completion internal structure
+ * @is_fatal: Type is fatal or not
+ * @indicator: Source of bug report
+ * @reason_code: Reason code for bug report
+ * @is_report_in_progress: If bug report is in progress
+ *
+ * This structure internally stores the log related params
+ */
+struct vos_log_complete {
+	uint32_t is_fatal;
+	uint32_t indicator;
+	uint32_t reason_code;
+	bool is_report_in_progress;
+};
 
 typedef struct _VosContextType
 {
@@ -385,8 +393,10 @@ typedef struct _VosContextType
    /* BAP Context */
    v_VOID_t           *pBAPContext;
 
+#ifndef WLAN_FEATURE_MBSSID
    /* SAP Context */
    v_VOID_t           *pSAPContext;
+#endif
 
    vos_event_t         ProbeEvent;
 
@@ -397,10 +407,7 @@ typedef struct _VosContextType
    /* WDA Context */
    v_VOID_t            *pWDAContext;
 
-#ifdef QCA_WIFI_2_0
-#ifndef QCA_WIFI_ISOC
    v_VOID_t        *pHIFContext;
-#endif
 
    v_VOID_t        *htc_ctx;
 
@@ -415,16 +422,21 @@ typedef struct _VosContextType
 
    /* Configuration handle used to get system configuration */
    v_VOID_t    *cfg_ctx;
-#else
-   /* VOS Packet Context */
-   vos_pkt_context_t    vosPacket;
-#endif	/* QCA_WIFI_2_0 */
 
    volatile v_U8_t    isLoadUnloadInProgress;
 
    /* SSR re-init in progress */
    volatile v_U8_t     isReInitInProgress;
 
+   bool is_wakelock_log_enabled;
+   uint32_t wakelock_log_level;
+   uint32_t connectivity_log_level;
+   uint32_t packet_stats_log_level;
+   uint32_t driver_debug_log_level;
+   uint32_t fw_debug_log_level;
+
+   struct vos_log_complete log_complete;
+   vos_spin_lock_t bug_report_lock;
 } VosContextType, *pVosContextType;
 
 
@@ -434,6 +446,9 @@ typedef struct _VosContextType
 ---------------------------------------------------------------------------*/
 
 #ifdef QCA_CONFIG_SMP
+int vos_sched_handle_cpu_hot_plug(void);
+int vos_sched_handle_throughput_req(bool high_tput_required);
+
 /*---------------------------------------------------------------------------
   \brief vos_drop_rxpkt_by_staid() - API to drop pending Rx packets for a sta
   The \a vos_drop_rxpkt_by_staid() drops queued packets for a station, to drop
@@ -493,6 +508,12 @@ void vos_free_tlshim_pkt(pVosSchedContext pSchedContext,
   \sa vos_free_tlshim_pkt_freeq()
   -------------------------------------------------------------------------*/
 void vos_free_tlshim_pkt_freeq(pVosSchedContext pSchedContext);
+#else
+static inline int vos_sched_handle_throughput_req(
+	bool high_tput_required)
+{
+	return 0;
+}
 #endif
 
 int vos_sched_is_tx_thread(int threadID);
@@ -644,16 +665,17 @@ void vos_sched_deinit_mqs (pVosSchedContext pSchedContext);
 void vos_sched_flush_mc_mqs  (pVosSchedContext pSchedContext);
 void vos_sched_flush_tx_mqs  (pVosSchedContext pSchedContext);
 void vos_sched_flush_rx_mqs  (pVosSchedContext pSchedContext);
-VOS_STATUS vos_watchdog_chip_reset ( vos_chip_reset_reason_type reason );
 void clearWlanResetReason(void);
 
 void vos_timer_module_init( void );
 VOS_STATUS vos_watchdog_wlan_shutdown(void);
 VOS_STATUS vos_watchdog_wlan_re_init(void);
 v_BOOL_t isWDresetInProgress(void);
+void vos_ssr_protect_init(void);
 void vos_ssr_protect(const char *caller_func);
 void vos_ssr_unprotect(const char *caller_func);
 bool vos_is_ssr_ready(const char *caller_func);
+int vos_get_gfp_flags(void);
 
 #define vos_wait_for_work_thread_completion(func) vos_is_ssr_ready(func)
 

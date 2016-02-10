@@ -170,12 +170,13 @@ radar_summary_parse(struct ath_dfs *dfs, const char *buf, size_t len,
     struct rx_radar_status *rsu)
 {
    uint32_t rs[2];
+   int freq_centre, freq;
 
    /* Drop out if we have < 2 DWORDs available */
    if (len < sizeof(rs)) {
       DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR |
           ATH_DEBUG_DFS_PHYERR_SUM,
-          "%s: len (%d) < expected (%d)!",
+          "%s: len (%zu) < expected (%zu)!",
           __func__,
           len,
           sizeof(rs));
@@ -211,6 +212,35 @@ radar_summary_parse(struct ath_dfs *dfs, const char *buf, size_t len,
            6);
    rsu->delta_diff =
        MS(rs[RADAR_REPORT_PULSE_REG_1], RADAR_REPORT_PULSE_DELTA_DIFF);
+
+   /* WAR for FCC Type 4*/
+   /*
+    * HW is giving longer pulse duration (in case of VHT80, with traffic)
+    * which fails to detect FCC type4 radar pulses. Added a work around to
+    * fix the pulse duration and duration delta.
+    *
+    * IF VHT80
+    *   && (primary_channel==30MHz || primary_channel== -30MHz)
+    *   && -4 <= pulse_index <= 4
+    *   && !chirp
+    *   && pulse duration > 20 us
+    * THEN
+    *   Set pulse duration to 20 us
+    */
+
+   adf_os_spin_lock_bh(&dfs->ic->chan_lock);
+   freq = ieee80211_chan2freq(dfs->ic, dfs->ic->ic_curchan);
+   freq_centre = dfs->ic->ic_curchan->ic_vhtop_ch_freq_seg1;
+
+   if ((IEEE80211_IS_CHAN_11AC_VHT80(dfs->ic->ic_curchan) &&
+            (abs(freq - freq_centre) == 30) &&
+            !rsu->is_chirp &&
+            abs(rsu->sidx) <= 4 &&
+            rsu->pulse_duration > 20)){
+      rsu->pulse_duration = 20;
+   }
+
+   adf_os_spin_unlock_bh(&dfs->ic->chan_lock);
 }
 
 static void
@@ -223,7 +253,7 @@ radar_fft_search_report_parse(struct ath_dfs *dfs, const char *buf, size_t len,
    if (len < sizeof(rs)) {
       DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR |
           ATH_DEBUG_DFS_PHYERR_SUM,
-          "%s: len (%d) < expected (%d)!",
+          "%s: len (%zu) < expected (%zu)!",
           __func__,
           len,
           sizeof(rs));
@@ -276,13 +306,13 @@ tlv_parse_frame(struct ath_dfs *dfs, struct rx_radar_status *rs,
         bool false_detect = false;
 
    DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR,
-       "%s: total length = %d bytes", __func__, len);
+       "%s: total length = %zu bytes", __func__, len);
    while ((i < len ) && (false_detect == false)) {
       /* Ensure we at least have four bytes */
       if ((len - i) < sizeof(tlv_hdr)) {
          DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR |
              ATH_DEBUG_DFS_PHYERR_SUM,
-             "%s: ran out of bytes, len=%d, i=%d",
+             "%s: ran out of bytes, len=%zu, i=%d",
              __func__, len, i);
          return (0);
       }
@@ -309,7 +339,7 @@ tlv_parse_frame(struct ath_dfs *dfs, struct rx_radar_status *rs,
        */
       if (MS(tlv_hdr[TLV_REG], TLV_LEN) + i >= len) {
          DFS_DPRINTK(dfs, ATH_DEBUG_DFS_PHYERR,
-             "%s: TLV oversize: TLV LEN=%d, available=%d, "
+             "%s: TLV oversize: TLV LEN=%d, available=%zu, "
              "i=%d",
              __func__,
              MS(tlv_hdr[TLV_REG], TLV_LEN),
@@ -387,13 +417,16 @@ tlv_calc_freq_info(struct ath_dfs *dfs, struct rx_radar_status *rs)
       DFS_PRINTK("%s: dfs->ic=%p, that or curchan is null?",
           __func__, dfs->ic);
       return (0);
+   }
+
+   adf_os_spin_lock_bh(&dfs->ic->chan_lock);
    /*
     * For now, the only 11ac channel with freq1/freq2 setup is
     * VHT80.
     *
     * XXX should have a flag macro to check this!
     */
-   } else if (IEEE80211_IS_CHAN_11AC_VHT80(dfs->ic->ic_curchan)) {
+   if (IEEE80211_IS_CHAN_11AC_VHT80(dfs->ic->ic_curchan)) {
       /* 11AC, so cfreq1/cfreq2 are setup */
 
       /*
@@ -401,9 +434,7 @@ tlv_calc_freq_info(struct ath_dfs *dfs, struct rx_radar_status *rs)
        * appropriately!
        */
 
-      chan_centre = dfs->ic->ic_ieee2mhz(
-          dfs->ic->ic_curchan->ic_vhtop_ch_freq_seg1,
-          dfs->ic->ic_curchan->ic_flags);
+      chan_centre = dfs->ic->ic_curchan->ic_vhtop_ch_freq_seg1;
    } else {
       /* HT20/HT40 */
 
@@ -430,6 +461,7 @@ tlv_calc_freq_info(struct ath_dfs *dfs, struct rx_radar_status *rs)
       /* Calculate new _real_ channel centre */
       chan_centre += (chan_offset / 2);
    }
+   adf_os_spin_unlock_bh(&dfs->ic->chan_lock);
 
    /*
     * XXX half/quarter rate support!
@@ -633,6 +665,7 @@ dfs_process_phyerr_bb_tlv(struct ath_dfs *dfs, void *buf, u_int16_t datalen,
    OS_MEMSET(e, 0, sizeof(*e));
    e->rssi = rs.rssi;
    e->dur = rs.pulse_duration;
+   e->sidx = rs.sidx;
    e->is_pri = 1;    /* XXX always PRI for now */
    e->is_ext = 0;
    e->is_dc = 0;

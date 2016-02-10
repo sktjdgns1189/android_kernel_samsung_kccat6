@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -59,7 +59,6 @@ extern "C" {
 #include <adf_os_lock.h>
 #include <adf_os_timer.h>
 #include <adf_os_atomic.h>
-#include "htc_debug.h"
 #include "hif_msg_based.h"
 #include <htc.h>
 #include "htc_api.h"
@@ -69,9 +68,21 @@ extern "C" {
 #define HTC_TARGET_RESPONSE_TIMEOUT         2000 /* in ms */
 #define HTC_TARGET_DEBUG_INTR_MASK          0x01
 #define HTC_TARGET_CREDIT_INTR_MASK         0xF0
-
-#define HTC_HOST_MAX_MSG_PER_BUNDLE        18
-#define HTC_MIN_HTC_MSGS_TO_BUNDLE         2
+#define HTC_MIN_MSG_PER_BUNDLE              2
+#if defined(HIF_USB)
+#define HTC_MAX_MSG_PER_BUNDLE              9
+#else
+#define HTC_MAX_MSG_PER_BUNDLE              16
+#endif
+/*
+ * HTC_MAX_TX_BUNDLE_SEND_LIMIT -
+ * This value is in units of tx frame fragments.
+ * It needs to be at least as large as the maximum number of tx frames in a
+ * HTC download bundle times the average number of fragments in each such frame
+ * (In certain operating systems, such as Linux, we expect to only have
+ * a single fragment per frame anyway.)
+ */
+#define HTC_MAX_TX_BUNDLE_SEND_LIMIT        255
 
 #define HTC_PACKET_CONTAINER_ALLOCATION     32
 #define NUM_CONTROL_TX_BUFFERS              2
@@ -91,6 +102,8 @@ extern "C" {
 typedef enum {
     HTC_REQUEST_CREDIT,
     HTC_PROCESS_CREDIT_REPORT,
+    HTC_SUSPEND_ACK,
+    HTC_SUSPEND_NACK,
 } htc_credit_exchange_type;
 
 typedef struct {
@@ -187,8 +200,10 @@ typedef struct _HTC_TARGET {
     HTC_PACKET                  *pBundleFreeList;
     A_UINT32                    CE_send_cnt;
     A_UINT32                    TX_comp_cnt;
+    A_UINT8                     MaxMsgsPerHTCBundle;
 } HTC_TARGET;
 
+#define HTC_ENABLE_BUNDLE(target) (target->MaxMsgsPerHTCBundle > 1)
 #ifdef RX_SG_SUPPORT
 #define RESET_RX_SG_CONFIG(_target) \
     _target->ExpRxSgTotalLen = 0; \
@@ -246,9 +261,12 @@ void        HTCProcessCreditRpt(HTC_TARGET        *target,
                                 HTC_CREDIT_REPORT *pRpt,
                                 int                NumEntries,
                                 HTC_ENDPOINT_ID    FromEndpoint);
-void        HTCFwEventHandler(void *context);
+void        HTCFwEventHandler(void *context, A_STATUS status);
 void        HTCSendCompleteCheckCleanup(void *context);
+void        HTCTxResumeAllHandler(void *context);
 
+void htc_credit_record(htc_credit_exchange_type type, A_UINT32 tx_credit,
+                       A_UINT32 htc_tx_queue_depth);
 
 static inline void HTCSendCompletePollTimerStop(HTC_ENDPOINT *pEndpoint)
 {
@@ -301,5 +319,17 @@ HTCSendCompleteCheck(HTC_ENDPOINT *pEndpoint, int force)
 }
 #endif
 
+#ifndef DEBUG_BUNDLE
+#define DEBUG_BUNDLE 0
+#endif
 
+#ifdef HIF_SDIO
+#ifndef ENABLE_BUNDLE_TX
+#define ENABLE_BUNDLE_TX 1
+#endif
+
+#ifndef ENABLE_BUNDLE_RX
+#define ENABLE_BUNDLE_RX 1
+#endif
+#endif /* HIF_SDIO */
 #endif	/* !_HTC_HOST_INTERNAL_H_ */

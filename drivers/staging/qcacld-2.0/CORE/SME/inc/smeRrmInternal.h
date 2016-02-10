@@ -46,7 +46,6 @@
 #include "vos_trace.h"
 #include "vos_memory.h"
 #include "vos_types.h"
-#include "palTimer.h"
 #include "rrmGlobal.h"
 
 /*--------------------------------------------------------------------------
@@ -63,6 +62,7 @@ typedef struct sRrmNeighborReportDesc
    tListElem    List;
    tSirNeighborBssDescription   *pNeighborBssDescription;
    tANI_U32                     roamScore;
+   tANI_U8                      sessionId;
 } tRrmNeighborReportDesc, *tpRrmNeighborReportDesc;
 
 

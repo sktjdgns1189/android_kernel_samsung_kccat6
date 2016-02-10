@@ -110,6 +110,9 @@
  */
 #define MAX_EVENTS 100
 
+#define DFS_STATUS_SUCCESS 0
+#define DFS_STATUS_FAIL 1
+
 /*
  * Constants to use for chirping detection.
  *
@@ -272,6 +275,7 @@ struct dfs_event {
    u_int32_t  re_freq;       /* Centre frequency of event, KHz */
    u_int32_t  re_freq_lo;    /* Lower bounds of frequency, KHz */
    u_int32_t  re_freq_hi;    /* Upper bounds of frequency, KHz */
+   int        sidx;          /* Pulse Index as in radar summary report */
    STAILQ_ENTRY(dfs_event) re_list; /* List of radar events */
 } adf_os_packed;
 #ifdef WIN32
@@ -596,6 +600,12 @@ struct ath_dfs {
     int        dfs_phyerr_w53_counter;
     int        dfs_pri_multiplier;      /* allow pulse if they are within multiple of PRI for the radar type */
     int        ath_dfs_nol_timeout;
+    int        dfs_pri_multiplier_ini;  /* dfs pri configuration from ini */
+    /*
+     * Flag to indicate if DFS test mode is enabled and
+     * channel switch is disabled.
+     */
+    int8_t     disable_dfs_ch_switch;
 };
 
 /* This should match the table from if_ath.c */
@@ -683,6 +693,7 @@ struct dfs_phy_err {
 
    u_int8_t rssi;    /* pulse RSSI */
    u_int8_t dur;     /* pulse duration, raw (not uS) */
+   int sidx; /* Pulse Index as in radar summary report */
 };
 
 /* Attach, detach, handle ioctl prototypes */

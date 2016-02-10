@@ -37,7 +37,6 @@
 
 #include "palTypes.h"
 #include "aniGlobal.h"
-#include "palTimer.h"
 #include "csrLinkList.h"
 #include "smsDebug.h"
 #include "pmcApi.h"
@@ -94,7 +93,6 @@ eHalStatus pmcOpen (tHalHandle hHal)
     pMac->pmc.bmpsEnabled = TRUE;
     pMac->pmc.standbyEnabled = TRUE;
     pMac->pmc.wowlEnabled = TRUE;
-    pMac->pmc.rfSuppliesVotedOff= FALSE;
 
     vos_mem_set(&(pMac->pmc.bmpsConfig), sizeof(tPmcBmpsConfigParams), 0);
     vos_mem_set(&(pMac->pmc.impsConfig), sizeof(tPmcImpsConfigParams), 0);
@@ -384,94 +382,6 @@ eHalStatus pmcClose (tHalHandle hHal)
     pmcCloseDeferredMsgList(pMac);
 
     return eHAL_STATUS_SUCCESS;
-}
-
-
-/******************************************************************************
-*
-* Name:  pmcSignalPowerEvent
-*
-* Description:
-*    Signals to PMC that a power event has occurred.
-*
-* Parameters:
-*    hHal - HAL handle for device
-*    event - the event that has occurred
-*
-* Returns:
-*    eHAL_STATUS_SUCCESS - signaling successful
-*    eHAL_STATUS_FAILURE - signaling not successful
-*
-******************************************************************************/
-eHalStatus pmcSignalPowerEvent (tHalHandle hHal, tPmcPowerEvent event)
-{
-    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-#ifndef GEN6_ONWARDS
-    tSirMacHTMIMOPowerSaveState  htMimoPowerSaveState;
-#endif
-
-    pmcLog(pMac, LOG2, FL("Entering pmcSignalPowerEvent, event %d"), event);
-
-    /* Take action based on the event being signaled. */
-    switch (event)
-    {
-#ifndef GEN6_ONWARDS
-    case ePMC_SYSTEM_HIBERNATE:
-        return pmcEnterLowPowerState(hHal);
-
-    case ePMC_SYSTEM_RESUME:
-        return pmcExitLowPowerState(hHal);
-
-    case ePMC_HW_WLAN_SWITCH_OFF:
-        pMac->pmc.hwWlanSwitchState = ePMC_SWITCH_OFF;
-        return pmcEnterLowPowerState(hHal);
-
-    case ePMC_HW_WLAN_SWITCH_ON:
-        pMac->pmc.hwWlanSwitchState = ePMC_SWITCH_ON;
-        return pmcExitLowPowerState(hHal);
-
-    case ePMC_SW_WLAN_SWITCH_OFF:
-        pMac->pmc.swWlanSwitchState = ePMC_SWITCH_OFF;
-        return pmcEnterLowPowerState(hHal);
-
-    case ePMC_SW_WLAN_SWITCH_ON:
-        pMac->pmc.swWlanSwitchState = ePMC_SWITCH_ON;
-        return pmcExitLowPowerState(hHal);
-
-    case ePMC_BATTERY_OPERATION:
-        pMac->pmc.powerSource = BATTERY_POWER;
-
-        /* Turn on SMPS. */
-        if (pMac->pmc.smpsEnabled)
-        {
-            if (pMac->pmc.smpsConfig.mode == ePMC_DYNAMIC_SMPS)
-                htMimoPowerSaveState = eSIR_HT_MIMO_PS_DYNAMIC;
-            if (pMac->pmc.smpsConfig.mode == ePMC_STATIC_SMPS)
-                htMimoPowerSaveState = eSIR_HT_MIMO_PS_STATIC;
-            if (pmcSendMessage(hHal, eWNI_PMC_SMPS_STATE_IND, &htMimoPowerSaveState,
-                               sizeof(tSirMacHTMIMOPowerSaveState)) != eHAL_STATUS_SUCCESS)
-                return eHAL_STATUS_FAILURE;
-        }
-        return eHAL_STATUS_SUCCESS;
-
-    case ePMC_AC_OPERATION:
-        pMac->pmc.powerSource = AC_POWER;
-
-        /* Turn off SMPS. */
-        if (!pMac->pmc.smpsConfig.enterOnAc)
-        {
-            htMimoPowerSaveState = eSIR_HT_MIMO_PS_NO_LIMIT;
-            if (pmcSendMessage(hHal, eWNI_PMC_SMPS_STATE_IND, &htMimoPowerSaveState,
-                               sizeof(tSirMacHTMIMOPowerSaveState)) != eHAL_STATUS_SUCCESS)
-                return eHAL_STATUS_FAILURE;
-        }
-        return eHAL_STATUS_SUCCESS;
-#endif //GEN6_ONWARDS
-    default:
-        pmcLog(pMac, LOGE, FL("Invalid event %d"), event);
-        PMC_ABORT;
-        return eHAL_STATUS_FAILURE;
-    }
 }
 
 
@@ -1654,7 +1564,7 @@ tANI_BOOLEAN pmcValidateConnectState( tHalHandle hHal )
       pmcLog(pMac, LOGW, "PMC: BT-AMP exists. BMPS cannot be entered");
       return eANI_BOOLEAN_FALSE;
    }
-   if ((vos_concurrent_sessions_running()) &&
+   if ((vos_concurrent_open_sessions_running()) &&
        (csrIsConcurrentInfraConnected( pMac ) ||
        (vos_get_concurrency_mode()& VOS_SAP) ||
        (vos_get_concurrency_mode()& VOS_P2P_GO)))
@@ -1662,6 +1572,13 @@ tANI_BOOLEAN pmcValidateConnectState( tHalHandle hHal )
       pmcLog(pMac, LOGW, "PMC: Multiple active sessions exists. BMPS cannot be entered");
       return eANI_BOOLEAN_FALSE;
    }
+#ifdef FEATURE_WLAN_TDLS
+   if (pMac->isTdlsPowerSaveProhibited) {
+      pmcLog(pMac, LOGE, FL("TDLS peer(s) connected/discovery sent. "
+                            "Dont enter BMPS"));
+      return eANI_BOOLEAN_FALSE;
+   }
+#endif
    return eANI_BOOLEAN_TRUE;
 }
 
@@ -3365,155 +3282,6 @@ void pmcResetImpsFailStatus (tHalHandle hHal)
     pMac->pmc.ImpsReqFailed = VOS_FALSE;
     pMac->pmc.ImpsReqTimerFailed = VOS_FALSE;
 }
-
-#ifdef FEATURE_WLAN_BATCH_SCAN
-/* -----------------------------------------------------------------------------
-    \fn pmcSetBatchScanReq
-    \brief  setting batch scan request in FW
-    \param  hHal - The handle returned by macOpen.
-    \param  sessionId - session ID
-    \param  callbackRoutine - Pointer to set batch scan request callback routine
-    \param  callbackContext - Pointer to set batch scan request callback context
-    \return eHalStatus
-             eHAL_STATUS_FAILURE  Cannot set batch scan request
-             eHAL_STATUS_SUCCESS  Request accepted.
- -----------------------------------------------------------------------------*/
-
-eHalStatus pmcSetBatchScanReq(tHalHandle hHal, tSirSetBatchScanReq *pRequest,
-    tANI_U8 sessionId, hddSetBatchScanReqCallback callbackRoutine,
-    void *callbackContext)
-{
-    tpSirSetBatchScanReq pRequestBuf;
-    vos_msg_t msg;
-    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-
-    pRequestBuf = vos_mem_malloc(sizeof(tSirSetBatchScanReq));
-    if (NULL == pRequestBuf)
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-          "%s: Not able to allocate memory for SET BATCH SCAN req", __func__);
-        return eHAL_STATUS_FAILED_ALLOC;
-    }
-
-    /* Cache HDD callback information*/
-    pMac->pmc.setBatchScanReqCallback = callbackRoutine;
-    pMac->pmc.setBatchScanReqCallbackContext = callbackContext;
-
-    pRequestBuf->sessionId = sessionId;
-    pRequestBuf->scanFrequency = pRequest->scanFrequency;
-    pRequestBuf->numberOfScansToBatch = pRequest->numberOfScansToBatch;
-    pRequestBuf->bestNetwork = pRequest->bestNetwork;
-    pRequestBuf->rfBand = pRequest->rfBand;
-    pRequestBuf->rtt = pRequest->rtt;
-
-    msg.type     = WDA_SET_BATCH_SCAN_REQ;
-    msg.reserved = 0;
-    msg.bodyptr  = pRequestBuf;
-    if (!VOS_IS_STATUS_SUCCESS(vos_mq_post_message(VOS_MODULE_ID_WDA, &msg)))
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-          "%s: Not able to post WDA_SET_BATCH_SCAN_REQ message to WDA",
-          __func__);
-        vos_mem_free(pRequestBuf);
-        return eHAL_STATUS_FAILURE;
-    }
-
-    return eHAL_STATUS_SUCCESS;
-}
-
-/* -----------------------------------------------------------------------------
-    \fn pmcTriggerBatchScanResultInd
-    \brief  API to trigger batch scan results indications from FW
-    \param  hHal - The handle returned by macOpen.
-    \param  sessionId - session ID
-    \param  callbackRoutine - Pointer to get batch scan request callback routine
-    \param  callbackContext - Pointer to get batch scan request callback context
-    \return eHalStatus
-             eHAL_STATUS_FAILURE  Cannot set batch scan request
-             eHAL_STATUS_SUCCESS  Request accepted.
- -----------------------------------------------------------------------------*/
-
-eHalStatus pmcTriggerBatchScanResultInd
-(
-    tHalHandle hHal, tSirTriggerBatchScanResultInd *pRequest, tANI_U8 sessionId,
-    hddTriggerBatchScanResultIndCallback callbackRoutine, void *callbackContext
-)
-{
-    tpSirTriggerBatchScanResultInd pRequestBuf;
-    vos_msg_t msg;
-    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-
-    pRequestBuf = vos_mem_malloc(sizeof(tSirTriggerBatchScanResultInd));
-    if (NULL == pRequestBuf)
-    {
-       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-        "%s: Not able to allocate memory for WDA_TRIGGER_BATCH_SCAN_RESULT_IND",
-        __func__);
-        return eHAL_STATUS_FAILED_ALLOC;
-    }
-
-    /*HDD callback to be called after getting batch scan result ind from FW*/
-    pMac->pmc.batchScanResultCallback = callbackRoutine;
-    pMac->pmc.batchScanResultCallbackContext = callbackContext;
-
-    pRequestBuf->param = pRequest->param;
-
-    msg.type     = WDA_TRIGGER_BATCH_SCAN_RESULT_IND;
-    msg.reserved = 0;
-    msg.bodyptr  = pRequestBuf;
-    if (!VOS_IS_STATUS_SUCCESS(vos_mq_post_message(VOS_MODULE_ID_WDA, &msg)))
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-          "%s: Not able to post WDA_TRIGGER_BATCH_SCAN_RESULT_IND message"
-          " to WDA", __func__);
-        vos_mem_free(pRequestBuf);
-        return eHAL_STATUS_FAILURE;
-    }
-
-    return eHAL_STATUS_SUCCESS;
-}
-
-/* -----------------------------------------------------------------------------
-    \fn pmcStopBatchScanInd
-    \brief  Stoping batch scan request in FW
-    \param  hHal - The handle returned by macOpen.
-    \param  callbackRoutine - Pointer to stop batch scan request callback routine
-    \return eHalStatus
-             eHAL_STATUS_FAILURE  Cannot set batch scan request
-             eHAL_STATUS_SUCCESS  Request accepted.
- -----------------------------------------------------------------------------*/
-
-eHalStatus pmcStopBatchScanInd(tHalHandle hHal, tSirStopBatchScanInd *pRequest,
-    tANI_U8 sessionId)
-{
-    tSirStopBatchScanInd *pRequestBuf;
-    vos_msg_t msg;
-
-    pRequestBuf = vos_mem_malloc(sizeof(tSirStopBatchScanInd));
-    if (NULL == pRequestBuf)
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-          "%s: Not able to allocate memory for STOP BATCH SCAN IND", __func__);
-        return eHAL_STATUS_FAILED_ALLOC;
-    }
-
-    pRequestBuf->param = pRequest->param;
-
-    msg.type     = WDA_STOP_BATCH_SCAN_IND;
-    msg.reserved = 0;
-    msg.bodyptr  = pRequestBuf;
-    if (!VOS_IS_STATUS_SUCCESS(vos_mq_post_message(VOS_MODULE_ID_WDA, &msg)))
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-          "%s: Not able to post WDA_TOP_BATCH_SCAN_IND message to WDA", __func__);
-        vos_mem_free(pRequestBuf);
-        return eHAL_STATUS_FAILURE;
-    }
-
-    return eHAL_STATUS_SUCCESS;
-}
-
-#endif
 
 eHalStatus pmcOffloadCleanup(tHalHandle hHal, tANI_U32 sessionId)
 {

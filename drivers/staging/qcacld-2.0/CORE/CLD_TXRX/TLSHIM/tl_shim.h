@@ -30,6 +30,7 @@
 
 #include <ol_txrx_osif_api.h>
 #include <adf_os_lock.h>
+#include <adf_os_atomic.h>
 
 #ifdef FEATURE_WLAN_ESE
 typedef struct deferred_iapp_work {
@@ -56,6 +57,7 @@ struct tlshim_sta_info {
 	struct list_head cached_bufq;
 	unsigned long flags;
 	v_S7_t first_rssi;
+	v_U8_t vdev_id;
 };
 
 #ifdef QCA_LL_TX_FLOW_CT
@@ -68,12 +70,17 @@ struct tlshim_session_flow_Control {
 };
 #endif /* QCA_LL_TX_FLOW_CT */
 
+#ifdef IPA_UC_OFFLOAD
+typedef void(*ipa_uc_fw_op_cb)(v_U8_t *op_msg, void *usr_ctxt);
+#endif /* IPA_UC_OFFLOAD */
+
 struct txrx_tl_shim_ctx {
 	void *cfg_ctx;
 	ol_txrx_tx_fp tx;
 	WLANTL_MgmtFrmRxCBType mgmt_rx;
 	struct tlshim_sta_info sta_info[WLAN_MAX_STA_COUNT];
 	adf_os_spinlock_t bufq_lock;
+	adf_os_spinlock_t mgmt_lock;
 	struct work_struct cache_flush_work;
 
 #ifdef FEATURE_WLAN_ESE
@@ -96,6 +103,10 @@ struct deferred_iapp_work iapp_work;
 #ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
 	vos_event_t  *peer_authorized_events;
 #endif
+#ifdef IPA_UC_OFFLOAD
+	ipa_uc_fw_op_cb fw_op_cb;
+	void *usr_ctxt;
+#endif /* IPA_UC_OFFLOAD */
 };
 
 /*

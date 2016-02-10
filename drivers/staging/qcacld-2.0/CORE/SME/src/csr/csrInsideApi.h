@@ -75,16 +75,16 @@
 #define CSR_AGING_COUNT     3
 //The following defines are used by palTimer
 //This is used for palTimer when request to imps fails
-#define CSR_IDLE_SCAN_WAIT_TIME     (1 * PAL_TIMER_TO_SEC_UNIT)     //1 second
+#define CSR_IDLE_SCAN_WAIT_TIME     (1 * VOS_TIMER_TO_SEC_UNIT)     //1 second
 //This is used for palTimer when imps ps is disabled
 //This number shall not be smaller than 5-6 seconds in general because a full scan may take 3-4 seconds
-#define CSR_IDLE_SCAN_NO_PS_INTERVAL     (10 * PAL_TIMER_TO_SEC_UNIT)     //10 second
-#define CSR_IDLE_SCAN_NO_PS_INTERVAL_MIN (5 * PAL_TIMER_TO_SEC_UNIT)
-#define CSR_SCAN_GET_RESULT_INTERVAL    (5 * PAL_TIMER_TO_SEC_UNIT)     //5 seconds
-#define CSR_MIC_ERROR_TIMEOUT  (60 * PAL_TIMER_TO_SEC_UNIT)     //60 seconds
-#define CSR_TKIP_COUNTER_MEASURE_TIMEOUT  (60 * PAL_TIMER_TO_SEC_UNIT)     //60 seconds
-#define CSR_SCAN_RESULT_AGING_INTERVAL    (5 * PAL_TIMER_TO_SEC_UNIT)     //5 seconds
-#define CSR_SCAN_RESULT_CFG_AGING_INTERVAL    (PAL_TIMER_TO_SEC_UNIT)     // 1  second
+#define CSR_IDLE_SCAN_NO_PS_INTERVAL     (10 * VOS_TIMER_TO_SEC_UNIT)     //10 second
+#define CSR_IDLE_SCAN_NO_PS_INTERVAL_MIN (5 * VOS_TIMER_TO_SEC_UNIT)
+#define CSR_SCAN_GET_RESULT_INTERVAL    (5 * VOS_TIMER_TO_SEC_UNIT)     //5 seconds
+#define CSR_MIC_ERROR_TIMEOUT  (60 * VOS_TIMER_TO_SEC_UNIT)     //60 seconds
+#define CSR_TKIP_COUNTER_MEASURE_TIMEOUT  (60 * VOS_TIMER_TO_SEC_UNIT)     //60 seconds
+#define CSR_SCAN_RESULT_AGING_INTERVAL    (5 * VOS_TIMER_TO_SEC_UNIT)     //5 seconds
+#define CSR_SCAN_RESULT_CFG_AGING_INTERVAL    (VOS_TIMER_TO_SEC_UNIT)     // 1  second
 //the following defines are NOT used by palTimer
 #define CSR_SCAN_AGING_TIME_NOT_CONNECT_NO_PS 50     //50 seconds
 #define CSR_SCAN_AGING_TIME_NOT_CONNECT_W_PS 300     //300 seconds
@@ -96,11 +96,12 @@
 #define CSR_BEST_RSSI_VALUE         (-30)   //RSSI >= this is in CAT4
 #define CSR_DEFAULT_RSSI_DB_GAP     30 //every 30 dbm for one category
 #define CSR_BSS_CAP_VALUE_NONE  0    //not much value
-#define CSR_BSS_CAP_VALUE_HT    2
+#define CSR_BSS_CAP_VALUE_HT    1
+#define CSR_BSS_CAP_VALUE_VHT   2
 #define CSR_BSS_CAP_VALUE_WMM   1
 #define CSR_BSS_CAP_VALUE_UAPSD 1
 #if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
-#define CSR_BSS_CAP_VALUE_5GHZ  1
+#define CSR_BSS_CAP_VALUE_5GHZ  2
 #endif
 #define CSR_DEFAULT_ROAMING_TIME 10   //10 seconds
 #define CSR_ROAM_MIN(X, Y)  ((X) < (Y) ? (X) : (Y))
@@ -108,13 +109,18 @@
 
 #ifdef FEATURE_WLAN_BTAMP_UT_RF
 #define CSR_JOIN_MAX_RETRY_COUNT             10
-#define CSR_JOIN_RETRY_TIMEOUT_PERIOD        ( 1 *  PAL_TIMER_TO_SEC_UNIT )  // 1 second
+#define CSR_JOIN_RETRY_TIMEOUT_PERIOD        ( 1 *  VOS_TIMER_TO_SEC_UNIT )  // 1 second
 #endif
 
 #define CSR_ROAMING_DFS_CHANNEL_DISABLED           (0)
 #define CSR_ROAMING_DFS_CHANNEL_ENABLED_NORMAL     (1)
 #define CSR_ROAMING_DFS_CHANNEL_ENABLED_ACTIVE     (2)
 
+/* The MAX BSSID Count should be lower than the command timeout
+ * value and it can be of a fraction of 3/4 of the total command
+ * timeout value  */
+#define CSR_ACTIVE_LIST_CMD_TIMEOUT_VALUE 1000*30*4  //120s
+#define CSR_MAX_BSSID_COUNT     ((CSR_ACTIVE_LIST_CMD_TIMEOUT_VALUE/4000) * 3)
 typedef enum
 {
     eCsrNextScanNothing,
@@ -190,6 +196,8 @@ typedef struct
 #define CSR_IS_BETTER_PREFER_VALUE(v1, v2)   ((v1) > (v2))
 #define CSR_IS_EQUAL_PREFER_VALUE(v1, v2)   ((v1) == (v2))
 #define CSR_IS_BETTER_CAP_VALUE(v1, v2)     ((v1) > (v2))
+#define CSR_IS_EQUAL_CAP_VALUE(v1, v2)  ((v1) == (v2))
+#define CSR_IS_BETTER_RSSI(v1, v2)   ((v1) > (v2))
 #define CSR_IS_ENC_TYPE_STATIC( encType ) ( ( eCSR_ENCRYPT_TYPE_NONE == (encType) ) || \
                                             ( eCSR_ENCRYPT_TYPE_WEP40_STATICKEY == (encType) ) || \
                                             ( eCSR_ENCRYPT_TYPE_WEP104_STATICKEY == (encType) ) )
@@ -211,6 +219,9 @@ typedef struct
                                                 ( eCsrForcedDisassocMICFailure ==\
                                                                           (pCommand)->u.roamCmd.roamReason ) ) )
 
+#define CSR_IS_CLOSE_SESSION_COMMAND(pCommand) \
+ ((pCommand)->command == eSmeCommandDelStaSession)
+
 eCsrRoamState csrRoamStateChange( tpAniSirGlobal pMac, eCsrRoamState NewRoamState, tANI_U8 sessionId);
 eHalStatus csrScanningStateMsgProcessor( tpAniSirGlobal pMac, void *pMsgBuf );
 void csrRoamingStateMsgProcessor( tpAniSirGlobal pMac, void *pMsgBuf );
@@ -219,7 +230,7 @@ tANI_BOOLEAN csrScanComplete( tpAniSirGlobal pMac, tSirSmeScanRsp *pScanRsp );
 void csrReleaseCommandRoam(tpAniSirGlobal pMac, tSmeCmd *pCommand);
 void csrReleaseCommandScan(tpAniSirGlobal pMac, tSmeCmd *pCommand);
 void csrReleaseCommandWmStatusChange(tpAniSirGlobal pMac, tSmeCmd *pCommand);
-//pIes2 can be NULL
+
 tANI_BOOLEAN csrIsDuplicateBssDescription( tpAniSirGlobal pMac, tSirBssDescription *pSirBssDesc1,
                                            tSirBssDescription *pSirBssDesc2, tDot11fBeaconIEs *pIes2, tANI_BOOLEAN fForced );
 eHalStatus csrRoamSaveConnectedBssDesc( tpAniSirGlobal pMac, tANI_U32 sessionId, tSirBssDescription *pBssDesc );
@@ -247,9 +258,11 @@ eHalStatus csrScanRequestLostLink3( tpAniSirGlobal pMac, tANI_U32 sessionId );
 eHalStatus csrScanHandleFailedLostlink1(tpAniSirGlobal pMac, tANI_U32 sessionId);
 eHalStatus csrScanHandleFailedLostlink2(tpAniSirGlobal pMac, tANI_U32 sessionId);
 eHalStatus csrScanHandleFailedLostlink3(tpAniSirGlobal pMac, tANI_U32 sessionId);
-tCsrScanResult *csrScanAppendBssDescription( tpAniSirGlobal pMac,
-                                             tSirBssDescription *pSirBssDescription,
-                                             tDot11fBeaconIEs *pIes, tANI_BOOLEAN fForced);
+tCsrScanResult *csrScanAppendBssDescription(tpAniSirGlobal pMac,
+                                         tSirBssDescription *pSirBssDescription,
+                                         tDot11fBeaconIEs *pIes,
+                                         tANI_BOOLEAN fForced,
+                                         tANI_U8 sessionId);
 void csrScanCallCallback(tpAniSirGlobal pMac, tSmeCmd *pCommand, eCsrScanStatus scanStatus);
 eHalStatus csrScanCopyRequest(tpAniSirGlobal pMac, tCsrScanRequest *pDstReq, tCsrScanRequest *pSrcReq);
 eHalStatus csrScanFreeRequest(tpAniSirGlobal pMac, tCsrScanRequest *pReq);
@@ -277,7 +290,8 @@ void csrScanStopTimers(tpAniSirGlobal pMac);
 tANI_BOOLEAN csrScanRemoveNotRoamingScanCommand(tpAniSirGlobal pMac);
 //To remove fresh scan commands from the pending queue
 tANI_BOOLEAN csrScanRemoveFreshScanCommand(tpAniSirGlobal pMac, tANI_U8 sessionId);
-eHalStatus csrScanAbortMacScan(tpAniSirGlobal pMac, tANI_U8 sessionId);
+eHalStatus csrScanAbortMacScan(tpAniSirGlobal pMac, tANI_U8 sessionId,
+                               eCsrAbortReason reason);
 void csrRemoveCmdFromPendingList(tpAniSirGlobal pMac, tDblLinkList *pList,
                                               eSmeCommandType commandType );
 void csrRemoveCmdWithSessionIdFromPendingList(tpAniSirGlobal pMac,
@@ -287,6 +301,9 @@ void csrRemoveCmdWithSessionIdFromPendingList(tpAniSirGlobal pMac,
 eHalStatus csrScanAbortMacScanNotForConnect(tpAniSirGlobal pMac,
                                             tANI_U8 sessionId);
 eHalStatus csrScanGetScanChannelInfo(tpAniSirGlobal pMac, tANI_U8 sessionId);
+eHalStatus csrScanAbortScanForSSID(tpAniSirGlobal pMac, tANI_U32 sessionId);
+void csrRemoveScanForSSIDFromPendingList(tpAniSirGlobal pMac, tDblLinkList *pList, tANI_U32 sessionId);
+
 //To age out scan results base. tSmeGetScanChnRsp is a pointer returned by LIM that
 //has the information regarding scanned channels.
 //The logic is that whenever CSR add a BSS to scan result, it set the age count to
@@ -480,9 +497,20 @@ eHalStatus csrScanGetResult(tpAniSirGlobal, tCsrScanResultFilter *pFilter, tScan
 /* ---------------------------------------------------------------------------
     \fn csrScanFlushResult
     \brief Clear scan results.
+    \param pMac - pMac global pointer
+    \param sessionId - Session Identifier
     \return eHalStatus
   -------------------------------------------------------------------------------*/
-eHalStatus csrScanFlushResult(tpAniSirGlobal);
+eHalStatus csrScanFlushResult(tpAniSirGlobal, tANI_U8 sessionId);
+/* ---------------------------------------------------------------------------
+ *  \fn csrScanFilterResults
+ *  \brief Filter scan results based on valid channel list.
+ *  \param  pMac - Pointer to Global MAC structure
+ *  \return eHalStatus
+ *-------------------------------------------------------------------------------
+ */
+eHalStatus csrScanFilterResults(tpAniSirGlobal pMac);
+
 eHalStatus csrScanFlushSelectiveResult(tpAniSirGlobal, v_BOOL_t flushP2P);
 /* ---------------------------------------------------------------------------
     \fn csrScanBGScanGetParam
@@ -744,8 +772,37 @@ eHalStatus csrRoamReconnect(tpAniSirGlobal pMac, tANI_U32 sessionId);
     has the number of tPmkidCacheInfo.
     \Note: pNumItems is a number of tPmkidCacheInfo, not sizeof(tPmkidCacheInfo) * something
   -------------------------------------------------------------------------------*/
-eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId, tPmkidCacheInfo *pPMKIDCache, tANI_U32 numItems );
+eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
+                                 tPmkidCacheInfo *pPMKIDCache,
+                                 tANI_U32 numItems,
+                                 tANI_BOOLEAN update_entire_cache );
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+/* ---------------------------------------------------------------------------
+ *\fn csrRoamSetPSK_PMK
+ *\brief store PSK/PMK
+ *\param pMac  - pointer to global structure for MAC
+ *\param sessionId - Sme session id
+ *\param pPSK_PMK - pointer to an array of Psk/Pmk
+ *\return eHalStatus - usually it succeed unless sessionId is not found
+ *\Note:
+ *-------------------------------------------------------------------------------*/
+eHalStatus csrRoamSetPSK_PMK(tpAniSirGlobal pMac, tANI_U32 sessionId,
+                             tANI_U8 *pPSK_PMK, size_t pmk_len);
+
+/* ---------------------------------------------------------------------------
+ *\fn csrRoamSetKeyMgmtOffload
+ *\brief sets nRoamKeyMgmtOffloadEnabled
+ *\param pMac  - pointer to global structure for MAC
+ *\param sessionId - Sme session id
+ *\param nRoamKeyMgmtOffloadEnabled - value of key mgmt offload enable
+ *\return eHalStatus - usually it succeed unless sessionId is not found
+ *\Note:
+ *-------------------------------------------------------------------------------*/
+eHalStatus csrRoamSetKeyMgmtOffload(tpAniSirGlobal pMac,
+                                    tANI_U32 sessionId,
+                                    v_BOOL_t nRoamKeyMgmtOffloadEnabled);
+#endif
 /* ---------------------------------------------------------------------------
     \fn csrRoamGetWpaRsnReqIE
     \brief return the WPA or RSN IE CSR passes to PE to JOIN request or START_BSS request
@@ -883,23 +940,20 @@ void csrCallRoamingCompletionCallback(tpAniSirGlobal pMac, tCsrRoamSession *pSes
     \param reason - reason code, be one of the tSirMacReasonCodes
     \return eHalStatus
   ---------------------------------------------------------------------------*/
-eHalStatus csrRoamIssueDisassociateStaCmd( tpAniSirGlobal pMac,
-                                           tANI_U32 sessionId,
-                                           tANI_U8 *pPeerMacAddr,
-                                           tANI_U32 reason);
+eHalStatus csrRoamIssueDisassociateStaCmd(tpAniSirGlobal pMac,
+                                          tANI_U32 sessionId,
+                                          struct tagCsrDelStaParams *pDelStaParams);
 
 /* ---------------------------------------------------------------------------
     \fn csrRoamIssueDeauthSta
     \brief csr function that HDD calls to delete a associated station
     \param sessionId    - session Id for Soft AP
-    \param pPeerMacAddr - MAC of associated station to delete
-    \param reason - reason code, be one of the tSirMacReasonCodes
+    \param pDelStaParams- Pointer to parameters of the station to deauthenticate
     \return eHalStatus
   ---------------------------------------------------------------------------*/
 eHalStatus csrRoamIssueDeauthStaCmd( tpAniSirGlobal pMac,
                                      tANI_U32 sessionId,
-                                     tANI_U8 *pPeerMacAddr,
-                                     tANI_U32 reason);
+                                     struct tagCsrDelStaParams *pDelStaParams);
 
 /* ---------------------------------------------------------------------------
     \fn csrRoamIssueTkipCounterMeasures
@@ -980,9 +1034,12 @@ eHalStatus csrRoamEnqueuePreauth(tpAniSirGlobal pMac, tANI_U32 sessionId, tpSirB
                                 eCsrRoamReason reason, tANI_BOOLEAN fImmediate);
 eHalStatus csrDequeueRoamCommand(tpAniSirGlobal pMac,  eCsrRoamReason reason);
 #ifdef FEATURE_WLAN_LFR
-void csrInitOccupiedChannelsList(tpAniSirGlobal pMac);
-tANI_BOOLEAN csrNeighborRoamIsNewConnectedProfile(tpAniSirGlobal pMac);
-tANI_BOOLEAN csrNeighborRoamConnectedProfileMatch(tpAniSirGlobal pMac, tCsrScanResult *pResult,
+void csrInitOccupiedChannelsList(tpAniSirGlobal pMac, tANI_U8 sessionId);
+tANI_BOOLEAN csrNeighborRoamIsNewConnectedProfile(tpAniSirGlobal pMac,
+                                                  tANI_U8 sessionId);
+tANI_BOOLEAN csrNeighborRoamConnectedProfileMatch(tpAniSirGlobal pMac,
+                                                  tANI_U8 sessionId,
+                                                  tCsrScanResult *pResult,
                                                   tDot11fBeaconIEs *pIes);
 #endif
 eHalStatus csrSetTxPower(tpAniSirGlobal pMac, v_U8_t sessionId, v_U8_t mW);
@@ -992,5 +1049,17 @@ eHalStatus csrScanCreateEntryInScanCache(tpAniSirGlobal pMac, tANI_U32 sessionId
 
 eHalStatus csrUpdateChannelList(tpAniSirGlobal pMac);
 eHalStatus csrRoamDelPMKIDfromCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
-                                 tANI_U8 *pBSSId );
+                                     tANI_U8 *pBSSId, tANI_BOOLEAN flush_cache );
+
+tANI_BOOLEAN csrElectedCountryInfo(tpAniSirGlobal pMac);
+void csrAddVoteForCountryInfo(tpAniSirGlobal pMac, tANI_U8 *pCountryCode);
+void csrClearVotesForCountryInfo(tpAniSirGlobal pMac);
+
 #endif
+
+#ifdef QCA_HT_2040_COEX
+eHalStatus csrSetHT2040Mode(tpAniSirGlobal pMac, tANI_U32 sessionId,
+                     ePhyChanBondState cbMode, tANI_BOOLEAN obssEnabled);
+#endif
+eHalStatus csr_prepare_disconnect_command(tpAniSirGlobal mac,
+                                    tANI_U32 session_id, tSmeCmd **sme_cmd);

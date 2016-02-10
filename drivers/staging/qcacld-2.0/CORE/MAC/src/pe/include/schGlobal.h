@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -44,23 +44,6 @@
 
 #include "parserApi.h"
 
-
-#define ANI_SCH_ADAPTIVE_THRESHOLD_TH_CD    0x00000001
-#define ANI_SCH_ADAPTIVE_THRESHOLD_TH_D0    0x00000002
-
-#define ANI_SCH_ADAPTIVE_THRESHOLD_ALL      (ANI_SCH_ADAPTIVE_THRESHOLD_TH_CD | ANI_SCH_ADAPTIVE_THRESHOLD_TH_D0)
-
-#define ANI_SCH_ADAPTIVE_ALGO_BAND_2GHZ     0x00000001
-#define ANI_SCH_ADAPTIVE_ALGO_BAND_5GHZ     0x00000002
-
-#define ANI_SCH_ADAPTIVE_ALGO_BAND_ALL      (ANI_SCH_ADAPTIVE_ALGO_BAND_2GHZ | ANI_SCH_ADAPTIVE_ALGO_BAND_5GHZ)
-
-
-// Diagnostic bitmap defines
-
-#define SCH_DIAG_RR_TIMEOUT_DELETE    0x1
-#define SCH_DIAG_RR_LOWER_RATE        0x2
-
 #ifdef WLAN_SOFTAP_VSTA_FEATURE
 #define TIM_IE_SIZE 0xB
 #else
@@ -77,26 +60,7 @@
 
 //****************** MISC defs *********************************
 
-/// Maximum allowable size of a beacon frame
-#define SCH_MAX_BEACON_SIZE    512
-
-#define SCH_MAX_PROBE_RESP_SIZE 512
-
 struct schMisc {
-
-    tANI_U8 *gSchProbeRspTemplate;
-
-    /// Beginning portion of the beacon frame to be written to TFP
-    tANI_U8 *gSchBeaconFrameBegin;
-
-    /// Trailing portion of the beacon frame to be written to TFP
-    tANI_U8 *gSchBeaconFrameEnd;
-
-    /// Size of the beginning portion
-    tANI_U16 gSchBeaconOffsetBegin;
-    /// Size of the trailing portion
-    tANI_U16 gSchBeaconOffsetEnd;
-
     tANI_U16 gSchBeaconInterval;
 
     /// Current CFP count
@@ -183,16 +147,10 @@ typedef struct sAniSirSch
     tANI_U32 gSchBcnParseErrorCnt;
     tANI_U32 gSchBcnIgnored;
 
-    // tTmpInstBuffer TIB;
-    // tANI_U16 gSchQuantum[8];
-
     tANI_U32 numPoll, numData, numCorrupt;
     tANI_U32 numBogusInt, numTxAct0;
 
 #define SCH_MAX_NUM_SCH 21
-    // tANI_U32 numSchHist[SCH_MAX_NUM_SCH];
-    // tANI_U32 defaultTxop;
-
     tANI_U32 lastBeaconLength;
     tANI_U16 rrTimeout;
     tANI_U32 pollPeriod;

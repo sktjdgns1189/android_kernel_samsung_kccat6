@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -43,6 +43,9 @@
 #include "sirParams.h"
 #include "limUtils.h"
 #include "limTimerUtils.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#endif
 #include "limSession.h"
 #include "limSessionUtils.h"
 
@@ -152,7 +155,6 @@ limAssignPeerIdx(tpAniSirGlobal pMac, tpPESession pSessionEntry)
         if (pSessionEntry->freePeerIdxHead==0)
             pSessionEntry->freePeerIdxTail=0;
         pSessionEntry->gLimNumOfCurrentSTAs++;
-        //PELOG2(limLog(pMac, LOG2,FL("Assign aid %d, numSta %d, head %d tail %d "),aid,pSessionEntry->gLimNumOfCurrentSTAs,pSessionEntry->freeAidHead,pSessionEntry->freeAidTail);)
         return peerId;
     }
 
@@ -197,6 +199,4 @@ limReleasePeerIdx(tpAniSirGlobal pMac, tANI_U16 peerIdx, tpPESession pSessionEnt
         pSessionEntry->freePeerIdxTail=pSessionEntry->freePeerIdxHead=(tANI_U8)peerIdx;
     }
     pSessionEntry->gpLimPeerIdxpool[(tANI_U8)peerIdx]=0;
-    //PELOG2(limLog(pMac, LOG2,FL("Release aid %d, numSta %d, head %d tail %d "),aid,pMac->lim.gLimNumOfCurrentSTAs,pMac->lim.freeAidHead,pMac->lim.freeAidTail);)
-
 }

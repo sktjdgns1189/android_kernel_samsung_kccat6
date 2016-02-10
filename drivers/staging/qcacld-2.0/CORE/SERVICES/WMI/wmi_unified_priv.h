@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -73,15 +73,14 @@ struct wmi_unified {
 	ol_scn_t scn_handle; /* handle to device */
 	adf_os_atomic_t pending_cmds;
 	HTC_ENDPOINT_ID wmi_endpoint_id;
+	uint16_t max_msg_len;
 	WMI_EVT_ID event_id[WMI_UNIFIED_MAX_EVENT];
 	wmi_unified_event_handler event_handler[WMI_UNIFIED_MAX_EVENT];
 	u_int32_t max_event_idx;
 	void *htc_handle;
-#ifndef QCA_WIFI_ISOC
 	adf_os_spinlock_t eventq_lock;
 	adf_nbuf_queue_t event_queue;
 	struct work_struct rx_event_work;
-#endif
 #ifdef WLAN_OPEN_SOURCE
        struct fwdebug dbglog;
        struct dentry *debugfs_phy;
@@ -92,6 +91,9 @@ struct wmi_unified {
 #endif /*WMI_INTERFACE_EVENT_LOGGING*/
 
 	adf_os_atomic_t  is_target_suspended;
+#ifdef FEATURE_RUNTIME_PM
+	adf_os_atomic_t runtime_pm_inprogress;
+#endif
 	void (*wma_wow_tx_complete_cbk)(ol_scn_t scn_handle);
 };
 #endif

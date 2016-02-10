@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -100,11 +100,13 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
     tANI_U8 qosEnabled =    false;
     tANI_U8 wmeEnabled =    false;
 
-    if (psessionEntry)
+    if (!psessionEntry)
     {
-        limLog(pMac,LOG1,"SessionId:%d ProbeRsp Frame is received",
-               psessionEntry->peSessionId);
+        limLog(pMac, LOGE, FL("psessionEntry is NULL") );
+        return;
     }
+    limLog(pMac,LOG1,"SessionId:%d ProbeRsp Frame is received",
+               psessionEntry->peSessionId);
 
     pProbeRsp = vos_mem_malloc(sizeof(tSirProbeRespBeacon));
     if ( NULL == pProbeRsp )
@@ -177,7 +179,8 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
             VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
                       FL("Probe Resp Frame Received: BSSID " MAC_ADDRESS_STR " (RSSI %d)"),
                       MAC_ADDR_ARRAY(pHdr->bssId),
-                      (uint)abs((tANI_S8)WDA_GET_RX_RSSI_DB(pRxPacketInfo)));
+                      (uint)abs((tANI_S8)WDA_GET_RX_RSSI_NORMALIZED(
+                                                        pRxPacketInfo)));
         }
 
         // Get pointer to Probe Response frame body
@@ -242,16 +245,6 @@ limProcessProbeRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession 
             * our Probe Request sent upon reaching
             * heart beat threshold
             */
-            #if 0
-            if (wlan_cfgGetStr(pMac,
-                          WNI_CFG_BSSID,
-                          currentBssId,
-                          &cfg) != eSIR_SUCCESS)
-            {
-                /// Could not get BSSID from CFG. Log error.
-                limLog(pMac, LOGP, FL("could not retrieve BSSID"));
-            }
-            #endif //TO SUPPORT BT-AMP
             sirCopyMacAddr(currentBssId,psessionEntry->bssId);
 
             if ( !vos_mem_compare(currentBssId, pHdr->bssId, sizeof(tSirMacAddr)) )
@@ -412,7 +405,8 @@ limProcessProbeRspFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo)
             VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
                       FL("Probe Resp Frame Received: BSSID " MAC_ADDRESS_STR " (RSSI %d)"),
                       MAC_ADDR_ARRAY(pHdr->bssId),
-                      (uint)abs((tANI_S8)WDA_GET_RX_RSSI_DB(pRxPacketInfo)));
+                      (uint)abs((tANI_S8)
+                                 WDA_GET_RX_RSSI_NORMALIZED(pRxPacketInfo)));
         }
 
         // Get pointer to Probe Response frame body
@@ -459,7 +453,8 @@ limProcessProbeRspFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo)
             VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
                       FL("Probe Resp Frame Received: BSSID " MAC_ADDRESS_STR " (RSSI %d)"),
                       MAC_ADDR_ARRAY(pHdr->bssId),
-                      (uint)abs((tANI_S8)WDA_GET_RX_RSSI_DB(pRxPacketInfo)));
+                      (uint)abs((tANI_S8)WDA_GET_RX_RSSI_NORMALIZED(
+                                                       pRxPacketInfo)));
         }
 
         // Get pointer to Probe Response frame body

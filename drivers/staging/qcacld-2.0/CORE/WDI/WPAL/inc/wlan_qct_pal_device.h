@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012, 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -52,7 +52,6 @@
  * ==================================================================================================================*/
 #include "wlan_qct_pal_type.h"
 #include "wlan_qct_pal_status.h"
-#include "wlan_qct_pal_trace.h"
 
 /* ====================================================================================================================
                   PREPROCESSORS AND DEFINITIONS
@@ -208,7 +207,6 @@ wpt_status wpalDisableInterrupt
 
   @return SUCCESS if the data was successfully written
 */
-#ifdef QCA_WIFI_2_0
 static inline wpt_status wpalReadRegister
 (
    wpt_uint32                           address,
@@ -217,13 +215,6 @@ static inline wpt_status wpalReadRegister
 {
         return eWLAN_PAL_STATUS_SUCCESS;
 }
-#else
-wpt_status wpalReadRegister
-(
-   wpt_uint32                           address,
-   wpt_uint32                          *data
-);
-#endif	/* #ifdef QCA_WIFI_2_0 */
 
 /**
   @brief wpalReadRegister provides a mechansim for a client
@@ -234,7 +225,6 @@ wpt_status wpalReadRegister
 
   @return SUCCESS if the data was successfully read
 */
-#ifdef QCA_WIFI_2_0
 static inline wpt_status wpalWriteRegister
 (
    wpt_uint32                           address,
@@ -243,13 +233,6 @@ static inline wpt_status wpalWriteRegister
 {
         return eWLAN_PAL_STATUS_SUCCESS;
 }
-#else
-wpt_status wpalWriteRegister
-(
-   wpt_uint32                           address,
-   wpt_uint32                           data
-);
-#endif	/* #ifdef QCA_WIFI_2_0 */
 
 /**
   @brief wpalReadDeviceMemory provides a mechansim for a client
@@ -262,7 +245,6 @@ wpt_status wpalWriteRegister
 
   @return SUCCESS if the data was successfully read
 */
-#ifdef QCA_WIFI_2_0
 static inline wpt_status wpalReadDeviceMemory
 (
    wpt_uint32                            address,
@@ -272,14 +254,6 @@ static inline wpt_status wpalReadDeviceMemory
 {
         return eWLAN_PAL_STATUS_SUCCESS;
 }
-#else
-wpt_status wpalReadDeviceMemory
-(
-   wpt_uint32                            address,
-   wpt_uint8                            *DestBuffer,
-   wpt_uint32                            len
-);
-#endif	/* #ifdef QCA_WIFI_2_0 */
 
 /**
   @brief wpalWriteDeviceMemory provides a mechansim for a client
@@ -292,7 +266,6 @@ wpt_status wpalReadDeviceMemory
 
   @return SUCCESS if the data was successfully written
 */
-#ifdef QCA_WIFI_2_0
 static inline wpt_status wpalWriteDeviceMemory
 (
    wpt_uint32                            address,
@@ -302,14 +275,6 @@ static inline wpt_status wpalWriteDeviceMemory
 {
         return eWLAN_PAL_STATUS_SUCCESS;
 }
-#else
-wpt_status wpalWriteDeviceMemory
-(
-   wpt_uint32                            address,
-   wpt_uint8                            *srcBuffer,
-   wpt_uint32                            len
-);
-#endif	/* #ifdef QCA_WIFI_2_0 */
 
 /**
   @brief wpalNotifySmsm provides a mechansim for a client to

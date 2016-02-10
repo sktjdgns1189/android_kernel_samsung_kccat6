@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -73,16 +73,12 @@ enum
 #ifdef FEATURE_WLAN_ESE
     eLIM_TSM_TIMER,
 #endif
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-    eLIM_TDLS_DISCOVERY_RSP_WAIT,
-    eLIM_TDLS_LINK_SETUP_RSP_TIMEOUT,
-    eLIM_TDLS_LINK_SETUP_CNF_TIMEOUT,
-#endif
     eLIM_DISASSOC_ACK_TIMER,
     eLIM_DEAUTH_ACK_TIMER,
     eLIM_PERIODIC_JOIN_PROBE_REQ_TIMER,
     eLIM_INSERT_SINGLESHOT_NOA_TIMER,
-    eLIM_CONVERT_ACTIVE_CHANNEL_TO_PASSIVE
+    eLIM_CONVERT_ACTIVE_CHANNEL_TO_PASSIVE,
+    eLIM_AUTH_RETRY_TIMER
 };
 
 #define LIM_DISASSOC_DEAUTH_ACK_TIMEOUT         500
@@ -134,9 +130,6 @@ void limCBScanDurationTimerHandler(void *, tANI_U32);
  */
 v_UINT_t limActivateHearBeatTimer(tpAniSirGlobal pMac, tpPESession psessionEntry);
 
-#if 0
-void limWPSOverlapTimerHandler(void *pMacGlobal, tANI_U32 param);
-#endif
 #ifdef WLAN_ACTIVEMODE_OFFLOAD_FEATURE
 void limMissedBeaconInActiveMode(void *pMacGlobal, tpPESession psessionEntry);
 #endif

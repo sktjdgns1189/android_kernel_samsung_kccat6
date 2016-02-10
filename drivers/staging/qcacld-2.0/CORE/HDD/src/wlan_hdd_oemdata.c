@@ -44,10 +44,9 @@
 #include <wlan_hdd_includes.h>
 #include <net/arp.h>
 #include "qwlan_version.h"
-
-#ifdef QCA_WIFI_2_0
+#include "vos_utils.h"
+#include "wma.h"
 static struct hdd_context_s *pHddCtx;
-#endif /* QCA_WIFI_2_0 */
 
 
 /*---------------------------------------------------------------------------------------------
@@ -56,7 +55,7 @@ static struct hdd_context_s *pHddCtx;
 
   This function also reports the results to the user space
 
-  \return - 0 for success, non zero for failure
+  \return - eHalStatus enumeration
 
 -----------------------------------------------------------------------------------------------*/
 static eHalStatus hdd_OemDataReqCallback(tHalHandle hHal,
@@ -75,20 +74,14 @@ static eHalStatus hdd_OemDataReqCallback(tHalHandle hHal,
     //now if the status is success, then send an event up
     //so that the application can request for the data
     //else no need to send the event up
-    if(oemDataReqStatus == eOEM_DATA_REQ_FAILURE)
-    {
+    if (oemDataReqStatus == eOEM_DATA_REQ_FAILURE) {
         snprintf(buffer, IW_CUSTOM_MAX, "QCOM: OEM-DATA-REQ-FAILED");
         hddLog(LOGW, "%s: oem data req %d failed", __func__, oemDataReqID);
-    }
-    else if(oemDataReqStatus == eOEM_DATA_REQ_INVALID_MODE)
-    {
+    } else if(oemDataReqStatus == eOEM_DATA_REQ_INVALID_MODE) {
         snprintf(buffer, IW_CUSTOM_MAX, "QCOM: OEM-DATA-REQ-INVALID-MODE");
         hddLog(LOGW, "%s: oem data req %d failed because the driver is in invalid mode (IBSS|BTAMP|AP)", __func__, oemDataReqID);
-    }
-    else
-    {
+    } else {
         snprintf(buffer, IW_CUSTOM_MAX, "QCOM: OEM-DATA-REQ-SUCCESS");
-        //everything went alright
     }
 
     wrqu.data.pointer = buffer;
@@ -121,7 +114,8 @@ int iw_get_oem_data_rsp(
         union iwreq_data *wrqu,
         char *extra)
 {
-    eHalStatus                            status = eHAL_STATUS_SUCCESS;
+    int                                   rc = 0;
+    eHalStatus                            status;
     struct iw_oem_data_rsp*               pHddOemDataRsp;
     tOemDataRsp*                          pSmeOemDataRsp;
 
@@ -138,14 +132,15 @@ int iw_get_oem_data_rsp(
     {
         //get the oem data response from sme
         status = sme_getOemDataRsp(WLAN_HDD_GET_HAL_CTX(pAdapter), &pSmeOemDataRsp);
-        if(status != eHAL_STATUS_SUCCESS)
+        if (status != eHAL_STATUS_SUCCESS)
         {
             hddLog(LOGE, "%s: failed in sme_getOemDataRsp", __func__);
+            rc = -EIO;
             break;
         }
         else
         {
-            if(pSmeOemDataRsp != NULL)
+            if (pSmeOemDataRsp != NULL)
             {
                 pHddOemDataRsp = (struct iw_oem_data_rsp*)(extra);
                 vos_mem_copy(pHddOemDataRsp->oemDataRsp, pSmeOemDataRsp->oemDataRsp, OEM_DATA_RSP_SIZE);
@@ -153,13 +148,13 @@ int iw_get_oem_data_rsp(
             else
             {
                 hddLog(LOGE, "%s: pSmeOemDataRsp = NULL", __func__);
-                status = eHAL_STATUS_FAILURE;
+                rc = -EIO;
                 break;
             }
         }
     } while(0);
 
-    return eHAL_STATUS_SUCCESS;
+    return rc;
 }
 
 /**---------------------------------------------------------------------------
@@ -184,6 +179,7 @@ int iw_set_oem_data_req(
         union iwreq_data *wrqu,
         char *extra)
 {
+    int rc = 0;
     eHalStatus status = eHAL_STATUS_SUCCESS;
     struct iw_oem_data_req *pOemDataReq = NULL;
     tOemDataReqConfig oemDataReqConfig;
@@ -192,6 +188,12 @@ int iw_set_oem_data_req(
 
     hdd_adapter_t *pAdapter = (netdev_priv(dev));
     hdd_wext_state_t *pwextBuf = WLAN_HDD_GET_WEXT_STATE_PTR(pAdapter);
+
+    if (!capable(CAP_NET_ADMIN)) {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("permission check failed"));
+        return -EPERM;
+    }
 
     if ((WLAN_HDD_GET_CTX(pAdapter))->isLogpInProgress)
     {
@@ -202,15 +204,15 @@ int iw_set_oem_data_req(
 
     do
     {
-        if(NULL != wrqu->data.pointer)
+        if (NULL != wrqu->data.pointer)
         {
             pOemDataReq = (struct iw_oem_data_req *)wrqu->data.pointer;
         }
 
-        if(pOemDataReq == NULL)
+        if (pOemDataReq == NULL)
         {
             hddLog(LOGE, "in %s oemDataReq == NULL", __func__);
-            status = eHAL_STATUS_FAILURE;
+            rc = -EIO;
             break;
         }
 
@@ -221,7 +223,8 @@ int iw_set_oem_data_req(
         {
             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
                       "%s: copy_from_user() failed!", __func__);
-            return -EFAULT;
+            rc = -EFAULT;
+            break;
         }
 
         status = sme_OemDataReq(WLAN_HDD_GET_HAL_CTX(pAdapter),
@@ -230,19 +233,21 @@ int iw_set_oem_data_req(
                                                 &oemDataReqID,
                                                 &hdd_OemDataReqCallback,
                                                 dev);
-
+        if (status != eHAL_STATUS_SUCCESS)
+        {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                      "%s: sme_OemDataReq status %d", __func__, status);
+            rc = -EFAULT;
+            break;
+        }
         pwextBuf->oemDataReqID = oemDataReqID;
         pwextBuf->oemDataReqInProgress = TRUE;
 
-    } while(0);
+    } while (0);
 
-    return status;
+    return rc;
 }
 
-#ifdef QCA_WIFI_2_0
-
-/* Forward declaration */
-static int oem_msg_callback(struct sk_buff *skb);
 
 /**---------------------------------------------------------------------------
 
@@ -265,7 +270,7 @@ int iw_get_oem_data_cap(
         union iwreq_data *wrqu,
         char *extra)
 {
-    eHalStatus status = eHAL_STATUS_SUCCESS;
+    eHalStatus status;
     t_iw_oem_data_cap oemDataCap;
     t_iw_oem_data_cap *pHddOemDataCap;
     hdd_adapter_t *pAdapter = (netdev_priv(dev));
@@ -321,9 +326,11 @@ int iw_get_oem_data_cap(
        oemDataCap.allowed_dwell_time_min = pConfig->nNeighborScanMinChanTime;
        oemDataCap.allowed_dwell_time_max = pConfig->nNeighborScanMaxChanTime;
        oemDataCap.curr_dwell_time_min =
-               sme_getNeighborScanMinChanTime(pHddContext->hHal);
+               sme_getNeighborScanMinChanTime(pHddContext->hHal,
+                                              pAdapter->sessionId);
        oemDataCap.curr_dwell_time_max =
-               sme_getNeighborScanMaxChanTime(pHddContext->hHal);
+               sme_getNeighborScanMaxChanTime(pHddContext->hHal,
+                                              pAdapter->sessionId);
        oemDataCap.supported_bands = pConfig->nBandCapability;
 
        /* request for max num of channels */
@@ -357,17 +364,17 @@ int iw_get_oem_data_cap(
 
        pHddOemDataCap = (t_iw_oem_data_cap *)(extra);
        vos_mem_copy(pHddOemDataCap, &oemDataCap, sizeof(*pHddOemDataCap));
-    } while(0);
+    } while (0);
 
     EXIT();
-    return status;
+    return 0;
 }
 
 /**---------------------------------------------------------------------------
 
   \brief send_oem_reg_rsp_nlink_msg() - send oem registration response
 
-  This function sends oem message to registetred application process
+  This function sends oem message to registered application process
 
   \param -
      - none
@@ -498,7 +505,7 @@ void send_oem_err_rsp_nlink_msg(v_SINT_t app_pid, tANI_U8 error_code)
    buf = (char *) ((char *) aniHdr + sizeof(tAniMsgHdr));
    *buf = error_code;
 
-   skb_put(skb, NLMSG_SPACE(sizeof(tAniMsgHdr)));
+   skb_put(skb, NLMSG_SPACE(sizeof(tAniMsgHdr) + aniHdr->length));
 
    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
              "%s: sending oem error response to process pid (%d)",
@@ -513,7 +520,7 @@ void send_oem_err_rsp_nlink_msg(v_SINT_t app_pid, tANI_U8 error_code)
 
   \brief send_oem_data_rsp_msg() - send oem data response
 
-  This function sends oem data rsp message to registetred application process
+  This function sends oem data rsp message to registered application process
   over the netlink socket.
 
   \param -
@@ -587,10 +594,10 @@ void send_oem_data_rsp_msg(int length, tANI_U8 *oemDataRsp)
      - oemDataLen - Length to OEM Data buffer
      - oemData - Pointer to OEM Data buffer
 
-  \return - 0 for success, non zero for failure
+  \return - eHalStatus enumeration
 
   --------------------------------------------------------------------------*/
-int oem_process_data_req_msg(int oemDataLen, char *oemData)
+eHalStatus oem_process_data_req_msg(int oemDataLen, char *oemData)
 {
    hdd_adapter_t *pAdapter = NULL;
    tOemDataReqConfig oemDataReqConfig;
@@ -649,8 +656,9 @@ int oem_process_channel_info_req_msg(int numOfChannels, char *chanList)
    tAniMsgHdr *aniHdr;
    tHddChannelInfo *pHddChanInfo;
    tHddChannelInfo hddChanInfo;
-   tSmeChannelInfo smeChanInfo;
    tANI_U8 chanId;
+   tANI_U32 reg_info_1;
+   tANI_U32 reg_info_2;
    eHalStatus status = eHAL_STATUS_FAILURE;
    int i;
    tANI_U8 *buf;
@@ -697,26 +705,37 @@ int oem_process_channel_info_req_msg(int numOfChannels, char *chanList)
                                         i * sizeof(tHddChannelInfo));
 
       chanId = chanList[i];
-      status = sme_getChannelInfo(pHddCtx->hHal, chanId, &smeChanInfo);
+      status = sme_getRegInfo(pHddCtx->hHal, chanId,
+                              &reg_info_1, &reg_info_2);
       if (eHAL_STATUS_SUCCESS == status)
       {
-         /* copy into hdd chan info struct */
-         hddChanInfo.chan_id = smeChanInfo.chan_id;
+         /* band center freq1, and freq2 depends on peer's capability
+          * and at this time we might not be associated on the given channel,
+          * so fill freq1=mhz, and freq2=0
+          */
+         hddChanInfo.chan_id = chanId;
          hddChanInfo.reserved0 = 0;
-         hddChanInfo.mhz = smeChanInfo.mhz;
-         hddChanInfo.band_center_freq1 = smeChanInfo.band_center_freq1;
-         hddChanInfo.band_center_freq2 = smeChanInfo.band_center_freq2;
-         hddChanInfo.info = smeChanInfo.info;
-         hddChanInfo.reg_info_1 = smeChanInfo.reg_info_1;
-         hddChanInfo.reg_info_2 = smeChanInfo.reg_info_2;
+         hddChanInfo.mhz = vos_chan_to_freq(chanId);
+         hddChanInfo.band_center_freq1 = hddChanInfo.mhz;
+         hddChanInfo.band_center_freq2 = 0;
+
+         /* set only DFS flag in info, rest of the fields will be filled in
+          *  by the OEM App
+          */
+         hddChanInfo.info = 0;
+         if (NV_CHANNEL_DFS == vos_nv_getChannelEnabledState(chanId))
+             WMI_SET_CHANNEL_FLAG(&hddChanInfo, WMI_CHAN_FLAG_DFS);
+
+         hddChanInfo.reg_info_1 = reg_info_1;
+         hddChanInfo.reg_info_2 = reg_info_2;
       }
       else
       {
-         /* channel info is not returned, fill in zeros in channel
-          * info struct
+         /* chanId passed to sme_getRegInfo is not valid, fill in zeros
+          * in channel info struct
           */
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                   "%s: sme_getChannelInfo failed for chan (%d), return info 0",
+                   "%s: sme_getRegInfo failed for chan (%d), return info 0",
                    __func__, chanId);
          hddChanInfo.chan_id = chanId;
          hddChanInfo.reserved0 = 0;
@@ -758,17 +777,16 @@ int oem_process_channel_info_req_msg(int numOfChannels, char *chanList)
 
   --------------------------------------------------------------------------*/
 void hdd_SendPeerStatusIndToOemApp(v_MACADDR_t *peerMac,
-                                     tANI_U8 peerStatus,
-                                     tANI_U8 peerTimingMeasCap,
-                                     tANI_U8 sessionId,
-                                     tANI_U8 chanId)
+                                   tANI_U8 peerStatus,
+                                   tANI_U8 peerTimingMeasCap,
+                                   tANI_U8 sessionId,
+                                   tSirSmeChanInfo *chan_info)
 {
    struct sk_buff *skb;
    struct nlmsghdr *nlh;
    tAniMsgHdr *aniHdr;
-   tSmeChannelInfo smeChanInfo;
    tPeerStatusInfo *pPeerInfo;
-   eHalStatus status = eHAL_STATUS_FAILURE;
+
 
    if (!pHddCtx || !pHddCtx->hHal)
    {
@@ -783,15 +801,6 @@ void hdd_SendPeerStatusIndToOemApp(v_MACADDR_t *peerMac,
       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
                 "%s: OEM app is not registered(%d) or pid is invalid(%d)",
                 __func__, pHddCtx->oem_app_registered, pHddCtx->oem_pid);
-      return;
-   }
-
-   status = sme_getChannelInfo(pHddCtx->hHal, chanId, &smeChanInfo);
-   if (eHAL_STATUS_SUCCESS != status)
-   {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s: sme_getChannelInfo failed for chan (%d)",
-                __func__, chanId);
       return;
    }
 
@@ -821,30 +830,204 @@ void hdd_SendPeerStatusIndToOemApp(v_MACADDR_t *peerMac,
                 sizeof(peerMac->bytes));
    pPeerInfo->peer_status = peerStatus;
    pPeerInfo->vdev_id = sessionId;
+   /* peerTimingMeasCap - bit mask for timing and fine timing Meas Cap */
    pPeerInfo->peer_capability = peerTimingMeasCap;
    pPeerInfo->reserved0 = 0;
 
-   pPeerInfo->peer_chan_info.chan_id = smeChanInfo.chan_id;
-   pPeerInfo->peer_chan_info.reserved0 = 0;
-   pPeerInfo->peer_chan_info.mhz = smeChanInfo.mhz;
-   pPeerInfo->peer_chan_info.band_center_freq1 = smeChanInfo.band_center_freq1;
-   pPeerInfo->peer_chan_info.band_center_freq2 = smeChanInfo.band_center_freq2;
-   pPeerInfo->peer_chan_info.info = smeChanInfo.info;
-   pPeerInfo->peer_chan_info.reg_info_1 = smeChanInfo.reg_info_1;
-   pPeerInfo->peer_chan_info.reg_info_2 = smeChanInfo.reg_info_2;
-
+   if (chan_info) {
+       pPeerInfo->peer_chan_info.chan_id = chan_info->chan_id;
+       pPeerInfo->peer_chan_info.reserved0 = 0;
+       pPeerInfo->peer_chan_info.mhz = chan_info->mhz;
+       pPeerInfo->peer_chan_info.band_center_freq1 =
+                                      chan_info->band_center_freq1;
+       pPeerInfo->peer_chan_info.band_center_freq2 =
+                                      chan_info->band_center_freq2;
+       pPeerInfo->peer_chan_info.info = chan_info->info;
+       pPeerInfo->peer_chan_info.reg_info_1 = chan_info->reg_info_1;
+       pPeerInfo->peer_chan_info.reg_info_2 = chan_info->reg_info_2;
+   } else {
+       pPeerInfo->peer_chan_info.chan_id = 0;
+       pPeerInfo->peer_chan_info.reserved0 = 0;
+       pPeerInfo->peer_chan_info.mhz = 0;
+       pPeerInfo->peer_chan_info.band_center_freq1 = 0;
+       pPeerInfo->peer_chan_info.band_center_freq2 = 0;
+       pPeerInfo->peer_chan_info.info = 0;
+       pPeerInfo->peer_chan_info.reg_info_1 = 0;
+       pPeerInfo->peer_chan_info.reg_info_2 = 0;
+   }
    skb_put(skb, NLMSG_SPACE((sizeof(tAniMsgHdr) + aniHdr->length)));
 
    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-             "%s: sending peer "MAC_ADDRESS_STR
-             " status(%d), peerTimingMeasCap(%d), vdevId(%d), chanId(%d)"
-             " to oem app pid(%d)",
-             __func__, MAC_ADDR_ARRAY(peerMac->bytes), peerStatus,
-             peerTimingMeasCap, sessionId, chanId, pHddCtx->oem_pid);
+            "%s: sending peer "MAC_ADDRESS_STR
+            " status(%d), peerTimingMeasCap(%d), vdevId(%d), chanId(%d)"
+            " to oem app pid(%d), center freq 1 (%d), center freq 2 (%d),"
+            " info (0x%x), frequency (%d),reg info 1 (0x%x),"
+            " reg info 2 (0x%x)",__func__, MAC_ADDR_ARRAY(peerMac->bytes),
+             peerStatus, peerTimingMeasCap, sessionId,
+             pPeerInfo->peer_chan_info.chan_id, pHddCtx->oem_pid,
+             pPeerInfo->peer_chan_info.band_center_freq1,
+             pPeerInfo->peer_chan_info.band_center_freq2,
+             pPeerInfo->peer_chan_info.info,
+             pPeerInfo->peer_chan_info.mhz,
+             pPeerInfo->peer_chan_info.reg_info_1,
+             pPeerInfo->peer_chan_info.reg_info_2);
 
    (void)nl_srv_ucast(skb, pHddCtx->oem_pid, MSG_DONTWAIT);
 
    return;
+}
+
+/*
+ * Callback function invoked by Netlink service for all netlink
+ * messages (from user space) addressed to WLAN_NL_MSG_OEM
+ */
+
+/**
+ * oem_msg_callback() - callback invoked by netlink service
+ * @skb:    skb with netlink message
+ *
+ * This function gets invoked by netlink service when a message
+ * is received from user space addressed to WLAN_NL_MSG_OEM
+ *
+ * Return: zero on success
+ *         On error, error number will be returned.
+ */
+static int oem_msg_callback(struct sk_buff *skb)
+{
+   struct nlmsghdr *nlh;
+   tAniMsgHdr *msg_hdr;
+   int ret;
+   char *sign_str = NULL;
+   nlh = (struct nlmsghdr *)skb->data;
+
+   if (!nlh) {
+       hddLog(LOGE, FL("Netlink header null"));
+       return -EPERM;
+   }
+
+   ret = wlan_hdd_validate_context(pHddCtx);
+   if (0 != ret) {
+       hddLog(LOGE, FL("HDD context is not valid"));
+       return ret;
+   }
+
+   msg_hdr = NLMSG_DATA(nlh);
+
+   if (!msg_hdr) {
+       hddLog(LOGE, FL("Message header null"));
+       send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid, OEM_ERR_NULL_MESSAGE_HEADER);
+       return -EPERM;
+   }
+
+   if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(tAniMsgHdr) + msg_hdr->length)) {
+       hddLog(LOGE, FL("Invalid nl msg len, nlh->nlmsg_len (%d), msg_hdr->len (%d)"),
+              nlh->nlmsg_len, msg_hdr->length);
+       send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                  OEM_ERR_INVALID_MESSAGE_LENGTH);
+       return -EPERM;
+   }
+
+   switch (msg_hdr->type) {
+   case ANI_MSG_APP_REG_REQ:
+      /* Registration request is only allowed for Qualcomm Application */
+      hddLog(LOG1, FL("Received App Req Req from App process pid(%d), len(%d)"),
+                   nlh->nlmsg_pid, msg_hdr->length);
+
+      sign_str = (char *)((char *)msg_hdr + sizeof(tAniMsgHdr));
+      if ((OEM_APP_SIGNATURE_LEN == msg_hdr->length) &&
+          (0 == strncmp(sign_str, OEM_APP_SIGNATURE_STR,
+                        OEM_APP_SIGNATURE_LEN))) {
+          hddLog(LOG1, FL("Valid App Req Req from oem app process pid(%d)"),
+                       nlh->nlmsg_pid);
+
+          pHddCtx->oem_app_registered = TRUE;
+          pHddCtx->oem_pid = nlh->nlmsg_pid;
+          send_oem_reg_rsp_nlink_msg();
+      } else {
+          hddLog(LOGE, FL("Invalid signature in App Reg Request from pid(%d)"),
+                 nlh->nlmsg_pid);
+          send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                       OEM_ERR_INVALID_SIGNATURE);
+          return -EPERM;
+      }
+      break;
+
+   case ANI_MSG_OEM_DATA_REQ:
+      hddLog(LOG1, FL("Received Oem Data Request length(%d) from pid: %d"),
+                   msg_hdr->length, nlh->nlmsg_pid);
+
+      if ((!pHddCtx->oem_app_registered) ||
+          (nlh->nlmsg_pid != pHddCtx->oem_pid)) {
+          /* either oem app is not registered yet or pid is different */
+          hddLog(LOGE, FL("OEM DataReq: app not registered(%d) or incorrect pid(%d)"),
+                 pHddCtx->oem_app_registered, nlh->nlmsg_pid);
+          send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                       OEM_ERR_APP_NOT_REGISTERED);
+          return -EPERM;
+      }
+
+      if ((!msg_hdr->length) || (OEM_DATA_REQ_SIZE < msg_hdr->length)) {
+          hddLog(LOGE, FL("Invalid length (%d) in Oem Data Request"),
+                       msg_hdr->length);
+          send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                       OEM_ERR_INVALID_MESSAGE_LENGTH);
+          return -EPERM;
+      }
+      oem_process_data_req_msg(msg_hdr->length,
+                              (char *) ((char *)msg_hdr +
+                              sizeof(tAniMsgHdr)));
+      break;
+
+   case ANI_MSG_CHANNEL_INFO_REQ:
+      hddLog(LOG1,
+             FL("Received channel info request, num channel(%d) from pid: %d"),
+             msg_hdr->length, nlh->nlmsg_pid);
+
+      if ((!pHddCtx->oem_app_registered) ||
+          (nlh->nlmsg_pid != pHddCtx->oem_pid)) {
+          /* either oem app is not registered yet or pid is different */
+          hddLog(LOGE,
+                 FL("Chan InfoReq: app not registered(%d) or incorrect pid(%d)"),
+                 pHddCtx->oem_app_registered, nlh->nlmsg_pid);
+          send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                     OEM_ERR_APP_NOT_REGISTERED);
+          return -EPERM;
+      }
+
+      /* message length contains list of channel ids */
+      if ((!msg_hdr->length) ||
+          (WNI_CFG_VALID_CHANNEL_LIST_LEN < msg_hdr->length)) {
+          hddLog(LOGE,
+                 FL("Invalid length (%d) in channel info request"),
+                 msg_hdr->length);
+          send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                    OEM_ERR_INVALID_MESSAGE_LENGTH);
+          return -EPERM;
+      }
+      oem_process_channel_info_req_msg(msg_hdr->length,
+                            (char *)((char*)msg_hdr + sizeof(tAniMsgHdr)));
+      break;
+
+   default:
+      hddLog(LOGE,
+             FL("Received Invalid message type (%d), length (%d)"),
+             msg_hdr->type, msg_hdr->length);
+      send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
+                                 OEM_ERR_INVALID_MESSAGE_TYPE);
+      return -EPERM;
+   }
+   return 0;
+}
+
+static int __oem_msg_callback(struct sk_buff *skb)
+{
+    int ret;
+
+    vos_ssr_protect(__func__);
+    ret = oem_msg_callback(skb);
+    vos_ssr_unprotect(__func__);
+
+    return ret;
 }
 
 /**---------------------------------------------------------------------------
@@ -855,7 +1038,7 @@ void hdd_SendPeerStatusIndToOemApp(v_MACADDR_t *peerMac,
   an OEM application process.
 
   \param -
-     - pAdapter - ponter to HDD adapter
+     - pAdapter - pointer to HDD adapter
 
   \return - 0 for success, non zero for failure
 
@@ -865,181 +1048,10 @@ int oem_activate_service(void *pAdapter)
    pHddCtx = (struct hdd_context_s*) pAdapter;
 
    /* Register the msg handler for msgs addressed to WLAN_NL_MSG_OEM */
-   nl_srv_register(WLAN_NL_MSG_OEM, oem_msg_callback);
+   nl_srv_register(WLAN_NL_MSG_OEM, __oem_msg_callback);
    return 0;
 }
 
-/*
- * Callback function invoked by Netlink service for all netlink
- * messages (from user space) addressed to WLAN_NL_MSG_OEM
- */
-/**---------------------------------------------------------------------------
 
-  \brief oem_msg_callback() - callback invoked by netlink service
 
-  This function gets invoked by netlink service when a message
-  is received from user space addressed to WLAN_NL_MSG_OEM
-
-  \param -
-     - skb - skb with netlink message
-
-  \return - 0 for success, non zero for failure
-
-  --------------------------------------------------------------------------*/
-int oem_msg_callback(struct sk_buff *skb)
-{
-   struct nlmsghdr *nlh;
-   tAniMsgHdr *msg_hdr;
-   char *sign_str = NULL;
-   nlh = (struct nlmsghdr *)skb->data;
-
-   if (!nlh)
-   {
-     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-               "%s: Netlink header null", __func__);
-     return -1;
-   }
-
-   if (!pHddCtx)
-   {
-     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-               "%s: HDD context null", __func__);
-     send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid, OEM_ERR_NULL_CONTEXT);
-     return -1;
-   }
-
-   if (pHddCtx->isLogpInProgress)
-   {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s:LOGP in Progress. Ignore!!!", __func__);
-      return -EBUSY;
-   }
-
-   msg_hdr = NLMSG_DATA(nlh);
-
-   if (!msg_hdr)
-   {
-     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-               "%s: Message header null", __func__);
-     send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid, OEM_ERR_NULL_MESSAGE_HEADER);
-     return -1;
-   }
-
-   if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(tAniMsgHdr) + msg_hdr->length))
-   {
-     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-               "%s: Invalid nl msg len, nlh->nlmsg_len (%d), msg_hdr->len (%d)",
-               __func__, nlh->nlmsg_len, msg_hdr->length);
-     send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid, OEM_ERR_INVALID_MESSAGE_LENGTH);
-     return -1;
-   }
-
-   switch (msg_hdr->type)
-   {
-      case ANI_MSG_APP_REG_REQ:
-         /* Registration request is only allowed for Qualcomm Application */
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                   "%s: Received App Req Req from App process pid(%d), len(%d)",
-                   __func__, nlh->nlmsg_pid, msg_hdr->length);
-
-         sign_str = (char *)((char *)msg_hdr + sizeof(tAniMsgHdr));
-         if ((OEM_APP_SIGNATURE_LEN == msg_hdr->length) &&
-             (0 == strncmp(sign_str, OEM_APP_SIGNATURE_STR,
-                           OEM_APP_SIGNATURE_LEN)))
-         {
-            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                      "%s: Valid App Req Req from oem app process pid(%d)",
-                      __func__, nlh->nlmsg_pid);
-
-            pHddCtx->oem_app_registered = TRUE;
-            pHddCtx->oem_pid = nlh->nlmsg_pid;
-            send_oem_reg_rsp_nlink_msg();
-         }
-         else
-         {
-            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                      "%s: Invalid signature in App Reg Request from pid(%d)",
-                      __func__, nlh->nlmsg_pid);
-            send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
-                                       OEM_ERR_INVALID_SIGNATURE);
-            return -1;
-         }
-         break;
-
-      case ANI_MSG_OEM_DATA_REQ:
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                   "%s: Received Oem Data Request length(%d) from pid: %d",
-                   __func__, msg_hdr->length, nlh->nlmsg_pid);
-
-         if ((!pHddCtx->oem_app_registered) ||
-             (nlh->nlmsg_pid != pHddCtx->oem_pid))
-         {
-            /* either oem app is not registered yet or pid is different */
-            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s: OEM DataReq: app not regsitered(%d) or incorrect pid(%d)",
-                __func__, pHddCtx->oem_app_registered, nlh->nlmsg_pid);
-            send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
-                                       OEM_ERR_APP_NOT_REGISTERED);
-            return -1;
-         }
-
-         if ((!msg_hdr->length) ||
-             (OEM_DATA_REQ_SIZE < msg_hdr->length))
-         {
-            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                      "%s: Invalid length (%d) in Oem Data Request",
-                      __func__, msg_hdr->length);
-            send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
-                                       OEM_ERR_INVALID_MESSAGE_LENGTH);
-            return -1;
-         }
-         oem_process_data_req_msg(msg_hdr->length,
-                                  (char *) ((char *)msg_hdr +
-                                  sizeof(tAniMsgHdr)));
-         break;
-
-      case ANI_MSG_CHANNEL_INFO_REQ:
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-              "%s: Received channel info request, num channel(%d) from pid: %d",
-              __func__, msg_hdr->length, nlh->nlmsg_pid);
-
-         if ((!pHddCtx->oem_app_registered) ||
-             (nlh->nlmsg_pid != pHddCtx->oem_pid))
-         {
-            /* either oem app is not registered yet or pid is different */
-            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s: Chan InfoReq: app not regsitered(%d) or incorrect pid(%d)",
-                __func__, pHddCtx->oem_app_registered, nlh->nlmsg_pid);
-            send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
-                                       OEM_ERR_APP_NOT_REGISTERED);
-            return -1;
-         }
-
-         /* message length contains list of channel ids */
-         if ((!msg_hdr->length) ||
-             (WNI_CFG_VALID_CHANNEL_LIST_LEN < msg_hdr->length))
-         {
-            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                      "%s: Invalid length (%d) in channel info request",
-                      __func__, msg_hdr->length);
-            send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
-                                       OEM_ERR_INVALID_MESSAGE_LENGTH);
-            return -1;
-         }
-         oem_process_channel_info_req_msg(msg_hdr->length,
-                               (char *)((char*)msg_hdr + sizeof(tAniMsgHdr)));
-         break;
-
-      default:
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                   "%s: Received Invalid message type (%d), length (%d)",
-                   __func__, msg_hdr->type, msg_hdr->length);
-         send_oem_err_rsp_nlink_msg(nlh->nlmsg_pid,
-                                    OEM_ERR_INVALID_MESSAGE_TYPE);
-         return -1;
-   }
-   return 0;
-}
-
-#endif /* QCA_WIFI_2_0 */
 #endif

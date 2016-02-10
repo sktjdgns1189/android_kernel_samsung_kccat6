@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2014-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -79,6 +79,9 @@
 #include "_ieee80211_common.h"
 #include <a_types.h>
 #include "wlan_defs.h"
+
+#define MAX_CHANNELS_PER_OPERATING_CLASS  15
+
 enum EnumRd {
     /*
      * The following regulatory domain definitions are
@@ -145,11 +148,12 @@ enum EnumRd {
     APL1_ETSIC  = 0x55,
     APL2_ETSIC  = 0x56,     /* Venezuela */
     APL5_WORLD  = 0x58,     /* Chile */
+    APL13_WORLD = 0x5A,     /* Algeria */
     APL6_WORLD  = 0x5B,     /* Singapore */
     APL7_FCCA   = 0x5C,     /* Taiwan 5.47 Band */
     APL8_WORLD  = 0x5D,     /* Malaysia 5GHz */
-    APL9_WORLD  = 0x5E,     /* Korea 5GHz, Before 11/2007. Now used only by APs */
-    APL10_WORLD = 0x5F,     /* Korea 5GHz, After 11/2007. For STAs only */
+    APL9_MKKC   = 0x5E,     /* Korea 5GHz, Before 11/2007. Now used only by APs */
+    APL10_MKKC  = 0x5F,     /* Korea 5GHz, After 11/2007. For STAs only */
 
     /*
      * World mode SKUs
@@ -196,6 +200,7 @@ enum EnumRd {
 
     MKK14_MKKA1  = 0x92,     /* Japan UNI-1 even + UNI-1 odd + 4.9GHz + MKKA1 */
     MKK15_MKKA1  = 0x93,     /* Japan UNI-1 even + UNI-1 odd + UNI-2 + 4.9GHz + MKKA1 */
+    MKK5_FCCA    = 0x9A,
 
     MKK10_FCCA  = 0xD0,     /* Japan UNI-1 even + UNI-2 + 4.9GHz + FCCA */
     MKK10_MKKA1 = 0xD1,     /* Japan UNI-1 even + UNI-2 + 4.9GHz + MKKA1 */
@@ -370,10 +375,9 @@ static const REG_DMN_PAIR_MAPPING ahCmnRegDomainPairs[] = {
 	{APL6_WORLD,	APL6,		WORLD,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
 	{APL7_FCCA,	    APL7,		FCCA,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
 	{APL8_WORLD,	APL8,		WORLD,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
-	{APL9_WORLD,	APL9,		WORLD,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
-	{APL10_WORLD,	APL10,		WORLD,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
-
-	{APL3_FCCA,		APL3,		FCCA,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
+	{APL9_MKKC,	APL9,		MKKC,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
+	{APL10_MKKC,	APL10,		MKKC,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
+	{APL3_FCCA,	APL3,		FCCA,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
 	{APL1_ETSIC,	APL1,		ETSIC,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
 	{APL2_ETSIC,	APL2,		ETSIC,		NO_REQ, NO_REQ, PSCAN_DEFER, 0 },
 
@@ -408,7 +412,7 @@ static const REG_DMN_PAIR_MAPPING ahCmnRegDomainPairs[] = {
 	{MKK5_MKKB,	MKK5,		MKKA,		DISALLOW_ADHOC_11A | DISALLOW_ADHOC_11A_TURB | NEED_NFC | LIMIT_FRAME_4MS, NEED_NFC, PSCAN_MKK3 | PSCAN_MKKA | PSCAN_MKKA_G, CTRY_JAPAN13 },
 	{MKK5_MKKA2,MKK5,		MKKA,		DISALLOW_ADHOC_11A_TURB | NEED_NFC | LIMIT_FRAME_4MS, NEED_NFC, PSCAN_MKK3 | PSCAN_MKKA2 | PSCAN_MKKA2_G, CTRY_JAPAN14 },
 	{MKK5_MKKC,	MKK5,		MKKC,		DISALLOW_ADHOC_11A_TURB | NEED_NFC | LIMIT_FRAME_4MS, NEED_NFC, PSCAN_MKK3, CTRY_JAPAN15 },
-/*	{MKK5_FCCA,     MKK4,       FCCA,       DISALLOW_ADHOC_11A_TURB | NEED_NFC | LIMIT_FRAME_4MS, NEED_NFC, PSCAN_MKK3, CTRY_JAPAN57 },*/
+       	{MKK5_FCCA,     MKK5,       FCCA,       DISALLOW_ADHOC_11A_TURB | NEED_NFC | LIMIT_FRAME_4MS, NEED_NFC, PSCAN_MKK3, CTRY_JAPAN },
 
 	/* MKK6 */
 	{MKK6_MKKB,	MKK6,		MKKA,		DISALLOW_ADHOC_11A_TURB | NEED_NFC | LIMIT_FRAME_4MS, NEED_NFC, PSCAN_MKK1 | PSCAN_MKKA | PSCAN_MKKA_G, CTRY_JAPAN16 },
@@ -537,7 +541,7 @@ static const COUNTRY_CODE_TO_ENUM_RD ahCmnAllCountries[] = {
     {CTRY_ISRAEL,      ETSI3_WORLD,   "IL", "ISRAEL",         YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_ITALY,       ETSI1_WORLD,   "IT", "ITALY",          YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_JAMAICA,     FCC3_WORLD,    "JM", "JAMAICA",        YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
-    {CTRY_JAPAN,       MKK1_MKKA,     "JP", "JAPAN",          YES,  NO,  NO, YES, YES, YES,  NO, NO, 7000 },
+    {CTRY_JAPAN,       MKK5_MKKA2,    "JP", "JAPAN",          YES,  NO,  NO, YES, YES, YES,  NO, NO, 7000 },
     {CTRY_JAPAN1,      MKK1_MKKB,     "JP", "JAPAN1",         YES,  NO,  NO, YES, YES, YES,  NO, NO, 7000 },
     {CTRY_JAPAN2,      MKK1_FCCA,     "JP", "JAPAN2",         YES,  NO,  NO, YES, YES, YES,  NO, NO, 7000 },
     {CTRY_JAPAN3,      MKK2_MKKA,     "JP", "JAPAN3",         YES,  NO,  NO, YES, YES, YES,  NO, NO, 7000 },
@@ -600,9 +604,9 @@ static const COUNTRY_CODE_TO_ENUM_RD ahCmnAllCountries[] = {
     {CTRY_JORDAN,      ETSI2_WORLD,   "JO", "JORDAN",         YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_KAZAKHSTAN,  NULL1_WORLD,   "KZ", "KAZAKHSTAN",     YES,  NO, YES, YES, YES,  NO,  NO, NO, 7000 },
     {CTRY_KENYA,       APL1_WORLD,    "KE", "KENYA",          YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
-    {CTRY_KOREA_NORTH, APL9_WORLD,    "KP", "NORTH KOREA",    YES,  NO,  NO, YES,  NO, YES,  NO, NO, 7000 },
-    {CTRY_KOREA_ROC,   APL10_WORLD,   "KR", "KOREA REPUBLIC", YES,  NO,  NO, YES, YES, YES, YES, YES, 7000 },
-    {CTRY_KOREA_ROC3,  APL9_WORLD,    "KR", "KOREA REPUBLIC3", YES,  NO,  NO, YES,  NO, YES,  NO, NO, 7000 },
+    {CTRY_KOREA_NORTH, APL9_MKKC,     "KP", "NORTH KOREA",    YES,  NO,  NO, YES,  NO, YES,  NO, NO, 7000 },
+    {CTRY_KOREA_ROC,   APL10_MKKC,    "KR", "KOREA REPUBLIC", YES,  NO,  NO, YES, YES, YES, YES, YES, 7000 },
+    {CTRY_KOREA_ROC3,  APL9_MKKC,     "KR", "KOREA REPUBLIC3", YES,  NO,  NO, YES,  NO, YES,  NO, NO, 7000 },
     {CTRY_KUWAIT,      ETSI3_WORLD,   "KW", "KUWAIT",         YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_LATVIA,      ETSI1_WORLD,   "LV", "LATVIA",         YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_LEBANON,     APL1_WORLD,    "LB", "LEBANON",        YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
@@ -655,9 +659,8 @@ static const COUNTRY_CODE_TO_ENUM_RD ahCmnAllCountries[] = {
     {CTRY_TRINIDAD_Y_TOBAGO, FCC3_WORLD, "TT", "TRINIDAD AND TOBAGO", YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_TUNISIA,     ETSI3_WORLD,   "TN", "TUNISIA",        YES,  NO, YES, YES, YES, YES,  NO, NO, 7000 },
     {CTRY_TURKEY,      ETSI3_WORLD,   "TR", "TURKEY",         YES,  NO, YES, YES, YES, YES,  NO, NO, 7000 },
-    {CTRY_UGANDA,      APL10_WORLD,   "UG", "UGANDA",         YES,  NO, NO, YES, YES, YES,  YES, YES, 7000 },
+    {CTRY_UGANDA,      FCC3_WORLD,    "UG", "UGANDA",         YES,  NO, NO, YES, YES, YES,  YES, YES, 7000 },
     {CTRY_UKRAINE,     ETSI9_WORLD,   "UA", "UKRAINE",        YES,  NO, NO,  YES, YES, YES,  YES, NO, 7000 },
-    {CTRY_UGANDA,      APL10_WORLD,   "UG", "UGANDA",         YES, YES, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_UAE,         ETSI1_WORLD, "AE", "UNITED ARAB EMIRATES", YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_UNITED_KINGDOM, ETSI1_WORLD, "GB", "UNITED KINGDOM", YES,  NO, YES, YES, YES, YES, YES, YES, 7000 },
     {CTRY_UNITED_STATES, FCC3_FCCA,   "US", "UNITED STATES",  YES, YES, YES, YES, YES, YES, YES, YES, 5825 },
@@ -1831,3 +1834,30 @@ static const struct cmode modes[] = {
 	{ REGDMN_MODE_11AC_VHT40_2G,       IEEE80211_CHAN_11AC_VHT40_2G},
 	{ REGDMN_MODE_11AC_VHT80_2G,       IEEE80211_CHAN_11AC_VHT80_2G},
 };
+
+typedef enum offset
+{
+	BW20 = 0,
+	BW40_LOW_PRIMARY = 1,
+	BW40_HIGH_PRIMARY = 3,
+	BWALL
+} offset_t;
+
+typedef struct _regdm_op_class_map
+{
+	u_int8_t op_class;
+	u_int8_t ch_spacing;
+	offset_t offset;
+	u_int8_t channels[MAX_CHANNELS_PER_OPERATING_CLASS];
+} regdm_op_class_map_t;
+
+typedef struct _regdm_supp_op_classes {
+	u_int8_t num_classes;
+	u_int8_t classes[SIR_MAC_MAX_SUPP_OPER_CLASSES];
+} regdm_supp_op_classes;
+
+u_int16_t regdm_get_opclass_from_channel(u_int8_t *country, u_int8_t channel,
+	u_int8_t offset);
+u_int16_t regdm_set_curr_opclasses(u_int8_t num_classes, u_int8_t *class);
+u_int16_t regdm_get_curr_opclasses(u_int8_t *num_classes, u_int8_t *class);
+

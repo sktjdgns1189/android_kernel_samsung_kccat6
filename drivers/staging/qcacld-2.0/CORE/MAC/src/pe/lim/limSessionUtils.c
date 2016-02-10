@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -37,6 +37,9 @@
   ------------------------------------------------------------------------*/
 #include "aniGlobal.h"
 #include "limDebug.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#endif
 #include "limSession.h"
 #include "limSessionUtils.h"
 #include "limUtils.h"
@@ -200,6 +203,34 @@ tANI_U8 peIsAnySessionActive(tpAniSirGlobal pMac)
     }
     return(FALSE);
 
+}
+
+/*--------------------------------------------------------------------------
+  \brief pePrintActiveSession() - print all the active pesession present .
+
+  This function print all the active pesession present
+
+  \param pMac                   - pointer to global adapter context
+
+  \sa
+  --------------------------------------------------------------------------*/
+
+
+void pePrintActiveSession(tpAniSirGlobal pMac)
+{
+    tANI_U8 i;
+    for(i =0; i < pMac->lim.maxBssId; i++)
+    {
+        if(pMac->lim.gpSession[i].valid == TRUE)
+        {
+            limLog(pMac, LOGE, FL("Active sessionId: %d BSID: "MAC_ADDRESS_STR
+                   "opmode = %d bssIdx = %d"), i,
+                   MAC_ADDR_ARRAY(pMac->lim.gpSession[i].bssId),
+                   pMac->lim.gpSession[i].operMode,
+                   pMac->lim.gpSession[i].bssIdx);
+        }
+    }
+    return;
 }
 
 /*--------------------------------------------------------------------------

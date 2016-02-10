@@ -57,7 +57,7 @@
  //gEnableDriverStop = 1 implies map driver stop to standby
  #define WLAN_MAP_DRIVER_STOP_TO_STANDBY     1
 
- //gEnableDriverStop = 2 implies map sriver stop to deep sleep
+ /* gEnableDriverStop = 2 implies map driver stop to deep sleep */
  #define WLAN_MAP_DRIVER_STOP_TO_DEEP_SLEEP  2
 
  //Maximum time (ms) to wait for standby to complete
@@ -89,7 +89,7 @@
  VOS_STATUS hdd_wlan_re_init(void *hif_sc);
 
 void hdd_conf_mcastbcast_filter(hdd_context_t* pHddCtx, v_BOOL_t setfilter);
-VOS_STATUS hdd_conf_arp_offload(hdd_adapter_t* pAdapter, v_BOOL_t fenable);
+VOS_STATUS hdd_conf_arp_offload(hdd_adapter_t* pAdapter, int fenable);
 /*
  * Function: hdd_conf_hostoffload
  *           Central function to configure the supported offloads,
@@ -100,6 +100,13 @@ void hdd_conf_hostoffload(hdd_adapter_t * pAdapter, v_BOOL_t fenable);
 void hdd_conf_gtk_offload(hdd_adapter_t *pAdapter, v_BOOL_t fenable);
 #endif
 #ifdef WLAN_NS_OFFLOAD
-void hdd_conf_ns_offload(hdd_adapter_t *pAdapter, v_BOOL_t fenable);
+void hdd_conf_ns_offload(hdd_adapter_t *pAdapter, int fenable);
 #endif
+
+int wlan_hdd_ipv4_changed(struct notifier_block *nb,
+				unsigned long data, void *arg);
+
+int wlan_hdd_ipv6_changed(struct notifier_block *nb,
+				unsigned long data, void *arg);
+
 #endif // if !defined __WLAN_QCT_DRIVER_H

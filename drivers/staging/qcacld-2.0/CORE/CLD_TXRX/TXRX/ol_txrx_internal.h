@@ -42,7 +42,7 @@
 #include <ipv6.h>          /* IPV6_HDR_LEN, etc. */
 #include <ip_prot.h>       /* IP_PROTOCOL_TCP, etc. */
 
-#if ATH_11AC_TXCOMPACT
+#ifdef ATH_11AC_TXCOMPACT
 #define OL_TX_DESC_NO_REFS(tx_desc) 1
 #define OL_TX_DESC_REF_INIT(tx_desc) /* no-op */
 #define OL_TX_DESC_REF_INC(tx_desc) /* no-op */
@@ -408,7 +408,7 @@ OL_TXRX_FRMS_DUMP(
     u_int8_t *p;
 
     if (name) {
-        adf_os_print("%s\n", name);
+        VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO, "%s\n", name);
     }
     while (frm) {
         p = adf_nbuf_data(frm);
@@ -456,7 +456,7 @@ OL_TXRX_FRMS_DUMP(
                 ip_prot = ipv6_hdr->next_hdr;
                 tcp_offset = l2_hdr_size + IPV6_HDR_LEN;
             } else {
-                adf_os_print(
+                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
                     "frame %p non-IP ethertype (%x)\n", frm, ethertype);
                 goto NOT_IP_TCP;
             }
@@ -470,16 +470,18 @@ OL_TXRX_FRMS_DUMP(
                     (tcp_hdr->seq_num[1] << 16) |
                     (tcp_hdr->seq_num[1] <<  8) |
                     (tcp_hdr->seq_num[1] <<  0);
-                adf_os_print("frame %p: TCP seq num = %d\n", frm, tcp_seq_num);
+                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
+                    "frame %p: TCP seq num = %d\n", frm, tcp_seq_num);
 #else
-                adf_os_print("frame %p: TCP seq num = %d\n", frm,
+                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
+                     "frame %p: TCP seq num = %d\n", frm,
                     ((*(p + tcp_offset + 4)) << 24) |
                     ((*(p + tcp_offset + 5)) << 16) |
                     ((*(p + tcp_offset + 6)) <<  8) |
                      (*(p + tcp_offset + 7)));
 #endif
             } else {
-                adf_os_print(
+                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
                     "frame %p non-TCP IP protocol (%x)\n", frm, ip_prot);
             }
         }
@@ -514,11 +516,13 @@ NOT_IP_TCP:
                 i += frag_bytes;
             }
 
-            adf_os_print("frame %p data (%p), hex dump of bytes 0-%d of %d:\n",
+            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
+                "frame %p data (%p), hex dump of bytes 0-%d of %d:\n",
                 frm, p, len_lim-1, (int) adf_nbuf_len(frm));
             p = local_buf;
             while (len_lim > 16) {
-                adf_os_print("  " /* indent */
+                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
+                    "  " /* indent */
                     "%02x %02x %02x %02x %02x %02x %02x %02x "
                     "%02x %02x %02x %02x %02x %02x %02x %02x\n",
                     *(p +  0), *(p +  1), *(p +  2), *(p +  3),
@@ -528,13 +532,15 @@ NOT_IP_TCP:
                 p += 16;
                 len_lim -= 16;
             }
-            adf_os_print("  " /* indent */);
+            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
+                "  " /* indent */);
             while (len_lim > 0) {
-                adf_os_print("%02x ", *p);
+                VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
+                    "%02x ", *p);
                 p++;
                 len_lim--;
             }
-            adf_os_print("\n");
+            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO, "\n");
         }
         frm = adf_nbuf_next(frm);
     }
@@ -661,10 +667,6 @@ do {                                                                            
 
 #ifndef DEBUG_HTT_CREDIT
 #define DEBUG_HTT_CREDIT 0
-#endif
-
-#if defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL) || defined(QCA_SUPPORT_TX_THROTTLE_LL)
-#define QCA_SUPPORT_TXRX_VDEV_LL_TXQ
 #endif
 
 #endif /* _OL_TXRX_INTERNAL__H_ */

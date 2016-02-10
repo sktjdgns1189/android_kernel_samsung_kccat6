@@ -45,7 +45,6 @@
 #include <linux/firmware.h>
 #include <wcnss_api.h>
 #include <wlan_hdd_tx_rx.h>
-#include <palTimer.h>
 #include <wniApi.h>
 #include <wlan_nlink_srv.h>
 #include <wlan_btc_svc.h>
@@ -324,7 +323,8 @@ void epping_destroy_adapter(epping_adapter_t *pAdapter)
    while (adf_nbuf_queue_len(&pAdapter->nodrop_queue)) {
       adf_nbuf_t tmp_nbuf = NULL;
       tmp_nbuf = adf_nbuf_queue_remove(&pAdapter->nodrop_queue);
-      adf_nbuf_free(tmp_nbuf);
+      if (tmp_nbuf)
+         adf_nbuf_free(tmp_nbuf);
    }
 
    free_netdev(dev);
@@ -374,7 +374,7 @@ epping_adapter_t *epping_add_adapter(epping_context_t *pEpping_ctx,
    adf_nbuf_queue_init(&pAdapter->nodrop_queue);
    pAdapter->epping_timer_state = EPPING_TX_TIMER_STOPPED;
    adf_os_timer_init(epping_get_adf_ctx(), &pAdapter->epping_timer,
-      epping_timer_expire, dev);
+      epping_timer_expire, dev, ADF_DEFERRABLE_TIMER);
    dev->type = ARPHRD_IEEE80211;
    dev->netdev_ops = &epping_drv_ops;
    dev->watchdog_timeo = 5 * HZ;           /* XXX */
@@ -431,7 +431,7 @@ int epping_connect_service(epping_context_t *pEpping_ctx)
    }
    pEpping_ctx->EppingEndpoint[0] = response.Endpoint;
 
-#if defined(HIF_PCI)
+#if defined(HIF_PCI) || defined(HIF_USB)
    connect.ServiceID = WMI_DATA_BK_SVC;
    status = HTCConnectService(pEpping_ctx->HTCHandle,
                               &connect, &response);

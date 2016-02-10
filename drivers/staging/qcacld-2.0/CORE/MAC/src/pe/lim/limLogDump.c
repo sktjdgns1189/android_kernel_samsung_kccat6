@@ -20,18 +20,11 @@
  */
 
 /*
- * Copyright (c) 2013 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
- */
-
-
-/*
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*============================================================================
 limLogDump.c
 
@@ -1671,18 +1664,6 @@ static char *
 dump_lim_enable_quietIE( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, tANI_U32 arg3, tANI_U32 arg4, char *p)
 {
     (void) arg2; (void) arg3; (void) arg4;
-#if 0
-    if (arg1)
-    {
-        pMac->lim.gLimSpecMgmt.fQuietEnabled = eANI_BOOLEAN_TRUE;
-        p += log_sprintf(pMac, p, "QuietIE enabled\n");
-    }
-    else
-    {
-        pMac->lim.gLimSpecMgmt.fQuietEnabled = eANI_BOOLEAN_FALSE;
-        p += log_sprintf(pMac, p, "QuietIE disabled\n");
-    }
-#endif
 
     return p;
 }
@@ -2082,93 +2063,111 @@ dump_lim_set_tl_data_pkt_rssi( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2
 static char *
 dump_lim_ft_event( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, tANI_U32 arg3, tANI_U32 arg4, char *p)
 {
-    static tANI_U8 macAddr[6] =  {0x00, 0xde, 0xad, 0xaf, 0xaf, 0x04};
-    tpPESession psessionEntry;
-    tSirMsgQ         msg;
-    tpSirFTPreAuthReq pftPreAuthReq;
-    tANI_U16 auth_req_len = 0;
-    tCsrRoamConnectedProfile Profile;
+   static tANI_U8 macAddr[6] =  {0x00, 0xde, 0xad, 0xaf, 0xaf, 0x04};
+   tpPESession psessionEntry;
+   tSirMsgQ         msg;
+   tpSirFTPreAuthReq pftPreAuthReq;
+   tANI_U16 auth_req_len = 0;
+   tCsrRoamConnectedProfile Profile;
+   tANI_U32  smeSessionId = arg2;
 
-    csrRoamCopyConnectProfile(pMac, arg2, &Profile);
+   if (!CSR_IS_SESSION_VALID( pMac, smeSessionId ))
+   {
+      p += log_sprintf( pMac, p, "smeSessionId is not valid\n");
+      return p;
+   }
 
-    if((psessionEntry = peFindSessionBySessionId(pMac,(tANI_U8)arg2) )== NULL)
-    {
-        p += log_sprintf( pMac,
+   csrRoamCopyConnectProfile(pMac, arg2, &Profile);
+
+   if((psessionEntry = peFindSessionBySessionId(pMac,(tANI_U8)arg2) )== NULL)
+   {
+      p += log_sprintf( pMac,
             p,"Session does not exist usage: 363 <0> sessionid channel \n");
-        return p;
-    }
+      return p;
+   }
 
-    switch (arg1)
-    {
-         case 0:
-              // Send Pre-auth event
-              {
-                   /*----------------*/
-                   p += log_sprintf( pMac,p, "Preparing Pre Auth Req message\n");
-                   auth_req_len = sizeof(tSirFTPreAuthReq);
+   switch (arg1)
+   {
+      case 0:
+         // Send Pre-auth event
+         {
+            /*----------------*/
+            p += log_sprintf( pMac,p, "Preparing Pre Auth Req message\n");
+            auth_req_len = sizeof(tSirFTPreAuthReq);
 
-                   pftPreAuthReq = vos_mem_malloc(auth_req_len);
-                   if (NULL == pftPreAuthReq)
-                   {
-                       p += log_sprintf( pMac,p,"Pre auth dump: AllocateMemory() failed \n");
-                       return p;
-                   }
-                   pftPreAuthReq->pbssDescription = vos_mem_malloc(sizeof(Profile.pBssDesc->length)+
-                                                        Profile.pBssDesc->length);
+            pftPreAuthReq = vos_mem_malloc(auth_req_len);
+            if (NULL == pftPreAuthReq)
+            {
+               p += log_sprintf( pMac, p,
+                        "Pre auth dump: AllocateMemory() failed \n");
+               return p;
+            }
+            pftPreAuthReq->pbssDescription =
+                        vos_mem_malloc(sizeof(Profile.pBssDesc->length)+
+                        Profile.pBssDesc->length);
 
-                   pftPreAuthReq->messageType = eWNI_SME_FT_PRE_AUTH_REQ;
-                   pftPreAuthReq->length = auth_req_len + sizeof(Profile.pBssDesc->length) +
-                       Profile.pBssDesc->length;
-                   pftPreAuthReq->preAuthchannelNum = 6;
+            pftPreAuthReq->messageType = eWNI_SME_FT_PRE_AUTH_REQ;
+            pftPreAuthReq->length =
+                        auth_req_len + sizeof(Profile.pBssDesc->length) +
+               Profile.pBssDesc->length;
+            pftPreAuthReq->preAuthchannelNum = 6;
 
-                   vos_mem_copy((void *) &pftPreAuthReq->currbssId,
-                                (void *)psessionEntry->bssId, 6);
-                   vos_mem_copy((void *) &pftPreAuthReq->preAuthbssId,
-                                (void *)macAddr, 6);
-                   pftPreAuthReq->ft_ies_length = (tANI_U16)pMac->ft.ftSmeContext.auth_ft_ies_length;
+            vos_mem_copy((void *) &pftPreAuthReq->currbssId,
+                  (void *)psessionEntry->bssId, 6);
+            vos_mem_copy((void *) &pftPreAuthReq->preAuthbssId,
+                  (void *)macAddr, 6);
+            pftPreAuthReq->ft_ies_length =
+               (tANI_U16)pMac->roam.roamSession[smeSessionId].ftSmeContext.auth_ft_ies_length;
 
-                   // Also setup the mac address in sme context.
-                   vos_mem_copy(pMac->ft.ftSmeContext.preAuthbssId, macAddr, 6);
+            // Also setup the mac address in sme context.
+            vos_mem_copy(
+                 pMac->roam.roamSession[smeSessionId].ftSmeContext.preAuthbssId,
+                 macAddr, 6);
 
-                   vos_mem_copy(pftPreAuthReq->ft_ies, pMac->ft.ftSmeContext.auth_ft_ies,
-                       pMac->ft.ftSmeContext.auth_ft_ies_length);
+            vos_mem_copy(pftPreAuthReq->ft_ies,
+                  pMac->roam.roamSession[smeSessionId].ftSmeContext.auth_ft_ies,
+                  pMac->roam.roamSession[smeSessionId].ftSmeContext.auth_ft_ies_length);
 
-                   vos_mem_copy(Profile.pBssDesc->bssId, macAddr, 6);
+            vos_mem_copy(Profile.pBssDesc->bssId, macAddr, 6);
 
-                   p += log_sprintf( pMac,p, "\n ----- LIM Debug Information ----- \n");
-                   p += log_sprintf( pMac, p, "%s: length = %d\n", __func__,
-                            (int)pMac->ft.ftSmeContext.auth_ft_ies_length);
-                   p += log_sprintf( pMac, p, "%s: length = %02x\n", __func__,
-                            (int)pMac->ft.ftSmeContext.auth_ft_ies[0]);
-                   p += log_sprintf( pMac, p, "%s: Auth Req %02x %02x %02x\n",
-                            __func__, pftPreAuthReq->ft_ies[0],
-                            pftPreAuthReq->ft_ies[1], pftPreAuthReq->ft_ies[2]);
+            p += log_sprintf( pMac, p,
+                     "\n ----- LIM Debug Information ----- \n");
+            p += log_sprintf( pMac, p, "%s: length = %d\n", __func__,
+                  (int)pMac->roam.roamSession[smeSessionId].ftSmeContext.auth_ft_ies_length);
+            p += log_sprintf( pMac, p, "%s: length = %02x\n", __func__,
+                  (int)pMac->roam.roamSession[smeSessionId].ftSmeContext.auth_ft_ies[0]);
+            p += log_sprintf( pMac, p, "%s: Auth Req %02x %02x %02x\n",
+                  __func__, pftPreAuthReq->ft_ies[0],
+                  pftPreAuthReq->ft_ies[1], pftPreAuthReq->ft_ies[2]);
 
-                   p += log_sprintf( pMac, p, "%s: Session %02x %02x %02x\n", __func__,
-                            psessionEntry->bssId[0],
-                            psessionEntry->bssId[1], psessionEntry->bssId[2]);
-                   p += log_sprintf( pMac, p, "%s: Session %02x %02x %02x %p\n", __func__,
-                            pftPreAuthReq->currbssId[0],
-                            pftPreAuthReq->currbssId[1],
-                            pftPreAuthReq->currbssId[2], pftPreAuthReq);
+            p += log_sprintf( pMac, p, "%s: Session %02x %02x %02x\n", __func__,
+                  psessionEntry->bssId[0],
+                  psessionEntry->bssId[1], psessionEntry->bssId[2]);
+            p += log_sprintf( pMac, p, "%s: Session %02x %02x %02x %p\n",
+                  __func__,
+                  pftPreAuthReq->currbssId[0],
+                  pftPreAuthReq->currbssId[1],
+                  pftPreAuthReq->currbssId[2], pftPreAuthReq);
 
-                   Profile.pBssDesc->channelId = (tANI_U8)arg3;
-                   vos_mem_copy((void *)pftPreAuthReq->pbssDescription, (void *)Profile.pBssDesc,
-                       Profile.pBssDesc->length);
+            Profile.pBssDesc->channelId = (tANI_U8)arg3;
+            vos_mem_copy((void *)pftPreAuthReq->pbssDescription,
+                  (void *)Profile.pBssDesc,
+                  Profile.pBssDesc->length);
 
-                   msg.type = eWNI_SME_FT_PRE_AUTH_REQ;
-                   msg.bodyptr = pftPreAuthReq;
-                   msg.bodyval = 0;
+            msg.type = eWNI_SME_FT_PRE_AUTH_REQ;
+            msg.bodyptr = pftPreAuthReq;
+            msg.bodyval = 0;
 
-                   p += log_sprintf( pMac, p, "limPostMsgApi(eWNI_SME_FT_PRE_AUTH_REQ) \n");
-                   limPostMsgApi(pMac, &msg);
-              }
-              break;
+            p += log_sprintf(pMac, p,
+                             "limPostMsgApi(eWNI_SME_FT_PRE_AUTH_REQ) \n");
+            limPostMsgApi(pMac, &msg);
+         }
+         break;
 
-         default:
-              break;
-    }
-    return p;
+      default:
+         break;
+   }
+   return p;
 }
 #endif
 static char *
@@ -2423,20 +2422,18 @@ dump_send_plm_start(tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2,
 }
 #endif
 
-#ifndef QCA_WIFI_2_0
-/* API to fill Rate Info based on mac efficiency
- * arg 1: mac efficiency to be used to calculate mac thorughput for a given rate index
- * arg 2: starting rateIndex to apply the macEfficiency to
- * arg 3: ending rateIndex to apply the macEfficiency to
- */
 static char *
-dump_limRateInfoBasedOnMacEff(tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, tANI_U32 arg3, tANI_U32 arg4, char *p)
+dump_set_max_probe_req(tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2,
+             tANI_U32 arg3, tANI_U32 arg4, char *p)
 {
-    limLog(pMac, LOGE, FL("arg1 %u, arg2 %u, arg3 %u"), arg1, arg2, arg3);
-    WDTS_FillRateInfo((tANI_U8)(arg1), (tANI_U16)(arg2), (tANI_U16)(arg3));
+    if ((arg1 <= 0) || (arg1 > 4)){
+       limLog(pMac, LOGE,
+           FL("invalid number. valid range 1 - 4 \n"));
+       return p;
+    }
+    pMac->lim.maxProbe = arg1;
     return p;
 }
-#endif /* QCA_WIFI_2_0 */
 
 static tDumpFuncEntry limMenuDumpTable[] = {
     {0,     "PE (300-499)",                                          NULL},
@@ -2511,12 +2508,10 @@ static tDumpFuncEntry limMenuDumpTable[] = {
     {369,   "PE.LIM: pkts/rateIdx: iwpriv wlan0 dump 369 <staId> <boolean to flush counter>",    dump_lim_get_pkts_rcvd_per_rate_idx},
     {370,   "PE.LIM: pkts/rssi: : iwpriv wlan0 dump 370 <staId> <boolean to flush counter>",    dump_lim_get_pkts_rcvd_per_rssi_values},
 #endif
-#ifndef QCA_WIFI_2_0
-    {371,   "PE.LIM: MAS RX stats MAC eff <MAC eff in percentage>",  dump_limRateInfoBasedOnMacEff},
-#endif /* QCA_WIFI_2_0 */
 #if defined(FEATURE_WLAN_ESE) && defined(FEATURE_WLAN_ESE_UPLOAD)
     {372,   "PE.LIM: send PLM start command Usage: iwpriv wlan0 372", dump_send_plm_start },
 #endif
+    {376,   "PE.LIM: max number of probe per scan", dump_set_max_probe_req },
 };
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -112,6 +112,7 @@ typedef struct targetdef_s {
     u_int32_t d_PCIE_INTR_FIRMWARE_MASK;
     u_int32_t d_PCIE_INTR_CE_MASK_ALL;
     u_int32_t d_CORE_CTRL_CPU_INTR_MASK;
+    u_int32_t d_FW_RAM_CONFIG_ADDRESS;
     u_int32_t d_SR_WR_INDEX_ADDRESS;
     u_int32_t d_DST_WATERMARK_ADDRESS;
 
@@ -368,6 +369,7 @@ typedef struct targetdef_s {
 #define PCIE_INTR_CLR_ADDRESS                    (sc->targetdef->d_PCIE_INTR_CLR_ADDRESS)
 #define PCIE_INTR_FIRMWARE_MASK                  (sc->targetdef->d_PCIE_INTR_FIRMWARE_MASK)
 #define PCIE_INTR_CE_MASK_ALL                    (sc->targetdef->d_PCIE_INTR_CE_MASK_ALL)
+#define FW_RAM_CONFIG_ADDRESS                    (sc->targetdef->d_FW_RAM_CONFIG_ADDRESS)
 #define CORE_CTRL_CPU_INTR_MASK                  (sc->targetdef->d_CORE_CTRL_CPU_INTR_MASK)
 #define PCIE_INTR_CAUSE_ADDRESS                  (sc->targetdef->d_PCIE_INTR_CAUSE_ADDRESS)
 #define SOC_RESET_CONTROL_ADDRESS                (sc->targetdef->d_SOC_RESET_CONTROL_ADDRESS)
@@ -777,7 +779,6 @@ typedef struct hostdef_s {
 
 #define INVALID_REG_LOC_DUMMY_DATA 0xAA
 
-#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 
 #define AR6320_CORE_CLK_DIV_ADDR	0x403fa8
 #define AR6320_CPU_PLL_INIT_DONE_ADDR	0x403fd0
@@ -826,7 +827,6 @@ struct cmnos_clock_s {
 	u_int32_t         pll_settling_time; /* 50us */
 	struct wlan_pll_s   wlan_pll;
 };
-#endif
 
 typedef struct TGT_REG_SECTION {
 	u_int32_t start_addr;

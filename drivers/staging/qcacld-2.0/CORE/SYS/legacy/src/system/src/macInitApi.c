@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -62,41 +62,14 @@ tSirRetStatus macReset(tpAniSirGlobal pMac, tANI_U32 rc);
 
 tSirRetStatus macPreStart(tHalHandle hHal)
 {
-   tSirRetStatus status = eSIR_SUCCESS;
-   tANI_BOOLEAN memAllocFailed = eANI_BOOLEAN_FALSE;
    tpAniSirGlobal pMac = (tpAniSirGlobal) hHal;
-   tANI_U8 i;
-
-   for(i=0; i<MAX_DUMP_TABLE_ENTRY; i++)
-   {
-      pMac->dumpTableEntry[i] = vos_mem_malloc(sizeof(tDumpModuleEntry));
-      if ( NULL == pMac->dumpTableEntry[i] )
-      {
-         memAllocFailed = eANI_BOOLEAN_TRUE;
-         break;
-      }
-      else
-      {
-         vos_mem_set(pMac->dumpTableEntry[i], sizeof(tSirMbMsg), 0);
-      }
-   }
-   if( memAllocFailed )
-   {
-      while(i>0)
-      {
-         i--;
-         vos_mem_free(pMac->dumpTableEntry[i]);
-      }
-      sysLog(pMac, LOGE, FL("pMac->dumpTableEntry is NULL\n"));
-      status = eSIR_FAILURE;
-   }
 
 #if defined(ANI_LOGDUMP)
    //logDumpInit must be called before any module starts
    logDumpInit(pMac);
 #endif //#if defined(ANI_LOGDUMP)
 
-   return status;
+   return eSIR_SUCCESS;
 }
 
 tSirRetStatus macStart(tHalHandle hHal, void* pHalMacStartParams)
@@ -152,7 +125,6 @@ tSirRetStatus macStart(tHalHandle hHal, void* pHalMacStartParams)
 
 tSirRetStatus macStop(tHalHandle hHal, tHalStopType stopType)
 {
-    tANI_U8 i;
     tpAniSirGlobal pMac = (tpAniSirGlobal) hHal;
     peStop(pMac);
     cfgCleanup( pMac );
@@ -162,11 +134,6 @@ tSirRetStatus macStop(tHalHandle hHal, tHalStopType stopType)
     {
         vos_mem_free(pMac->pResetMsg);
         pMac->pResetMsg = NULL;
-    }
-    /* Free the DumpTableEntry */
-    for(i=0; i<MAX_DUMP_TABLE_ENTRY; i++)
-    {
-        vos_mem_free(pMac->dumpTableEntry[i]);
     }
 
     return eSIR_SUCCESS;
@@ -184,66 +151,102 @@ tSirRetStatus macStop(tHalHandle hHal, tHalStopType stopType)
 
 tSirRetStatus macOpen(tHalHandle *pHalHandle, tHddHandle hHdd, tMacOpenParameters *pMacOpenParms)
 {
-    tpAniSirGlobal pMac = NULL;
+    tpAniSirGlobal p_mac = NULL;
+    tSirRetStatus status = eSIR_SUCCESS;
+    uint8_t i =0;
+    bool mem_alloc_failed = false;
 
     if(pHalHandle == NULL)
         return eSIR_FAILURE;
 
     /*
      * Make sure this adapter is not already opened. (Compare pAdapter pointer in already
-     * allocated pMac structures.)
-     * If it is opened just return pointer to previously allocated pMac pointer.
+     * allocated p_mac structures.)
+     * If it is opened just return pointer to previously allocated p_mac pointer.
      * Or should this result in error?
      */
 
-    /* Allocate pMac */
-    pMac = vos_mem_malloc(sizeof(tAniSirGlobal));
-    if ( NULL == pMac )
+    /* Allocate p_mac */
+    p_mac = vos_mem_malloc(sizeof(tAniSirGlobal));
+    if (NULL == p_mac)
         return eSIR_FAILURE;
 
-    /* Initialize the pMac structure */
-    vos_mem_set(pMac, sizeof(tAniSirGlobal), 0);
+    /* Initialize the p_mac structure */
+    vos_mem_set(p_mac, sizeof(tAniSirGlobal), 0);
 
     /** Store the Driver type in pMac Global.*/
     //pMac->gDriverType = pMacOpenParms->driverType;
 
     /*
-     * Set various global fields of pMac here
-     * (Could be platform dependant as some variables in pMac are platform
+     * Set various global fields of p_mac here
+     * (Could be platform dependant as some variables in p_mac are platform
      * dependant)
      */
-    pMac->hHdd      = hHdd;
-    pMac->pAdapter  = hHdd; //This line wil be removed
-    *pHalHandle     = (tHalHandle)pMac;
+    p_mac->hHdd      = hHdd;
+    *pHalHandle     = (tHalHandle)p_mac;
 
     {
         /* Call various PE (and other layer init here) */
-        if( eSIR_SUCCESS != logInit(pMac))
-           return eSIR_FAILURE;
+        if (eSIR_SUCCESS != logInit(p_mac)) {
+            vos_mem_free(p_mac);
+            return eSIR_FAILURE;
+        }
 
         /* Call routine to initialize CFG data structures */
-        if( eSIR_SUCCESS != cfgInit(pMac) )
+        if (eSIR_SUCCESS != cfgInit(p_mac)) {
+            vos_mem_free(p_mac);
             return eSIR_FAILURE;
+        }
 
-        sysInitGlobals(pMac);
+        sysInitGlobals(p_mac);
     }
 
-    /* Set the Powersave Offload Capability */
-    if(pMacOpenParms->powersaveOffloadEnabled)
-    {
-        pMac->psOffloadEnabled = TRUE;
-    }
-    else
-    {
-        pMac->psOffloadEnabled = FALSE;
-    }
+    /* Set the Powersave Offload Capability to TRUE irrespective of
+     * INI param as it should be always enabled for qca-cld driver
+     */
+    p_mac->psOffloadEnabled = TRUE;
 
-#ifdef QCA_WIFI_2_0
+    p_mac->scan.nextScanID = FIRST_SCAN_ID;
     /* FW: 0 to 2047 and Host: 2048 to 4095 */
-    pMac->mgmtSeqNum = WLAN_HOST_SEQ_NUM_MIN-1;
-#endif /* QCA_WIFI_2_0 */
+    p_mac->mgmtSeqNum = WLAN_HOST_SEQ_NUM_MIN-1;
+    p_mac->first_scan_done = false;
 
-    return peOpen(pMac, pMacOpenParms);
+    status = peOpen(p_mac, pMacOpenParms);
+
+    if (eSIR_SUCCESS != status) {
+        sysLog(p_mac, LOGE, FL("macOpen failure\n"));
+        vos_mem_free(p_mac);
+        return status;
+    }
+
+    for (i=0; i<MAX_DUMP_TABLE_ENTRY; i++)
+    {
+       p_mac->dumpTableEntry[i] = vos_mem_malloc(sizeof(tDumpModuleEntry));
+       if (NULL == p_mac->dumpTableEntry[i])
+       {
+          mem_alloc_failed = eANI_BOOLEAN_TRUE;
+          break;
+       }
+       else
+       {
+          vos_mem_set(p_mac->dumpTableEntry[i], sizeof(tSirMbMsg), 0);
+       }
+    }
+
+    if (mem_alloc_failed)
+    {
+       while (i>0)
+       {
+          i--;
+          vos_mem_free(p_mac->dumpTableEntry[i]);
+       }
+
+       peClose(p_mac);
+       vos_mem_free(p_mac);
+       return eSIR_FAILURE;
+    }
+
+    return status;
 }
 
 /** -------------------------------------------------------------
@@ -258,6 +261,10 @@ tSirRetStatus macClose(tHalHandle hHal)
 {
 
     tpAniSirGlobal pMac = (tpAniSirGlobal) hHal;
+    uint8_t i =0;
+
+    if (!pMac)
+        return eHAL_STATUS_FAILURE;
 
     peClose(pMac);
     pMac->psOffloadEnabled = FALSE;
@@ -266,6 +273,12 @@ tSirRetStatus macClose(tHalHandle hHal)
     cfgDeInit(pMac);
 
     logDeinit(pMac);
+
+    /* Free the DumpTableEntry */
+    for(i=0; i<MAX_DUMP_TABLE_ENTRY; i++)
+    {
+        vos_mem_free(pMac->dumpTableEntry[i]);
+    }
 
     // Finally, de-allocate the global MAC datastructure:
     vos_mem_free( pMac );

@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -3335,6 +3334,9 @@ typedef struct
   void*             pUserData;
 }WDI_SetP2PGONOAReqParamsType;
 
+#define WDI_MAX_SUPP_CHANNELS     128
+#define WDI_MAX_SUPP_OPER_CLASSES 32
+
 typedef struct
 {
     wpt_uint16 uStaIdx;
@@ -3342,6 +3344,13 @@ typedef struct
     wpt_uint8  uUapsdQueues;
     wpt_uint8  uMaxSp;
     wpt_uint8  uIsBufSta;
+    wpt_uint8  uIsOffChannelSupported;
+    wpt_uint8   peerCurrOperClass;
+    wpt_uint8   selfCurrOperClass;
+    wpt_uint8  validChannelsLen;
+    wpt_uint8  validChannels[WDI_MAX_SUPP_CHANNELS];
+    wpt_uint8  validOperClassesLen;
+    wpt_uint8  validOperClasses[WDI_MAX_SUPP_OPER_CLASSES];
 }WDI_SetTDLSLinkEstablishReqInfoType;
 /*---------------------------------------------------------------------------
   WDI_SetTDLSLinkEstablishReqParamsType
@@ -4244,19 +4253,11 @@ typedef struct
 #ifdef FEATURE_OEM_DATA_SUPPORT
 
 #ifndef OEM_DATA_REQ_SIZE
-#ifdef QCA_WIFI_2_0
 #define OEM_DATA_REQ_SIZE 280
-#else
-#define OEM_DATA_REQ_SIZE 134
-#endif
 #endif
 
 #ifndef OEM_DATA_RSP_SIZE
-#ifdef QCA_WIFI_2_0
 #define OEM_DATA_RSP_SIZE 1724
-#else
-#define OEM_DATA_RSP_SIZE 1968
-#endif
 #endif
 
 /*----------------------------------------------------------------------------
@@ -4906,7 +4907,7 @@ typedef struct
 
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
 
-#define WDI_ROAM_SCAN_MAX_CHANNELS       80 /* NUM_RF_CHANNELS */
+#define WDI_ROAM_SCAN_MAX_CHANNELS       80
 #define WDI_ROAM_SCAN_MAX_PROBE_SIZE     450
 #define WDI_ROAM_SCAN_RESERVED_BYTES     61
 
@@ -10175,14 +10176,10 @@ wpt_uint8 WDI_getHostWlanFeatCaps(wpt_uint8 feat_enum_value);
         0 - if the feature is NOT supported in FW
         any non-zero value - if the feature is SUPPORTED in FW.
 */
-#ifdef QCA_WIFI_2_0
 static inline wpt_uint8 WDI_getFwWlanFeatCaps(wpt_uint8 feat_enum_value)
 {
         return 1;
 }
-#else
-wpt_uint8 WDI_getFwWlanFeatCaps(wpt_uint8 feat_enum_value);
-#endif
 
 /**
  @brief WDI_GetWcnssCompiledApiVersion - Function to get wcnss compiled

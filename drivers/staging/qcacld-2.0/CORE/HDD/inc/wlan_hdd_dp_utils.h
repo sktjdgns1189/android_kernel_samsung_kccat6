@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -57,7 +57,6 @@
 /**-----------------------------------------------------------------------------
   Type declarations
  ----------------------------------------------------------------------------*/
-
 typedef struct list_head hdd_list_node_t;
 
 typedef struct hdd_list_s
@@ -78,7 +77,7 @@ typedef struct
 //FIXME Need a helper function to cleanup skbs in a queue. Required for cleanup/shutdown
 
 /**-----------------------------------------------------------------------------
-  Function declarations and documenation
+  Function declarations and documentation
  ----------------------------------------------------------------------------*/
 VOS_INLINE_FN v_VOID_t hdd_list_init( hdd_list_t *pList, v_SIZE_t max_size)
 {
@@ -116,4 +115,13 @@ VOS_STATUS hdd_list_peek_front( hdd_list_t *pList, hdd_list_node_t **ppNode );
 VOS_STATUS hdd_list_peek_next( hdd_list_t *pList, hdd_list_node_t *pNode,
                                hdd_list_node_t **ppNode );
 VOS_STATUS hdd_string_to_hex( char *pSrcMac, int length, char *pDescMac );
+struct hdd_context_s;
+#ifdef QCA_FEATURE_RPS
+void hdd_dp_util_send_rps_ind(struct hdd_context_s *hdd_ctx);
+#else
+static inline void hdd_dp_util_send_rps_ind(struct hdd_context_s *hdd_ctx)
+{
+	return;
+}
+#endif /* QCA_FEATURE_RPS */
 #endif //__WLAN_HDD_DP_UTILS_H

@@ -92,9 +92,9 @@ typedef PREPACK struct _HTC_FRAME_HDR{
 
     /***** end of 4-byte lookahead ****/
 
-    A_UINT32   ControlBytes0 : 8,
-               ControlBytes1 : 8,
-               reserved : 16;
+    A_UINT32   ControlBytes0 : 8, /* used for CRC check if CRC_CHECK flag set */
+               ControlBytes1 : 8, /* used for seq check if SEQ_CHECK flag set */
+               reserved : 16; /* used by bundle processing in SDIO systems */
 
     /* message payload starts after the header */
 
@@ -124,6 +124,9 @@ typedef PREPACK struct _HTC_FRAME_HDR{
     /* send direction */
 #define HTC_FLAGS_NEED_CREDIT_UPDATE (1 << 0)
 #define HTC_FLAGS_SEND_BUNDLE        (1 << 1)  /* start or part of bundle */
+#define HTC_FLAGS_SEQ_CHECK          (1 << 2) /* seq check on rx side */
+#define HTC_FLAGS_CRC CHECK          (1 << 3) /* CRC check on rx side */
+
     /* receive direction */
 #define HTC_FLAGS_RECV_UNUSED_0      (1 << 0)  /* bit 0 unused */
 #define HTC_FLAGS_RECV_TRAILER       (1 << 1)  /* bit 1 trailer data present */
@@ -220,6 +223,8 @@ typedef PREPACK struct {
 #define HTC_CONNECT_FLAGS_THRESHOLD_LEVEL_UNITY             0x3
     /* disable credit flow control on a specific service */
 #define HTC_CONNECT_FLAGS_DISABLE_CREDIT_FLOW_CTRL          (1 << 3)
+    /* enable htc schedule on a specific service */
+#define HTC_CONNECT_FLAGS_ENABLE_HTC_SCHEDULE               (1 << 4)
 
               ServiceMetaLength : 8,   /* length of meta data that follows */
               _Pad1 : 8;

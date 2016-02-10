@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,7 +39,6 @@
 #define __PMC_H__
 
 
-#include "palTimer.h"
 #include "csrLinkList.h"
 #include "pmcApi.h"
 #include "smeInternal.h"
@@ -188,7 +187,6 @@ typedef struct sPmcInfo
     void *enterWowlCallbackContext;/* value to be passed as parameter to routine specified above */
     tSirSmeWowlEnterParams wowlEnterParams; /* WOWL mode configuration */
     tDblLinkList deferredMsgList;   //The message in here are deferred and DONOT expect response from PE
-    tANI_BOOLEAN rfSuppliesVotedOff;  //Whether RF supplies are voted off or not.
 #ifdef FEATURE_WLAN_SCAN_PNO
     preferredNetworkFoundIndCallback  prefNetwFoundCB; /* routine to call for Preferred Network Found Indication */
     void *preferredNetworkFoundIndCallbackContext;/* value to be passed as parameter to routine specified above */
@@ -214,16 +212,6 @@ typedef struct sPmcInfo
     v_BOOL_t    ImpsReqTimerFailed;
     tANI_U8     ImpsReqFailCnt;
     tANI_U8     ImpsReqTimerfailCnt;
-
-#ifdef FEATURE_WLAN_BATCH_SCAN
-   /*HDD callback to be called after receiving SET BATCH SCAN RSP from FW*/
-   hddSetBatchScanReqCallback setBatchScanReqCallback;
-   void * setBatchScanReqCallbackContext;
-   /*HDD callback to be called after receiving BATCH SCAN iRESULT IND from FW*/
-   hddTriggerBatchScanResultIndCallback batchScanResultCallback;
-   void * batchScanResultCallbackContext;
-#endif
-
 
 } tPmcInfo, *tpPmcInfo;
 

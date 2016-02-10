@@ -488,7 +488,7 @@ static eHalStatus hdd_IndicateScanResult(hdd_scan_info_t *scanInfo, tCsrScanResu
               pAdapter->sessionCtx.station.conn_info.connState ) &&
               ( VOS_TRUE == vos_mem_compare(descriptor->bssId,
                              pAdapter->sessionCtx.station.conn_info.bssId,
-                             WNI_CFG_BSSID_LEN)))
+                             VOS_MAC_ADDR_SIZE)))
    {
       event.u.qual.level = pAdapter->rssi;
    }
@@ -537,6 +537,7 @@ static eHalStatus hdd_IndicateScanResult(hdd_scan_info_t *scanInfo, tCsrScanResu
 
   \param  - halHandle - Pointer to the Hal Handle.
               - pContext - Pointer to the data context.
+              - sessionId - Session identifier
               - scanId - Scan ID.
               - status - CSR Status.
   \return - 0 for success, non zero for failure
@@ -544,7 +545,8 @@ static eHalStatus hdd_IndicateScanResult(hdd_scan_info_t *scanInfo, tCsrScanResu
   --------------------------------------------------------------------------*/
 
 static eHalStatus hdd_ScanRequestCallback(tHalHandle halHandle, void *pContext,
-                         tANI_U32 scanId, eCsrScanStatus status)
+                                          tANI_U8 sessionId, tANI_U32 scanId,
+                                          eCsrScanStatus status)
 {
     struct net_device *dev = (struct net_device *) pContext;
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev) ;
@@ -619,6 +621,8 @@ int iw_set_scan(struct net_device *dev, struct iw_request_info *info,
    v_U32_t scanId = 0;
    eHalStatus status = eHAL_STATUS_SUCCESS;
    struct iw_scan_req *scanReq = (struct iw_scan_req *)extra;
+   hdd_adapter_t *con_sap_adapter;
+   uint16_t con_dfs_ch;
 
    ENTER();
 
@@ -632,6 +636,20 @@ int iw_set_scan(struct net_device *dev, struct iw_request_info *info,
        return eHAL_STATUS_SUCCESS;
    }
 #endif
+    /* Block All Scan during DFS operation and send null scan result */
+    con_sap_adapter = hdd_get_con_sap_adapter(pAdapter);
+    if (con_sap_adapter) {
+        con_dfs_ch = con_sap_adapter->sessionCtx.ap.sapConfig.channel;
+        if (con_dfs_ch == AUTO_CHANNEL_SELECT)
+            con_dfs_ch = con_sap_adapter->sessionCtx.ap.operatingChannel;
+
+        if (VOS_IS_DFS_CH(con_dfs_ch)) {
+            hddLog(LOGW, "%s:##In DFS Master mode. Scan aborted", __func__);
+            return -EOPNOTSUPP;
+        }
+    }
+
+
    if(pAdapter->scan_info.mScanPending == TRUE)
    {
        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s:mScanPending is TRUE !!!",__func__);
@@ -734,7 +752,9 @@ int iw_set_scan(struct net_device *dev, struct iw_request_info *info,
        scanRequest.pIEField = pAdapter->scan_info.scanAddIE.addIEdata;
    }
 
-   status = sme_ScanRequest( (WLAN_HDD_GET_CTX(pAdapter))->hHal, pAdapter->sessionId,&scanRequest, &scanId, &hdd_ScanRequestCallback, dev );
+   status = sme_ScanRequest((WLAN_HDD_GET_CTX(pAdapter))->hHal,
+                             pAdapter->sessionId, &scanRequest, &scanId,
+                             &hdd_ScanRequestCallback, dev);
    if (!HAL_STATUS_SUCCESS(status))
    {
        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s:sme_ScanRequest  fail %d!!!",__func__, status);
@@ -1055,7 +1075,7 @@ int iw_set_cscan(struct net_device *dev, struct iw_request_info *info,
         /* next two offsets contain min and max channel time */
         if( WEXT_CSCAN_PASV_DWELL_SECTION == (str_ptr[i]) )
         {
-            /* No SSID specified, num_ssid == 0, then start paasive scan */
+            /* No SSID specified, num_ssid == 0, then start passive scan */
             if (!num_ssid || (eSIR_PASSIVE_SCAN == pAdapter->scan_info.scan_mode))
             {
                 scanRequest.scanType = eSIR_PASSIVE_SCAN;
@@ -1112,8 +1132,9 @@ int iw_set_cscan(struct net_device *dev, struct iw_request_info *info,
             scanRequest.pIEField = pAdapter->scan_info.scanAddIE.addIEdata;
         }
 
-        status = sme_ScanRequest( (WLAN_HDD_GET_CTX(pAdapter))->hHal,
-            pAdapter->sessionId,&scanRequest, &scanId, &hdd_ScanRequestCallback, dev );
+        status = sme_ScanRequest((WLAN_HDD_GET_CTX(pAdapter))->hHal,
+                                 pAdapter->sessionId, &scanRequest, &scanId,
+                                 &hdd_ScanRequestCallback, dev);
         if( !HAL_STATUS_SUCCESS(status) )
         {
             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s: SME scan fail status %d !!!",__func__, status);
@@ -1148,7 +1169,8 @@ exit_point:
 }
 
 /* Abort any MAC scan if in progress */
-void hdd_abort_mac_scan(hdd_context_t* pHddCtx, tANI_U8 sessionId)
+void hdd_abort_mac_scan(hdd_context_t* pHddCtx, tANI_U8 sessionId,
+                        eCsrAbortReason reason)
 {
-    sme_AbortMacScan(pHddCtx->hHal, sessionId);
+    sme_AbortMacScan(pHddCtx->hHal, sessionId, reason);
 }

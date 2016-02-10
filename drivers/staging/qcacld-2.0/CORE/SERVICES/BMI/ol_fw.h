@@ -32,26 +32,34 @@
 #include "vos_types.h"
 #endif
 
+#define AR6004_VERSION_REV1_3        0x31c8088a
+
 #define AR9888_REV1_VERSION          0x4000002c
 #define AR9888_REV2_VERSION          0x4100016c
 #define QCA_VERSION                  0x4100270f
-#define AR6320_REV1_VERSION	     0x5000000
-#define AR6320_REV1_1_VERSION	     0x5000001
-#define AR6320_REV1_3_VERSION	     0x5000003
-#define AR6320_REV2_1_VERSION	     0x5010000
-#define AR6320_REV3_VERSION	     0x5020000
+#define AR6320_REV1_VERSION          0x5000000
+#define AR6320_REV1_1_VERSION        0x5000001
+#define AR6320_REV1_VERSION_1        AR6320_REV1_1_VERSION
+#define AR6320_REV1_3_VERSION        0x5000003
+#define AR6320_REV2_VERSION          AR6320_REV1_1_VERSION
+#define AR6320_REV2_1_VERSION        0x5010000
+#define AR6320_REV3_VERSION          0x5020000
+#define AR6320_REV3_2_VERSION        0x5030000
+#define AR6320_REV4_VERSION          AR6320_REV2_1_VERSION
+#define AR6320_DEV_VERSION           0x1000000
 #define QCA_FIRMWARE_FILE            "athwlan.bin"
 #define QCA_UTF_FIRMWARE_FILE        "utf.bin"
 #define QCA_BOARD_DATA_FILE          "fakeboar.bin"
 #define QCA_OTP_FILE                 "otp.bin"
+#define QCA_SETUP_FILE               "athsetup.bin"
 #define AR61X4_SINGLE_FILE           "qca61x4.bin"
+#define QCA_FIRMWARE_EPPING_FILE     "epping.bin"
 
 /* Configuration for statistics pushed by firmware */
 #define PDEV_DEFAULT_STATS_UPDATE_PERIOD    500
 #define VDEV_DEFAULT_STATS_UPDATE_PERIOD    500
 #define PEER_DEFAULT_STATS_UPDATE_PERIOD    500
 
-#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 /*
  * Note that not all the register locations are accessible.
  * A list of accessible target registers are specified with
@@ -64,10 +72,18 @@
 #define REGISTER_LOCATION       0x00000800
 
 #define DRAM_LOCATION           0x00400000
-#define DRAM_SIZE               0x00070000
+#define DRAM_SIZE               0x000a8000
+#define DRAM_LOCAL_BASE_ADDRESS (0x100000)
 
+#ifdef HIF_PCI
+#define IRAM1_LOCATION          0x00980000
+#define IRAM1_SIZE              0x00080000
+#define IRAM2_LOCATION          0x00a00000
+#define IRAM2_SIZE              0x00040000
+#else
 #define IRAM_LOCATION           0x00980000
 #define IRAM_SIZE               0x00038000
+#endif
 
 #define AXI_LOCATION            0x000a0000
 #define AXI_SIZE                0x00018000
@@ -95,7 +111,6 @@ void ol_schedule_ramdump_work(struct ol_softc *scn);
 void ol_schedule_fw_indication_work(struct ol_softc *scn);
 int ol_copy_ramdump(struct ol_softc *scn);
 int dump_CE_register(struct ol_softc *scn);
-#endif
 int ol_download_firmware(struct ol_softc *scn);
 int ol_configure_target(struct ol_softc *scn);
 void ol_target_failure(void *instance, A_STATUS status);

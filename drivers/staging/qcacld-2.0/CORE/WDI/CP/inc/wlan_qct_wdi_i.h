@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -439,7 +438,6 @@ typedef enum
 
   /* WLAN FW set batch scan request */
   WDI_SET_BATCH_SCAN_REQ                        = 86,
-#endif
 
   /*WLAN DAL Set Max Tx Power Per band Request*/
   WDI_SET_MAX_TX_POWER_PER_BAND_REQ             = 87,
@@ -736,9 +734,7 @@ typedef enum
   /* WLAN FW LPHB Config response */
   WDI_LPHB_CFG_RESP                             = 84,
 
-#ifdef FEATURE_WLAN_BATCH_SCAN
   WDI_SET_BATCH_SCAN_RESP                       = 85,
-#endif
 
   WDI_SET_MAX_TX_POWER_PER_BAND_RSP             = 86,
 
@@ -801,9 +797,7 @@ typedef enum
   /* Periodic Tx Pattern Indication from FW to Host */
   WDI_HAL_PERIODIC_TX_PTRN_FW_IND     = WDI_HAL_IND_MIN + 16,
 
-#ifdef FEATURE_WLAN_BATCH_SCAN
   WDI_BATCHSCAN_RESULT_IND           =  WDI_HAL_IND_MIN + 17,
-#endif
 
   WDI_MAX_RESP
 }WDI_ResponseEnumType;
@@ -3620,6 +3614,23 @@ WDI_ProcessUpdateProbeRspTemplateRsp
 */
 WDI_Status
 WDI_ProcessSetMaxTxPowerRsp
+(
+  WDI_ControlBlockType*          pWDICtx,
+  WDI_EventInfoType*             pEventData
+);
+
+/**
+  @brief Process Set Max Tx Power Per Band Rsp function (called when a response
+         is being received over the bus from HAL)
+
+  @param  pWDICtx:         pointer to the WLAN DAL context
+          pEventData:      pointer to the event information structure
+
+ @see
+ @return Result of the function call
+*/
+WDI_Status
+WDI_ProcessSetMaxTxPowerPerBandRsp
 (
   WDI_ControlBlockType*          pWDICtx,
   WDI_EventInfoType*             pEventData

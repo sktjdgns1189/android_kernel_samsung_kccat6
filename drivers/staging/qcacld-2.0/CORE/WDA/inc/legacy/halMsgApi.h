@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -305,6 +305,13 @@ typedef struct
     tANI_U32   vht_caps;
     tSirNwType nwType;
     tPowerdBm  maxTxPower;
+    /*
+     * Peer Atim Info, Valid only
+     * for IBSS Mode.
+     */
+    tANI_U8  atimIePresent;
+    tANI_U32 peerAtimWindowLength;
+    tANI_U8  nonRoamReassoc;
 } tAddStaParams, *tpAddStaParams;
 
 
@@ -528,6 +535,8 @@ typedef struct
     tANI_U8 reassocReq;    // Set only during roaming reassociation
     tANI_U16 chainMask;
     tANI_U16 smpsMode;
+    tANI_U8 dot11_mode;
+    tANI_U8 nonRoamReassoc;
 } tAddBssParams, * tpAddBssParams;
 
 typedef struct
@@ -623,12 +632,15 @@ typedef enum  eSmpsModeValue{
 // Msg Type = SIR_LIM_DELETE_STA_CONTEXT_IND
 //
 typedef struct {
+    bool        is_tdls;
+    tANI_U8     vdev_id;
     tANI_U16    assocId;
     tANI_U16    staId;
     tSirMacAddr bssId; // TO SUPPORT BT-AMP
                        // HAL copies bssid from the sta table.
     tSirMacAddr addr2;        //
     tANI_U16    reasonCode;   // To unify the keepalive / unknown A2 / tim-based disa
+    tANI_S8     rssi;
 } tDeleteStaContext, * tpDeleteStaContext;
 
 
@@ -724,18 +736,10 @@ typedef struct {
 #ifdef FEATURE_OEM_DATA_SUPPORT
 
 #ifndef OEM_DATA_REQ_SIZE
-#ifdef QCA_WIFI_2_0
 #define OEM_DATA_REQ_SIZE 280
-#else
-#define OEM_DATA_REQ_SIZE 134
-#endif
 #endif
 #ifndef OEM_DATA_RSP_SIZE
-#ifdef QCA_WIFI_2_0
 #define OEM_DATA_RSP_SIZE 1724
-#else
-#define OEM_DATA_RSP_SIZE 1968
-#endif
 #endif
 
 typedef struct
@@ -1024,6 +1028,8 @@ typedef struct
     tANI_U8  isDfsChannel;
 
     tANI_U8  vhtCapable;
+
+    tANI_U8  dot11_mode;
 }tSwitchChannelParams, *tpSwitchChannelParams;
 
 typedef struct CSAOffloadParams {
@@ -1037,7 +1043,8 @@ typedef struct CSAOffloadParams {
    tSirMacAddr bssId;
 }*tpCSAOffloadParams, tCSAOffloadParams;
 
-typedef void (*tpSetLinkStateCallback)(tpAniSirGlobal pMac, void *msgParam );
+typedef void (*tpSetLinkStateCallback)(tpAniSirGlobal pMac, void *msgParam,
+		 bool status);
 
 typedef struct sLinkStateParams
 {
@@ -1051,6 +1058,7 @@ typedef struct sLinkStateParams
     int ft;
     void * session;
 #endif
+    v_BOOL_t status;
 } tLinkStateParams, * tpLinkStateParams;
 
 
@@ -1064,6 +1072,10 @@ typedef struct
 #ifdef FEATURE_WLAN_ESE
   tANI_U16         tsm_interval; // TSM interval period passed from lim to wda
 #endif
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+  tANI_U8          setRICparams;
+#endif
+  uint8_t          sme_session_id;
 } tAddTsParams, *tpAddTsParams;
 
 typedef struct
@@ -1073,6 +1085,10 @@ typedef struct
   tSirMacAddr bssId; //TO SUPPORT BT-AMP
   tANI_U8 sessionId;
   tANI_U8 userPrio;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+  tSirDeltsReqInfo delTsInfo;
+  tANI_U8 setRICparams;
+#endif
 } tDelTsParams, *tpDelTsParams;
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
@@ -1403,23 +1419,55 @@ typedef struct sMaxTxPowerPerBandParams
 
 typedef struct sAddStaSelfParams
 {
-   tSirMacAddr selfMacAddr;
-   tVOS_CON_MODE currDeviceMode;
+   tSirMacAddr     selfMacAddr;
+   tVOS_CON_MODE   currDeviceMode;
    tANI_U32        type;
    tANI_U32        subType;
    tANI_U8         sessionId;
-   tANI_U32 status;
+   tANI_U32        status;
+   tANI_U16        pkt_err_disconn_th;
 }tAddStaSelfParams, *tpAddStaSelfParams;
 
 #ifdef FEATURE_WLAN_TDLS
-#ifdef QCA_WIFI_2_0
+
+#define HAL_TDLS_MAX_SUPP_CHANNELS       128
+#define HAL_TDLS_MAX_SUPP_OPER_CLASSES   32
+
+typedef struct {
+   tANI_U8 isPeerResponder;
+   tANI_U8 peerUapsdQueue;
+   tANI_U8 peerMaxSp;
+   tANI_U8 peerBuffStaSupport;
+   tANI_U8 peerOffChanSupport;
+   tANI_U8 peerCurrOperClass;
+   tANI_U8 selfCurrOperClass;
+   tANI_U8 peerChanLen;
+   tSirUpdateChanParam peerChan[HAL_TDLS_MAX_SUPP_CHANNELS];
+   tANI_U8 peerOperClassLen;
+   tANI_U8 peerOperClass[HAL_TDLS_MAX_SUPP_OPER_CLASSES];
+   tANI_U8 prefOffChanNum;
+   tANI_U8 prefOffChanBandwidth;
+   tANI_U8 opClassForPrefOffChan;
+} tTdlsPeerCapParams;
+
 typedef struct sTdlsPeerStateParams
 {
    tANI_U32 vdevId;
    tSirMacAddr peerMacAddr;
    tANI_U32 peerState;
+   tTdlsPeerCapParams peerCap;
 }tTdlsPeerStateParams;
-#endif /* QCA_WIFI_2_0 */
+
+typedef struct sTdlsChanSwitchParams
+{
+   tANI_U32    vdevId;
+   tSirMacAddr peerMacAddr;
+   tANI_U16    tdlsOffChBwOffset;/* Target Off Channel Bandwidth offset */
+   tANI_U8     tdlsOffCh;   /* Target Off Channel */
+   tANI_U8     tdlsSwMode;  /* TDLS Off Channel Mode */
+   tANI_U8     operClass;   /* Operating class corresponding to target channel */
+   tANI_U8     is_responder;/* responder or initiator */
+}tTdlsChanSwitchParams;
 #endif /* FEATURE_WLAN_TDLS */
 
 typedef struct sAbortScanParams
@@ -1446,6 +1494,9 @@ typedef struct sP2pPsParams
    tANI_U8   sessionId;
 }tP2pPsParams, *tpP2pPsParams;
 
+#define HAL_MAX_SUPP_CHANNELS     128
+#define HAL_MAX_SUPP_OPER_CLASSES 32
+
 typedef struct sTdlsLinkEstablishParams
 {
    tANI_U16  staIdx;
@@ -1453,16 +1504,21 @@ typedef struct sTdlsLinkEstablishParams
    tANI_U8   uapsdQueues;
    tANI_U8   maxSp;
    tANI_U8   isBufsta;
+   tANI_U8   isOffChannelSupported;
+   tANI_U8   peerCurrOperClass;
+   tANI_U8   selfCurrOperClass;
+   tANI_U8   validChannelsLen;
+   tANI_U8   validChannels[HAL_MAX_SUPP_CHANNELS];
+   tANI_U8   validOperClassesLen;
+   tANI_U8   validOperClasses[HAL_MAX_SUPP_OPER_CLASSES];
    tANI_U32  status;
 }tTdlsLinkEstablishParams, *tpTdlsLinkEstablishParams;
 
-#ifdef QCA_WIFI_2_0
 typedef struct tHalHiddenSsidVdevRestart
 {
    tANI_U8   ssidHidden;
    tANI_U8 sessionId;
 }tHalHiddenSsidVdevRestart,*tpHalHiddenSsidVdevRestart;
-#endif /* QCA_WIFI_2_0 */
 
 static inline void halGetTxTSFtimer(tpAniSirGlobal pMac,
                                                 tSirMacTimeStamp *pTime)
@@ -1512,17 +1568,21 @@ typedef __ani_attr_pre_packed struct sDisableIntraBssFwd
    tANI_BOOLEAN disableintrabssfwd;
 } __ani_attr_packed tDisableIntraBssFwd, *tpDisableIntraBssFwd;
 
-
 #ifdef WLAN_FEATURE_STATS_EXT
-
 typedef struct sStatsExtRequest
 {
     tANI_U32 vdev_id;
     tANI_U32 request_data_len;
     tANI_U8 request_data[];
 } tStatsExtRequest, *tpStatsExtRequest;
+#endif
 
-
+#ifdef WLAN_FEATURE_NAN
+typedef struct sNanRequest
+{
+    tANI_U16 request_data_len;
+    tANI_U8  request_data[];
+} tNanRequest, *tpNanRequest;
 #endif
 
 #endif /* _HALMSGAPI_H_ */

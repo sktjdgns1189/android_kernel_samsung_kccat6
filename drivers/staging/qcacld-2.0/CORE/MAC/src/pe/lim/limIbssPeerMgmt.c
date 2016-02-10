@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -46,6 +45,9 @@
 #include "schApi.h"          // schSetFixedBeaconFields for IBSS coalesce
 #include "limSecurityUtils.h"
 #include "limSendMessages.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#endif
 #include "limSession.h"
 #include "limIbssPeerMgmt.h"
 
@@ -183,6 +185,12 @@ ibss_peer_collect(
     pPeer->wmeEdcaPresent       = pBeacon->wmeEdcaPresent;
     pPeer->wmeInfoPresent       = pBeacon->wmeInfoPresent;
 
+    if (pBeacon->IBSSParams.present)
+    {
+        pPeer->atimIePresent = pBeacon->IBSSParams.present;
+        pPeer->peerAtimWindowLength = pBeacon->IBSSParams.atim;
+    }
+
     if(IS_DOT11_MODE_HT(psessionEntry->dot11mode) &&
         (pBeacon->HTCaps.present))
     {
@@ -227,9 +235,6 @@ ibss_peer_collect(
                      pBeacon->extendedRates.numRates + 1);
     else
         pPeer->extendedRates.numRates = 0;
-
-    // TBD copy EDCA parameters
-    // pPeer->edcaParams;
 
     pPeer->next = NULL;
 } /*** end ibss_peer_collect() ***/
@@ -326,7 +331,6 @@ ibss_sta_caps_update(
         if (! pStaDs->wmeEnabled)
         {
             pStaDs->wmeEnabled = 1;
-            //dphSetACM(pMac, pStaDs);
         }
         return;
     }
@@ -557,28 +561,11 @@ ibss_bss_add(
     vos_mem_copy(psessionEntry->bssId, pHdr->bssId,
                  sizeof(tSirMacAddr));
 
-    #if 0
-    if (cfgSetStr(pMac, WNI_CFG_BSSID, (tANI_U8 *) pHdr->bssId, sizeof(tSirMacAddr))
-        != eSIR_SUCCESS)
-        limLog(pMac, LOGP, FL("could not update BSSID at CFG"));
-    #endif //TO SUPPORT BT-AMP
-
     sirCopyMacAddr(pHdr->bssId,psessionEntry->bssId);
-    /* We need not use global Mac address since per seesion BSSID is available */
-    //limSetBssid(pMac, pHdr->bssId);
 
-#if 0
-    if (wlan_cfgGetInt(pMac, WNI_CFG_BEACON_INTERVAL, &cfg) != eSIR_SUCCESS)
-        limLog(pMac, LOGP, FL("Can't read beacon interval"));
-#endif //TO SUPPORT BT-AMP
     /* Copy beacon interval from sessionTable */
     cfg = psessionEntry->beaconParams.beaconInterval;
     if (cfg != pBeacon->beaconInterval)
-        #if 0
-        if (cfgSetInt(pMac, WNI_CFG_BEACON_INTERVAL, pBeacon->beaconInterval)
-            != eSIR_SUCCESS)
-            limLog(pMac, LOGP, FL("Can't update beacon interval"));
-        #endif//TO SUPPORT BT-AMP
         psessionEntry->beaconParams.beaconInterval = pBeacon->beaconInterval;
 
     /* This function ibss_bss_add (and hence the below code) is only called during ibss coalescing. We need to
@@ -594,14 +581,6 @@ ibss_bss_add(
     vos_mem_copy((tANI_U8 *) &psessionEntry->pLimStartBssReq->operationalRateSet,
                  (tANI_U8 *) &pBeacon->supportedRates,
                   pBeacon->supportedRates.numRates);
-
-    #if 0
-    if (cfgSetStr(pMac, WNI_CFG_OPERATIONAL_RATE_SET,
-           (tANI_U8 *) &pMac->lim.gpLimStartBssReq->operationalRateSet.rate,
-           pMac->lim.gpLimStartBssReq->operationalRateSet.numRates)
-        != eSIR_SUCCESS)
-        limLog(pMac, LOGP, FL("could not update OperRateset at CFG"));
-    #endif //TO SUPPORT BT-AMP
 
     /**
     * WNI_CFG_EXTENDED_OPERATIONAL_RATE_SET CFG needs to be reset, when
@@ -644,13 +623,6 @@ ibss_bss_add(
     mlmStartReq.htOperMode          = pMac->lim.gHTOperMode;
     mlmStartReq.dualCTSProtection   = pMac->lim.gHTDualCTSProtection;
     mlmStartReq.txChannelWidthSet   = psessionEntry->htRecommendedTxWidthSet;
-
-    #if 0
-    if (wlan_cfgGetInt(pMac, WNI_CFG_CURRENT_CHANNEL, &cfg) != eSIR_SUCCESS)
-        limLog(pMac, LOGP, FL("CurrentChannel CFG get fialed!"));
-    #endif
-
-    //mlmStartReq.channelNumber       = (tSirMacChanNum) cfg;
 
     /* reading the channel num from session Table */
     mlmStartReq.channelNumber = psessionEntry->currentOperChannel;
@@ -720,7 +692,6 @@ void
 limIbssInit(
     tpAniSirGlobal pMac)
 {
-    //pMac->lim.gLimIbssActive = 0;
     pMac->lim.gLimIbssCoalescingHappened = 0;
     pMac->lim.gLimIbssPeerList = NULL;
     pMac->lim.gLimNumIbssPeers = 0;
@@ -829,72 +800,6 @@ limIbssDelete(
 
     ibss_coalesce_free(pMac);
 } /*** end limIbssDelete() ***/
-
-/** Commenting this Code as from no where it is being invoked */
-#if 0
-/**
- * limIbssPeerDelete
- *
- *FUNCTION:
- * This may be called on a STA in IBSS to delete a peer
- * from the list.
- *
- *LOGIC:
- *
- *ASSUMPTIONS:
- *
- *NOTE:
- *
- * @param  pMac - Pointer to Global MAC structure
- * @param  peerMacAddr - MAC address of the peer STA that
- *                       need to be deleted from peer list.
- *
- * @return None
- */
-
-void
-limIbssPeerDelete(tpAniSirGlobal pMac, tSirMacAddr macAddr)
-{
-    tLimIbssPeerNode    *pPrevNode, *pTempNode;
-
-    pTempNode = pPrevNode = pMac->lim.gLimIbssPeerList;
-
-    if (pTempNode == NULL)
-        return;
-
-    while (pTempNode != NULL)
-    {
-        if (vos_mem_compare((tANI_U8 *) macAddr,
-                            (tANI_U8 *) &pTempNode->peerMacAddr,
-                            sizeof(tSirMacAddr)) )
-        {
-            // Found node to be deleted
-            if (pMac->lim.gLimIbssPeerList == pTempNode) /** First Node to be deleted*/
-                pMac->lim.gLimIbssPeerList = pTempNode->next;
-            else
-                pPrevNode->next = pTempNode->next;
-
-            if(pTempNode->beacon)
-            {
-                vos_mem_free(pTempNode->beacon);
-                pTempNode->beacon = NULL;
-            }
-            vos_mem_free(pTempNode);
-            pMac->lim.gLimNumIbssPeers--;
-            return;
-        }
-
-        pPrevNode = pTempNode;
-        pTempNode = pTempNode->next;
-    }
-
-    // Should not be here
-    PELOGE(limLog(pMac, LOGE, FL("peer not found in the list, addr= "));)
-    limPrintMacAddr(pMac, macAddr, LOGE);
-} /*** end limIbssPeerDelete() ***/
-
-#endif
-
 
 /** -------------------------------------------------------------
 \fn limIbssSetProtection
@@ -1670,7 +1575,6 @@ void limIbssHeartBeatHandle(tpAniSirGlobal pMac,tpPESession psessionEntry)
          * limReactivateTimer() calls.
          *
          ******/
-        //limReactivateTimer(pMac, eLIM_HEART_BEAT_TIMER, psessionEntry);
         limReactivateHeartBeatTimer(pMac, psessionEntry);
         return;
     }

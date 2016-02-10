@@ -174,7 +174,9 @@ static OS_TIMER_FUNC(dfs_task)
              */
             OS_CANCEL_TIMER(&dfs->ath_dfstesttimer);
             dfs->ath_dfstest = 1;
+            adf_os_spin_lock_bh(&ic->chan_lock);
             dfs->ath_dfstest_ieeechan = ic->ic_curchan->ic_ieee;
+            adf_os_spin_unlock_bh(&ic->chan_lock);
             dfs->ath_dfstesttime = 1;   /* 1ms */
             OS_SET_TIMER(&dfs->ath_dfstesttimer, dfs->ath_dfstesttime);
         }
@@ -266,10 +268,11 @@ dfs_attach(struct ieee80211com *ic)
     ic->ic_dfs_attach(ic, &dfs->dfs_caps, &radar_info);
     dfs_clear_stats(ic);
     dfs->dfs_event_log_on = 0;
-    OS_INIT_TIMER(NULL, &(dfs->ath_dfs_task_timer), dfs_task, (void *) (ic));
+    OS_INIT_TIMER(NULL, &(dfs->ath_dfs_task_timer), dfs_task, (void *) (ic),
+           ADF_DEFERRABLE_TIMER);
 #ifndef ATH_DFS_RADAR_DETECTION_ONLY
     OS_INIT_TIMER(NULL, &(dfs->ath_dfstesttimer), dfs_testtimer_task,
-        (void *) ic);
+        (void *) ic, ADF_DEFERRABLE_TIMER);
     dfs->ath_dfs_cac_time = ATH_DFS_WAIT_MS;
     dfs->ath_dfstesttime = ATH_DFS_TEST_RETURN_PERIOD_MS;
 #endif
@@ -525,6 +528,7 @@ int dfs_radar_enable(struct ieee80211com *ic,
 {
     int                                 is_ext_ch;
     int                                 is_fastclk = 0;
+    int                                 radar_filters_init_status = 0;
     //u_int32_t                        rfilt;
     struct ath_dfs                      *dfs;
     struct dfs_state *rs_pri, *rs_ext;
@@ -548,7 +552,18 @@ int dfs_radar_enable(struct ieee80211com *ic,
     * Setting country code might change the DFS domain
     * so initialize the DFS Radar filters
     */
-   dfs_init_radar_filters(ic, radar_info);
+   radar_filters_init_status = dfs_init_radar_filters(ic, radar_info);
+
+   /*
+    * dfs_init_radar_filters() returns 1 on failure and
+    * 0 on success.
+    */
+   if ( DFS_STATUS_FAIL == radar_filters_init_status ) {
+      VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                      "%s[%d]: DFS Radar Filters Initialization Failed",
+                       __func__,  __LINE__);
+      return -EIO;
+   }
 
    if ((ic->ic_opmode == IEEE80211_M_HOSTAP || ic->ic_opmode == IEEE80211_M_IBSS)) {
 
@@ -571,55 +586,51 @@ int dfs_radar_enable(struct ieee80211com *ic,
          if (ext_ch) {
                             rs_ext = dfs_getchanstate(dfs, &index_ext, 1);
                    }
-            if (rs_pri != NULL && ((ext_ch==NULL)||(rs_ext != NULL))) {
-            struct ath_dfs_phyerr_param pe;
+         if (rs_pri != NULL && ((ext_ch==NULL)||(rs_ext != NULL))) {
+             struct ath_dfs_phyerr_param pe;
 
-            OS_MEMSET(&pe, '\0', sizeof(pe));
+             OS_MEMSET(&pe, '\0', sizeof(pe));
 
-            if (index_pri != dfs->dfs_curchan_radindex)
-               dfs_reset_alldelaylines(dfs);
+             if (index_pri != dfs->dfs_curchan_radindex)
+                 dfs_reset_alldelaylines(dfs);
 
-            dfs->dfs_curchan_radindex = (int16_t) index_pri;
+             dfs->dfs_curchan_radindex = (int16_t) index_pri;
+             dfs->dfs_pri_multiplier_ini = radar_info->dfs_pri_multiplier;
 
-                                if (rs_ext)
-                     dfs->dfs_extchan_radindex = (int16_t) index_ext;
+             if (rs_ext)
+                 dfs->dfs_extchan_radindex = (int16_t) index_ext;
 
-            ath_dfs_phyerr_param_copy(&pe,
-                &rs_pri->rs_param);
-            DFS_DPRINTK(dfs, ATH_DEBUG_DFS3,
-                "%s: firpwr=%d, rssi=%d, height=%d, "
-                "prssi=%d, inband=%d, relpwr=%d, "
-                "relstep=%d, maxlen=%d\n",
-                __func__,
-                pe.pe_firpwr,
-                pe.pe_rrssi,
-                pe.pe_height,
-                pe.pe_prssi,
-                pe.pe_inband,
-                pe.pe_relpwr,
-                pe.pe_relstep,
-                pe.pe_maxlen
-                );
+             ath_dfs_phyerr_param_copy(&pe,
+                     &rs_pri->rs_param);
+             DFS_DPRINTK(dfs, ATH_DEBUG_DFS3,
+                     "%s: firpwr=%d, rssi=%d, height=%d, "
+                     "prssi=%d, inband=%d, relpwr=%d, "
+                     "relstep=%d, maxlen=%d\n",
+                     __func__,
+                     pe.pe_firpwr,
+                     pe.pe_rrssi,
+                     pe.pe_height,
+                     pe.pe_prssi,
+                     pe.pe_inband,
+                     pe.pe_relpwr,
+                     pe.pe_relstep,
+                     pe.pe_maxlen
+                     );
 
-#if 0 //Not needed
-            /* Disable strong signal fast antenna diversity */
-            ath_hal_setcapability(ah, HAL_CAP_DIVERSITY,
-                        HAL_CAP_STRONG_DIV, 1, NULL);
-#endif
-            ic->ic_dfs_enable(ic, &is_fastclk, &pe);
-            DFS_DPRINTK(dfs, ATH_DEBUG_DFS, "Enabled radar detection on channel %d\n",
-               chan->ic_freq);
-            dfs->dur_multiplier =
-                is_fastclk ? DFS_FAST_CLOCK_MULTIPLIER : DFS_NO_FAST_CLOCK_MULTIPLIER;
-            DFS_DPRINTK(dfs, ATH_DEBUG_DFS3,
-                "%s: duration multiplier is %d\n", __func__, dfs->dur_multiplier);
+             ic->ic_dfs_enable(ic, &is_fastclk, &pe);
+             DFS_DPRINTK(dfs, ATH_DEBUG_DFS, "Enabled radar detection on channel %d\n",
+                     chan->ic_freq);
+             dfs->dur_multiplier =
+                 is_fastclk ? DFS_FAST_CLOCK_MULTIPLIER : DFS_NO_FAST_CLOCK_MULTIPLIER;
+             DFS_DPRINTK(dfs, ATH_DEBUG_DFS3,
+                     "%s: duration multiplier is %d\n", __func__, dfs->dur_multiplier);
          } else
-            DFS_DPRINTK(dfs, ATH_DEBUG_DFS, "%s: No more radar states left\n",
-               __func__);
+             DFS_DPRINTK(dfs, ATH_DEBUG_DFS, "%s: No more radar states left\n",
+                     __func__);
       }
    }
 
-   return 0;
+   return DFS_STATUS_SUCCESS;
 }
 
 int
@@ -649,7 +660,7 @@ dfs_control(struct ieee80211com *ic, u_int id,
    case DFS_SET_THRESH:
       if (insize < sizeof(struct dfs_ioctl_params) || !indata) {
          DFS_DPRINTK(dfs, ATH_DEBUG_DFS1,
-             "%s: insize=%d, expected=%d bytes, indata=%p\n",
+             "%s: insize=%d, expected=%zu bytes, indata=%p\n",
              __func__, insize, sizeof(struct dfs_ioctl_params),
              indata);
          error = -EINVAL;

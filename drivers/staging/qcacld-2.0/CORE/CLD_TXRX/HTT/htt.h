@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -34,17 +34,21 @@
 #ifndef _HTT_H_
 #define _HTT_H_
 
-#if defined(ATH_TARGET)
-#include <osapi.h>      /* A_UINT32 */
-#else
 #include <a_types.h>    /* A_UINT32 */
-#include <osapi_linux.h>    /* PREPACK, POSTPACK */
-#endif
+#include <a_osapi.h>    /* PREPACK, POSTPACK */
 #ifdef ATHR_WIN_NWF
 #pragma warning( disable:4214 ) //bit field types other than int
 #endif
 #include "wlan_defs.h"
-#include "htt_common.h"
+#include <htt_common.h>
+
+/*
+ * Unless explicitly specified to use 64 bits to represent physical addresses
+ * (or more precisely, bus addresses), default to 32 bits.
+ */
+#ifndef HTT_PADDR64
+    #define HTT_PADDR64 0
+#endif
 
 #ifndef offsetof
 #define offsetof(type, field)   ((unsigned int)(&((type *)0)->field))
@@ -52,22 +56,88 @@
 
 /*
  * HTT version history:
- * 1.0 initial numbered version
- * 1.1 modifications to STATS messages.
- *     These modifications are not backwards compatible, but since the
- *     STATS messages themselves are non-essential (they are for debugging),
- *     the 1.1 version of the HTT message library as a whole is compatible
- *     with the 1.0 version.
- * 1.2 reset mask IE added to STATS_REQ message
- * 1.3 stat config IE added to STATS_REQ message
+ * 1.0  initial numbered version
+ * 1.1  modifications to STATS messages.
+ *      These modifications are not backwards compatible, but since the
+ *      STATS messages themselves are non-essential (they are for debugging),
+ *      the 1.1 version of the HTT message library as a whole is compatible
+ *      with the 1.0 version.
+ * 1.2  reset mask IE added to STATS_REQ message
+ * 1.3  stat config IE added to STATS_REQ message
  *----
- * 2.0 FW rx PPDU desc added to RX_IND message
- * 2.1 Enable msdu_ext/frag_desc banking change for WIFI2.0
+ * 2.0  FW rx PPDU desc added to RX_IND message
+ * 2.1  Enable msdu_ext/frag_desc banking change for WIFI2.0
  *----
- * 3.0 Remove HTT_H2T_MSG_TYPE_MGMT_TX messages
+ * 3.0  Remove HTT_H2T_MSG_TYPE_MGMT_TX message
+ * 3.1  Added HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND message
+ * 3.2  Added HTT_H2T_MSG_TYPE_WDI_IPA_CFG,
+ *            HTT_H2T_MSG_TYPE_WDI_IPA_OP_REQUEST messages
+ * 3.3  Added HTT_H2T_MSG_TYPE_AGGR_CFG_EX message
+ * 3.4  Added tx_compl_req flag in HTT tx descriptor
+ * 3.5  Added flush and fail stats in rx_reorder stats structure
+ * 3.6  Added frag flag in HTT RX INORDER PADDR IND header
+ * 3.7  Made changes to support EOS Mac_core 3.0
+ * 3.8  Added txq_group information element definition;
+ *      added optional txq_group suffix to TX_CREDIT_UPDATE_IND message
+ * 3.9  Added HTT_T2H CHAN_CHANGE message;
+ *      Allow buffer addresses in bus-address format to be stored as
+ *      either 32 bits or 64 bits.
+ * 3.10 Add optional TLV extensions to the VERSION_REQ and VERSION_CONF
+ *      messages to specify which HTT options to use.
+ *      Initial TLV options cover:
+ *        - whether to use 32 or 64 bits to represent LL bus addresses
+ *        - whether to use TX_COMPL_IND or TX_CREDIT_UPDATE_IND in HL systems
+ *        - how many tx queue groups to use
+ * 3.11 Expand rx debug stats:
+ *        - Expand the rx_reorder_stats struct with stats about successful and
+ *          failed rx buffer allcoations.
+ *        - Add a new rx_remote_buffer_mgmt_stats struct with stats about
+ *          the supply, allocation, use, and recycling of rx buffers for the
+ *          "remote ring" of rx buffers in host member in LL systems.
+ *          Add RX_REMOTE_RING_BUFFER_INFO stats type for uploading these stats.
+ * 3.12 Add "rx offload packet error" message with initial "MIC error" subtype
+ * 3.13 Add constants + macros to support 64-bit address format for the
+ *      tx fragments descriptor, the rx ring buffer, and the rx ring
+ *      index shadow register.
+ * 3.14 Add a method for the host to provide detailed per-frame tx specs:
+ *        - Add htt_tx_msdu_desc_ext_t struct def.
+ *        - Add TLV to specify whether the target supports the HTT tx MSDU
+ *          extension descriptor.
+ *        - Change a reserved bit in the HTT tx MSDU descriptor to an
+ *          "extension" bit, to specify whether a HTT tx MSDU extension
+ *          descriptor is present.
+ * 3.15 Add HW rx desc info to per-MSDU info elems in RX_IN_ORD_PADDR_IND msg.
+ *      (This allows the host to obtain key information about the MSDU
+ *      from a memory location already in the cache, rather than taking a
+ *      cache miss for each MSDU by reading the HW rx descs.)
+ * 3.16 Add htt_pkt_type_eth2 and define pkt_subtype flags to indicate
+ *      whether a copy-engine classification result is appended to TX_FRM.
+ * 3.17 Add a version of the WDI_IPA_CFG message; add RX_RING2 to WDI_IPA_CFG
+ * 3.18 Add a PEER_DEL tx completion indication status, for HL cleanup of
+ *      tx frames in the target after the peer has already been deleted.
+ * 3.19 Add HTT_DBG_STATS_RX_RATE_INFO_V2 and HTT_DBG_STATS_TX_RATE_INFO_V2
+ * 3.20 Expand rx_reorder_stats.
+ * 3.21 Add optional rx channel spec to HL RX_IND.
+ * 3.22 Expand rx_reorder_stats
+ *      (distinguish duplicates within vs. outside block ack window)
+ * 3.23 Add HTT_T2H_MSG_TYPE_RATE_REPORT to report peer justified rate.
+ *      The justified rate is calculated by two steps. The first is to
+ *      multiply user-rate by (1 - PER) and the other is to smooth the
+ *      step 1's result by a low pass filter.
+ *      This change allows HL download scheduling to consider the WLAN
+ *      rate that will be used for transmitting the downloaded frames.
+ * 3.24 Expand rx_reorder_stats
+ *      (add counter for decrypt / MIC errors)
+ * 3.25 Expand rx_reorder_stats
+ *      (add counter of frames received into both local + remote rings)
+ * 3.26 Add stats struct for counting rx of tx BF, MU, SU, and NDPA frames
+ *      (HTT_DBG_STATS_TXBF_MUSU_NDPA_PKT, rx_txbf_musu_ndpa_pkts_stats)
+ * 3.27 Add a new interface for flow-control. The following t2h messages have
+ *      been included: HTT_T2H_MSG_TYPE_FLOW_POOL_MAP and
+ *      HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP
  */
 #define HTT_CURRENT_VERSION_MAJOR 3
-#define HTT_CURRENT_VERSION_MINOR 0
+#define HTT_CURRENT_VERSION_MINOR 27
 
 #define HTT_NUM_TX_FRAG_DESC  1024
 
@@ -76,10 +146,72 @@
 #define HTT_CHECK_SET_VAL(field, val) \
     A_ASSERT(!((val) & ~((field ## _M) >> (field ## _S))))
 
-#define HTT_INVALID_PEER    0xffff
-#define HTT_INVALID_VDEV    0xff
-#define HTT_NON_QOS_TID     16
-#define HTT_INVALID_TID     31
+/* macros to assist in sign-extending fields from HTT messages */
+#define HTT_SIGN_BIT_MASK(field) \
+    ((field ## _M + (1 << field ## _S)) >> 1)
+#define HTT_SIGN_BIT(_val, field) \
+    (_val & HTT_SIGN_BIT_MASK(field))
+#define HTT_SIGN_BIT_UNSHIFTED(_val, field) \
+    (HTT_SIGN_BIT(_val, field) >> field ## _S)
+#define HTT_SIGN_BIT_UNSHIFTED_MINUS_ONE(_val, field) \
+    (HTT_SIGN_BIT_UNSHIFTED(_val, field) - 1)
+#define HTT_SIGN_BIT_EXTENSION(_val, field) \
+    (~(HTT_SIGN_BIT_UNSHIFTED(_val, field) | \
+    HTT_SIGN_BIT_UNSHIFTED_MINUS_ONE(_val, field)))
+#define HTT_SIGN_BIT_EXTENSION_MASK(_val, field) \
+    (HTT_SIGN_BIT_EXTENSION(_val, field) & ~(field ## _M >> field ## _S))
+
+
+/*
+ * TEMPORARY:
+ * Provide HTT_H2T_MSG_TYPE_MGMT_TX as an alias for
+ * DEPRECATED_HTT_H2T_MSG_TYPE_MGMT_TX until all code
+ * that refers to HTT_H2T_MSG_TYPE_MGMT_TX has been
+ * updated.
+ */
+#define HTT_H2T_MSG_TYPE_MGMT_TX DEPRECATED_HTT_H2T_MSG_TYPE_MGMT_TX
+
+/*
+ * TEMPORARY:
+ * Provide HTT_T2H_MSG_TYPE_RC_UPDATE_IND as an alias for
+ * DEPRECATED_HTT_T2H_MSG_TYPE_RC_UPDATE_IND until all code
+ * that refers to HTT_T2H_MSG_TYPE_RC_UPDATE_IND has been
+ * updated.
+ */
+#define HTT_T2H_MSG_TYPE_RC_UPDATE_IND DEPRECATED_HTT_T2H_MSG_TYPE_RC_UPDATE_IND
+
+/* HTT Access Category values */
+enum HTT_AC_WMM {
+    /* WMM Access Categories */
+    HTT_AC_WMM_BE         = 0x0,
+    HTT_AC_WMM_BK         = 0x1,
+    HTT_AC_WMM_VI         = 0x2,
+    HTT_AC_WMM_VO         = 0x3,
+    /* extension Access Categories */
+    HTT_AC_EXT_NON_QOS    = 0x4,
+    HTT_AC_EXT_UCAST_MGMT = 0x5,
+    HTT_AC_EXT_MCAST_DATA = 0x6,
+    HTT_AC_EXT_MCAST_MGMT = 0x7,
+};
+enum HTT_AC_WMM_MASK {
+    /* WMM Access Categories */
+    HTT_AC_WMM_BE_MASK = (1 << HTT_AC_WMM_BE),
+    HTT_AC_WMM_BK_MASK = (1 << HTT_AC_WMM_BK),
+    HTT_AC_WMM_VI_MASK = (1 << HTT_AC_WMM_VI),
+    HTT_AC_WMM_VO_MASK = (1 << HTT_AC_WMM_VO),
+    /* extension Access Categories */
+    HTT_AC_EXT_NON_QOS_MASK    = (1 << HTT_AC_EXT_NON_QOS),
+    HTT_AC_EXT_UCAST_MGMT_MASK = (1 << HTT_AC_EXT_UCAST_MGMT),
+    HTT_AC_EXT_MCAST_DATA_MASK = (1 << HTT_AC_EXT_MCAST_DATA),
+    HTT_AC_EXT_MCAST_MGMT_MASK = (1 << HTT_AC_EXT_MCAST_MGMT),
+};
+#define HTT_AC_MASK_WMM \
+    (HTT_AC_WMM_BE_MASK | HTT_AC_WMM_BK_MASK | \
+     HTT_AC_WMM_VI_MASK | HTT_AC_WMM_VO_MASK)
+#define HTT_AC_MASK_EXT \
+    (HTT_AC_EXT_NON_QOS_MASK | HTT_AC_EXT_UCAST_MGMT_MASK | \
+    HTT_AC_EXT_MCAST_DATA_MASK | HTT_AC_EXT_MCAST_MGMT_MASK)
+#define HTT_AC_MASK_ALL (HTT_AC_MASK_WMM | HTT_AC_MASK_EXT)
 
 /*
  * htt_dbg_stats_type -
@@ -87,29 +219,256 @@
  * The bitmask contains 24 bits.
  */
 enum htt_dbg_stats_type {
-    HTT_DBG_STATS_WAL_PDEV_TXRX      = 0, /* bit 0 -> 0x1 */
-    HTT_DBG_STATS_RX_REORDER         = 1, /* bit 1 -> 0x2 */
-    HTT_DBG_STATS_RX_RATE_INFO       = 2, /* bit 2 -> 0x4 */
-    HTT_DBG_STATS_TX_PPDU_LOG        = 3, /* bit 3 -> 0x8 */
-    HTT_DBG_STATS_TX_RATE_INFO       = 4, /* bit 4 -> 0x10 */
-    /* bits 5-23 currently reserved */
+    HTT_DBG_STATS_WAL_PDEV_TXRX              =  0, /* bit 0  ->    0x1 */
+    HTT_DBG_STATS_RX_REORDER                 =  1, /* bit 1  ->    0x2 */
+    HTT_DBG_STATS_RX_RATE_INFO               =  2, /* bit 2  ->    0x4 */
+    HTT_DBG_STATS_TX_PPDU_LOG                =  3, /* bit 3  ->    0x8 */
+    HTT_DBG_STATS_TX_RATE_INFO               =  4, /* bit 4  ->   0x10 */
+    HTT_DBG_STATS_TIDQ                       =  5, /* bit 5  ->   0x20 */
+    HTT_DBG_STATS_TXBF_INFO                  =  6, /* bit 6  ->   0x40 */
+    HTT_DBG_STATS_SND_INFO                   =  7, /* bit 7  ->   0x80 */
+    HTT_DBG_STATS_ERROR_INFO                 =  8, /* bit 8  ->  0x100 */
+    HTT_DBG_STATS_TX_SELFGEN_INFO            =  9, /* bit 9  ->  0x200 */
+    HTT_DBG_STATS_TX_MU_INFO                 = 10, /* bit 10 ->  0x400 */
+    HTT_DBG_STATS_SIFS_RESP_INFO             = 11, /* bit 11 ->  0x800 */
+    HTT_DBG_STATS_RX_REMOTE_RING_BUFFER_INFO = 12, /* bit 12 -> 0x1000*/
+    HTT_DBG_STATS_RX_RATE_INFO_V2            = 13, /* bit 13 -> 0x2000 */
+    HTT_DBG_STATS_TX_RATE_INFO_V2            = 14, /* bit 14 -> 0x4000 */
+    HTT_DBG_STATS_TXBF_MUSU_NDPA_PKT         = 15, /* bit 15 -> 0x8000 */
+    /* bits 16-23 currently reserved */
 
     /* keep this last */
     HTT_DBG_NUM_STATS
 };
 
+/*=== HTT option selection TLVs ===
+ * Certain HTT messages have alternatives or options.
+ * For such cases, the host and target need to agree on which option to use.
+ * Option specification TLVs can be appended to the VERSION_REQ and
+ * VERSION_CONF messages to select options other than the default.
+ * These TLVs are entirely optional - if they are not provided, there is a
+ * well-defined default for each option.  If they are provided, they can be
+ * provided in any order.  Each TLV can be present or absent independent of
+ * the presence / absence of other TLVs.
+ *
+ * The HTT option selection TLVs use the following format:
+ *     |31                             16|15             8|7              0|
+ *     |---------------------------------+----------------+----------------|
+ *     |        value (payload)          |     length     |       tag      |
+ *     |-------------------------------------------------------------------|
+ * The value portion need not be only 2 bytes; it can be extended by any
+ * integer number of 4-byte units.  The total length of the TLV, including
+ * the tag and length fields, must be a multiple of 4 bytes.  The length
+ * field specifies the total TLV size in 4-byte units.  Thus, the typical
+ * TLV, with a 1-byte tag field, a 1-byte length field, and a 2-byte value
+ * field, would store 0x1 in its length field, to show that the TLV occupies
+ * a single 4-byte unit.
+ */
+
+/*--- TLV header format - applies to all HTT option TLVs ---*/
+
+enum HTT_OPTION_TLV_TAGS {
+    HTT_OPTION_TLV_TAG_RESERVED0                = 0x0,
+    HTT_OPTION_TLV_TAG_LL_BUS_ADDR_SIZE         = 0x1,
+    HTT_OPTION_TLV_TAG_HL_SUPPRESS_TX_COMPL_IND = 0x2,
+    HTT_OPTION_TLV_TAG_MAX_TX_QUEUE_GROUPS      = 0x3,
+    HTT_OPTION_TLV_TAG_SUPPORT_TX_MSDU_DESC_EXT = 0x4,
+};
+
+PREPACK struct htt_option_tlv_header_t {
+    A_UINT8 tag;
+    A_UINT8 length;
+} POSTPACK;
+
+#define HTT_OPTION_TLV_TAG_M      0x000000ff
+#define HTT_OPTION_TLV_TAG_S      0
+#define HTT_OPTION_TLV_LENGTH_M   0x0000ff00
+#define HTT_OPTION_TLV_LENGTH_S   8
+/*
+ * value0 - 16 bit value field stored in word0
+ * The TLV's value field may be longer than 2 bytes, in which case
+ * the remainder of the value is stored in word1, word2, etc.
+ */
+#define HTT_OPTION_TLV_VALUE0_M   0xffff0000
+#define HTT_OPTION_TLV_VALUE0_S   16
+
+#define HTT_OPTION_TLV_TAG_SET(word, tag)           \
+    do {                                            \
+        HTT_CHECK_SET_VAL(HTT_OPTION_TLV_TAG, tag); \
+        (word) |= ((tag) << HTT_OPTION_TLV_TAG_S);  \
+    } while (0)
+#define HTT_OPTION_TLV_TAG_GET(word) \
+    (((word) & HTT_OPTION_TLV_TAG_M) >> HTT_OPTION_TLV_TAG_S)
+
+#define HTT_OPTION_TLV_LENGTH_SET(word, tag)           \
+    do {                                               \
+        HTT_CHECK_SET_VAL(HTT_OPTION_TLV_LENGTH, tag); \
+        (word) |= ((tag) << HTT_OPTION_TLV_LENGTH_S);  \
+    } while (0)
+#define HTT_OPTION_TLV_LENGTH_GET(word) \
+    (((word) & HTT_OPTION_TLV_LENGTH_M) >> HTT_OPTION_TLV_LENGTH_S)
+
+#define HTT_OPTION_TLV_VALUE0_SET(word, tag)           \
+    do {                                               \
+        HTT_CHECK_SET_VAL(HTT_OPTION_TLV_VALUE0, tag); \
+        (word) |= ((tag) << HTT_OPTION_TLV_VALUE0_S);  \
+    } while (0)
+#define HTT_OPTION_TLV_VALUE0_GET(word) \
+    (((word) & HTT_OPTION_TLV_VALUE0_M) >> HTT_OPTION_TLV_VALUE0_S)
+
+/*--- format of specific HTT option TLVs ---*/
+
+/*
+ * HTT option TLV for specifying LL bus address size
+ * Some chips require bus addresses used by the target to access buffers
+ * within the host's memory to be 32 bits; others require bus addresses
+ * used by the target to access buffers within the host's memory to be
+ * 64 bits.
+ * The LL_BUS_ADDR_SIZE TLV can be sent from the target to the host as
+ * a suffix to the VERSION_CONF message to specify which bus address format
+ * the target requires.
+ * If this LL_BUS_ADDR_SIZE TLV is not sent by the target, the host should
+ * default to providing bus addresses to the target in 32-bit format.
+ */
+enum HTT_OPTION_TLV_LL_BUS_ADDR_SIZE_VALUES {
+    HTT_OPTION_TLV_LL_BUS_ADDR_SIZE32 = 0x0,
+    HTT_OPTION_TLV_LL_BUS_ADDR_SIZE64 = 0x1,
+};
+PREPACK struct htt_option_tlv_ll_bus_addr_size_t {
+    struct htt_option_tlv_header_t hdr;
+    A_UINT16 ll_bus_addr_size; /* LL_BUS_ADDR_SIZE_VALUES enum */
+} POSTPACK;
+
+/*
+ * HTT option TLV for specifying whether HL systems should indicate
+ * over-the-air tx completion for individual frames, or should instead
+ * send a bulk TX_CREDIT_UPDATE_IND except when the host explicitly
+ * requests an OTA tx completion for a particular tx frame.
+ * This option does not apply to LL systems, where the TX_COMPL_IND
+ * is mandatory.
+ * This option is primarily intended for HL systems in which the tx frame
+ * downloads over the host --> target bus are as slow as or slower than
+ * the transmissions over the WLAN PHY.  For cases where the bus is faster
+ * than the WLAN PHY, the target will transmit relatively large A-MPDUs,
+ * and consquently will send one TX_COMPL_IND message that covers several
+ * tx frames.  For cases where the WLAN PHY is faster than the bus,
+ * the target will end up transmitting very short A-MPDUs, and consequently
+ * sending many TX_COMPL_IND messages, which each cover a very small number
+ * of tx frames.
+ * The HL_SUPPRESS_TX_COMPL_IND TLV can be sent by the host to the target as
+ * a suffix to the VERSION_REQ message to request whether the host desires to
+ * use TX_CREDIT_UPDATE_IND rather than TX_COMPL_IND.  The target can then
+ * send a HTT_SUPPRESS_TX_COMPL_IND TLV to the host as a suffix to the
+ * VERSION_CONF message to confirm whether TX_CREDIT_UPDATE_IND will be used
+ * rather than TX_COMPL_IND.  TX_CREDIT_UPDATE_IND shall only be used if the
+ * host sends a HL_SUPPRESS_TX_COMPL_IND TLV requesting use of
+ * TX_CREDIT_UPDATE_IND, and the target sends a HL_SUPPRESS_TX_COMPLE_IND TLV
+ * back to the host confirming use of TX_CREDIT_UPDATE_IND.
+ * Lack of a HL_SUPPRESS_TX_COMPL_IND TLV from either host --> target or
+ * target --> host is equivalent to a HL_SUPPRESS_TX_COMPL_IND that
+ * explicitly specifies HL_ALLOW_TX_COMPL_IND in the value payload of the
+ * TLV.
+ */
+enum HTT_OPTION_TLV_HL_SUPPRESS_TX_COMPL_IND_VALUES {
+    HTT_OPTION_TLV_HL_ALLOW_TX_COMPL_IND = 0x0,
+    HTT_OPTION_TLV_HL_SUPPRESS_TX_COMPL_IND = 0x1,
+};
+PREPACK struct htt_option_tlv_hl_suppress_tx_compl_ind_t {
+    struct htt_option_tlv_header_t hdr;
+    A_UINT16 hl_suppress_tx_compl_ind; /* HL_SUPPRESS_TX_COMPL_IND enum */
+} POSTPACK;
+
+/*
+ * HTT option TLV for specifying how many tx queue groups the target
+ * may establish.
+ * This TLV specifies the maximum value the target may send in the
+ * txq_group_id field of any TXQ_GROUP information elements sent by
+ * the target to the host.  This allows the host to pre-allocate an
+ * appropriate number of tx queue group structs.
+ *
+ * The MAX_TX_QUEUE_GROUPS_TLV can be sent from the host to the target as
+ * a suffix to the VERSION_REQ message to specify whether the host supports
+ * tx queue groups at all, and if so if there is any limit on the number of
+ * tx queue groups that the host supports.
+ * The MAX_TX_QUEUE_GROUPS TLV can be sent from the target to the host as
+ * a suffix to the VERSION_CONF message.  If the host has specified in the
+ * VER_REQ message a limit on the number of tx queue groups the host can
+ * supprt, the target shall limit its specification of the maximum tx groups
+ * to be no larger than this host-specified limit.
+ *
+ * If the target does not provide a MAX_TX_QUEUE_GROUPS TLV, then the host
+ * shall preallocate 4 tx queue group structs, and the target shall not
+ * specify a txq_group_id larger than 3.
+ */
+enum HTT_OPTION_TLV_MAX_TX_QUEUE_GROUPS_VALUES {
+    HTT_OPTION_TLV_TX_QUEUE_GROUPS_UNSUPPORTED = 0,
+    /*
+     * values 1 through N specify the max number of tx queue groups
+     * the sender supports
+     */
+    HTT_OPTION_TLV_TX_QUEUE_GROUPS_UNLIMITED = 0xffff,
+};
+/* TEMPORARY backwards-compatibility alias for a typo fix -
+ * The htt_option_tlv_mac_tx_queue_groups_t typo has been corrected
+ * to  htt_option_tlv_max_tx_queue_groups_t, but an alias is provided
+ * to support the old name (with the typo) until all references to the
+ * old name are replaced with the new name.
+ */
+#define htt_option_tlv_mac_tx_queue_groups_t htt_option_tlv_max_tx_queue_groups_t
+PREPACK struct htt_option_tlv_max_tx_queue_groups_t {
+    struct htt_option_tlv_header_t hdr;
+    A_UINT16 max_tx_queue_groups; /* max txq_group_id + 1 */
+} POSTPACK;
+
+/*
+ * HTT option TLV for specifying whether the target supports an extended
+ * version of the HTT tx descriptor.  If the target provides this TLV
+ * and specifies in the TLV that the target supports an extended version
+ * of the HTT tx descriptor, the target must check the "extension" bit in
+ * the HTT tx descriptor, and if the extension bit is set, to expect a
+ * HTT tx MSDU extension descriptor immediately following the HTT tx MSDU
+ * descriptor.  Furthermore, the target must provide room for the HTT
+ * tx MSDU extension descriptor in the target's TX_FRM buffer.
+ * This option is intended for systems where the host needs to explicitly
+ * control the transmission parameters such as tx power for individual
+ * tx frames.
+ * The SUPPORT_TX_MSDU_DESC_EXT TLB can be sent by the target to the host
+ * as a suffix to the VERSION_CONF message to explicitly specify whether
+ * the target supports the HTT tx MSDU extension descriptor.
+ * Lack of a SUPPORT_TX_MSDU_DESC_EXT from the target shall be interpreted
+ * by the host as lack of target support for the HTT tx MSDU extension
+ * descriptor; the host shall provide HTT tx MSDU extension descriptors in
+ * the HTT_H2T TX_FRM messages only if the target indicates it supports
+ * the HTT tx MSDU extension descriptor.
+ * The host is not required to provide the HTT tx MSDU extension descriptor
+ * just because the target supports it; the target must check the
+ * "extension" bit in the HTT tx MSDU descriptor to determine whether an
+ * extension descriptor is present.
+ */
+enum HTT_OPTION_TLV_SUPPORT_TX_MSDU_DESC_EXT_VALUES {
+    HTT_OPTION_TLV_TX_MSDU_DESC_EXT_NO_SUPPORT = 0x0,
+    HTT_OPTION_TLV_TX_MSDU_DESC_EXT_SUPPORT = 0x1,
+};
+PREPACK struct htt_option_tlv_support_tx_msdu_desc_ext_t {
+    struct htt_option_tlv_header_t hdr;
+    A_UINT16 tx_msdu_desc_ext_support; /* SUPPORT_TX_MSDU_DESC_EXT enum */
+} POSTPACK;
+
+
 /*=== host -> target messages ===============================================*/
 
 enum htt_h2t_msg_type {
-    HTT_H2T_MSG_TYPE_VERSION_REQ = 0x0,
-    HTT_H2T_MSG_TYPE_TX_FRM      = 0x1,
-    HTT_H2T_MSG_TYPE_RX_RING_CFG = 0x2,
-    HTT_H2T_MSG_TYPE_STATS_REQ   = 0x3,
-    HTT_H2T_MSG_TYPE_SYNC        = 0x4,
-    HTT_H2T_MSG_TYPE_AGGR_CFG    = 0x5,
+    HTT_H2T_MSG_TYPE_VERSION_REQ        = 0x0,
+    HTT_H2T_MSG_TYPE_TX_FRM             = 0x1,
+    HTT_H2T_MSG_TYPE_RX_RING_CFG        = 0x2,
+    HTT_H2T_MSG_TYPE_STATS_REQ          = 0x3,
+    HTT_H2T_MSG_TYPE_SYNC               = 0x4,
+    HTT_H2T_MSG_TYPE_AGGR_CFG           = 0x5,
     HTT_H2T_MSG_TYPE_FRAG_DESC_BANK_CFG = 0x6,
     DEPRECATED_HTT_H2T_MSG_TYPE_MGMT_TX = 0x7, /* no longer used */
-
+    HTT_H2T_MSG_TYPE_WDI_IPA_CFG        = 0x8,
+    HTT_H2T_MSG_TYPE_WDI_IPA_OP_REQ     = 0x9,
+    HTT_H2T_MSG_TYPE_AGGR_CFG_EX        = 0xa, /* per vdev amsdu subfrm limit */
     /* keep this last */
     HTT_H2T_NUM_MSGS
 };
@@ -136,6 +495,17 @@ enum htt_h2t_msg_type {
  *     |----------------+----------------+----------------+----------------|
  *     |                     reserved                     |    msg type    |
  *     |-------------------------------------------------------------------|
+ *     :                    option request TLV (optional)                  |
+ *     :...................................................................:
+ *
+ * The VER_REQ message may consist of a single 4-byte word, or may be
+ * extended with TLVs that specify which HTT options the host is requesting
+ * from the target.
+ * The following option TLVs may be appended to the VER_REQ message:
+ *   - HL_SUPPRESS_TX_COMPL_IND
+ *   - HL_MAX_TX_QUEUE_GROUPS
+ * These TLVs may appear in an arbitrary order.  Any number of these TLVs
+ * may be appended to the VER_REQ message (but only one TLV of each type).
  *
  * Header fields:
  *   - MSG_TYPE
@@ -145,24 +515,6 @@ enum htt_h2t_msg_type {
  */
 
 #define HTT_VER_REQ_BYTES 4
-
-/**
- * @brief General specification of the tx frame contents
- *
- * @details
- * for efficiency, the HTT packet type values correspond
- * to the bit positions of the WAL packet type values, so the
- * translation is a simple shift operation.
- */
-enum htt_pkt_type {
-    htt_pkt_type_raw = 0,
-    htt_pkt_type_native_wifi = 1,
-    htt_pkt_type_ethernet = 2,
-    htt_pkt_type_mgmt = 3,
-
-    /* keep this last */
-    htt_pkt_num_types
-};
 
 /* TBDXXX: figure out a reasonable number */
 #define HTT_HL_DATA_SVC_PIPE_DEPTH         24
@@ -195,156 +547,256 @@ enum htt_pkt_type {
 #define HTT_TX_MSDU_DESC_RAW_SUBTYPE_NO_ENCRYPT_M  0x4
 #define HTT_TX_MSDU_DESC_RAW_SUBTYPE_NO_CLASSIFY_S 3
 #define HTT_TX_MSDU_DESC_RAW_SUBTYPE_NO_CLASSIFY_M 0x8
-PREPACK struct htt_tx_msdu_desc_t
-{
-    /* DWORD 0: flags and meta-data */
-    A_UINT32
-        msg_type: 8, /* HTT_H2T_MSG_TYPE_TX_FRM */
 
-        /* pkt_subtype -
-         * Detailed specification of the tx frame contents, extending the
-         * general specification provided by pkt_type.
-         * FIX THIS: ADD COMPLETE SPECS FOR THIS FIELDS VALUE, e.g.
-         *     pkt_type    | pkt_subtype
-         *     ==============================================================
-         *     802.3       | n/a
-         *     ------------+-------------------------------------------------
-         *     native WiFi | n/a
-         *     ------------+-------------------------------------------------
-         *     mgmt        | 0x0 - 802.11 MAC header absent
-         *                 | 0x1 - 802.11 MAC header present
-         *     ------------+-------------------------------------------------
-         *     raw         | bit 0: 0x0 - 802.11 MAC header absent
-         *                 |        0x1 - 802.11 MAC header present
-         *                 | bit 1: 0x0 - allow aggregation
-         *                 |        0x1 - don't allow aggregation
-         *                 | bit 2: 0x0 - perform encryption
-         *                 |        0x1 - don't perform encryption
-         *                 | bit 3: 0x0 - perform tx classification / queuing
-         *                 |        0x1 - don't perform tx classification;
-         *                 |              insert the frame into the "misc"
-         *                 |              tx queue
-         *                 | bit 4: reserved
-         */
-        pkt_subtype: 5,
-
-        /* pkt_type -
-         * General specification of the tx frame contents.
-         * The htt_pkt_type enum should be used to specify and check the
-         * value of this field.
-         */
-        pkt_type: 3,
-
-        /* vdev_id -
-         * ID for the vdev that is sending this tx frame.
-         * For certain non-standard packet types, e.g. pkt_type == raw
-         * and (pkt_subtype >> 3) == 1, this field is not relevant/valid.
-         * This field is used primarily for determining where to queue
-         * broadcast and multicast frames.
-         */
 #define HTT_TX_VDEV_ID_WORD 0
 #define HTT_TX_VDEV_ID_MASK 0x3f
 #define HTT_TX_VDEV_ID_SHIFT 16
-        vdev_id: 6,
 
-        #define HTT_TX_EXT_TID_DEFAULT              0
-		#define HTT_TX_EXT_TID_NON_QOS_MCAST_BCAST 16
-        #define HTT_TX_EXT_TID_MGMT                17
-        #define HTT_TX_EXT_TID_INVALID             31
-        /* ext_tid -
-         * The extended traffic ID.
-         * If the TID is unknown, the extended TID is set to
-         * HTT_TX_EXT_TID_INVALID.
-         * If the tx frame is QoS data, then the extended TID has the 0-15
-         * value of the QoS TID.
-         * If the tx frame is non-QoS data, then the extended TID is set to
-         * HTT_TX_EXT_TID_NON_QOS.
-         * If the tx frame is multicast or broadcast, then the extended TID
-         * is set to HTT_TX_EXT_TID_MCAST_BCAST.
-         */
-        ext_tid: 5,
+#define HTT_TX_L3_CKSUM_OFFLOAD      1
+#define HTT_TX_L4_CKSUM_OFFLOAD      2
 
-        /* postponed -
-         * This flag indicates whether the tx frame has been downloaded to
-         * the target before but discarded by the target, and now is being
-         * downloaded again; or if this is a new frame that is being
-         * downloaded for the first time.
-         * This flag allows the target to determine the correct order for
-         * transmitting new vs. old frames.
-         * value: 0 -> new frame, 1 -> re-send of a previously sent frame
-         * This flag only applies to HL systems, since in LL systems,
-         * the tx flow control is handled entirely within the target.
-         */
-        postponed: 1,
-
-        /* more_in_batch -
-         * This flag indicates that this frame is followed by other tx frames
-         * that are in the process of being downloaded, and should arrive
-         * in the target imminently.
-         * This flag can be used by the target's tx scheduler to decide
-         * whether to transmit the frame now, or to wait for the following
-         * frames to arrive, to see if a more efficient (aggregate)
-         * transmission can be formed once the subsequent frames arrive.
-         * This flag only applies to HL systems, since in LL systems,
-         * all tx descriptors are immediately downloaded.
-         */
-        more_in_batch: 1,
-
-        /* cksum_offload -
-         * This flag indicates whether checksum offload is enabled or not
-         * for this frame. Target FW use this flag to turn on HW checksumming
-         *  0x0 - No checksum offload
-         *  0x1 - L3 header checksum only
-         *  0x2 - L4 checksum only
-         *  0x3 - L3 header checksum + L4 checksum
-         */
-        cksum_offload: 2,
-
-        #define HTT_TX_L3_CKSUM_OFFLOAD      1
-        #define HTT_TX_L4_CKSUM_OFFLOAD      2
-
-        reserved_dword0_bits31: 1; /* unused */
-
-        /* DWORD 1: MSDU length and ID */
 #define HTT_TX_MSDU_LEN_DWORD 1
 #define HTT_TX_MSDU_LEN_MASK 0xffff;
-        A_UINT32
-            len: 16, /* MSDU length, in bytes */
-            id:  16; /* MSDU ID used to identify the MSDU to the host, and this id is used to calculate
-                      * fragmentation descriptor pointer inside the target based on the base address,
-                      * configured inside the target.
-                      */
 
-        /* DWORD 2: fragmentation descriptor bus address */
-        /* frags_desc_ptr -
-         * The fragmentation descriptor pointer tells the HW's MAC DMA
-         * where the tx frame's fragments reside in memory.
-         * This field only applies to LL systems, since in HL systems the
-         * (degenerate single-fragment) fragmentation descriptor is created
-         * within the target.
-         */
-        A_UINT32 frags_desc_ptr;
+/*
+ * HTT_VAR_PADDR macros
+ * Allow physical / bus addresses to be either a single 32-bit value,
+ * or a 64-bit value, stored as a little-endian lo,hi pair of 32-bit parts
+ */
+#define HTT_VAR_PADDR32(var_name) \
+    A_UINT32 var_name
+#define HTT_VAR_PADDR64_LE(var_name)        \
+    struct {                                \
+        /* little-endian: lo precedes hi */ \
+        A_UINT32 lo;                        \
+        A_UINT32 hi;                        \
+    } var_name
 
-        /* DWORD 3: peerid */
-        /*
-         * Peer ID : Target can use this value to know which peer-id packet
-         *           destined to.
-         *           It's intended to be specified by host in case of NAWDS.
-         */
-        A_UINT32 peerid;
-
-        /* Reason reserved is commented is increasing the htt structure size
-         * leads to some wierd issues. Contact Raj/Kyeyoon for more info
-         * A_UINT32 reserved_dword3_bits0_31;
-         */
-} POSTPACK;
+/*
+ * TEMPLATE_HTT_TX_MSDU_DESC_T:
+ * This macro defines a htt_tx_msdu_descXXX_t in which any physical
+ * addresses are stored in a XXX-bit field.
+ * This macro is used to define both htt_tx_msdu_desc32_t and
+ * htt_tx_msdu_desc64_t structs.
+ */
+#define TEMPLATE_HTT_TX_MSDU_DESC_T(_paddr_bits_, _paddr__frags_desc_ptr_)     \
+PREPACK struct htt_tx_msdu_desc ## _paddr_bits_ ## _t                          \
+{                                                                              \
+    /* DWORD 0: flags and meta-data */                                         \
+    A_UINT32                                                                   \
+        msg_type: 8, /* HTT_H2T_MSG_TYPE_TX_FRM */                             \
+                                                                               \
+        /* pkt_subtype -                                                       \
+         * Detailed specification of the tx frame contents, extending the      \
+         * general specification provided by pkt_type.                         \
+         * FIX THIS: ADD COMPLETE SPECS FOR THIS FIELDS VALUE, e.g.            \
+         *     pkt_type    | pkt_subtype                                       \
+         *     ==============================================================  \
+         *     802.3       | bit 0:3    - Reserved                             \
+         *                 | bit 4: 0x0 - Copy-Engine Classification Results   \
+         *                 |              not appended to the HTT message      \
+         *                 |        0x1 - Copy-Engine Classification Results   \
+         *                 |              appended to the HTT message in the   \
+         *                 |              format:                              \
+         *                 |              [HTT tx desc, frame header,          \
+         *                 |              CE classification results]           \
+         *                 |              The CE classification results begin  \
+         *                 |              at the next 4-byte boundary after    \
+         *                 |              the frame header.                    \
+         *     ------------+-------------------------------------------------  \
+         *     Eth2        | bit 0:3    - Reserved                             \
+         *                 | bit 4: 0x0 - Copy-Engine Classification Results   \
+         *                 |              not appended to the HTT message      \
+         *                 |        0x1 - Copy-Engine Classification Results   \
+         *                 |              appended to the HTT message.         \
+         *                 |              See the above specification of the   \
+         *                 |              CE classification results location.  \
+         *     ------------+-------------------------------------------------  \
+         *     native WiFi | bit 0:3    - Reserved                             \
+         *                 | bit 4: 0x0 - Copy-Engine Classification Results   \
+         *                 |              not appended to the HTT message      \
+         *                 |        0x1 - Copy-Engine Classification Results   \
+         *                 |              appended to the HTT message.         \
+         *                 |              See the above specification of the   \
+         *                 |              CE classification results location.  \
+         *     ------------+-------------------------------------------------  \
+         *     mgmt        | 0x0 - 802.11 MAC header absent                    \
+         *                 | 0x1 - 802.11 MAC header present                   \
+         *     ------------+-------------------------------------------------  \
+         *     raw         | bit 0: 0x0 - 802.11 MAC header absent             \
+         *                 |        0x1 - 802.11 MAC header present            \
+         *                 | bit 1: 0x0 - allow aggregation                    \
+         *                 |        0x1 - don't allow aggregation              \
+         *                 | bit 2: 0x0 - perform encryption                   \
+         *                 |        0x1 - don't perform encryption             \
+         *                 | bit 3: 0x0 - perform tx classification / queuing  \
+         *                 |        0x1 - don't perform tx classification;     \
+         *                 |              insert the frame into the "misc"     \
+         *                 |              tx queue                             \
+         *                 | bit 4: 0x0 - Copy-Engine Classification Results   \
+         *                 |              not appended to the HTT message      \
+         *                 |        0x1 - Copy-Engine Classification Results   \
+         *                 |              appended to the HTT message.         \
+         *                 |              See the above specification of the   \
+         *                 |              CE classification results location.  \
+         */                                                                    \
+        pkt_subtype: 5,                                                        \
+                                                                               \
+        /* pkt_type -                                                          \
+         * General specification of the tx frame contents.                     \
+         * The htt_pkt_type enum should be used to specify and check the       \
+         * value of this field.                                                \
+         */                                                                    \
+        pkt_type: 3,                                                           \
+                                                                               \
+        /* vdev_id -                                                           \
+         * ID for the vdev that is sending this tx frame.                      \
+         * For certain non-standard packet types, e.g. pkt_type == raw         \
+         * and (pkt_subtype >> 3) == 1, this field is not relevant/valid.      \
+         * This field is used primarily for determining where to queue         \
+         * broadcast and multicast frames.                                     \
+         */                                                                    \
+        vdev_id: 6,                                                            \
+        /* ext_tid -                                                           \
+         * The extended traffic ID.                                            \
+         * If the TID is unknown, the extended TID is set to                   \
+         * HTT_TX_EXT_TID_INVALID.                                             \
+         * If the tx frame is QoS data, then the extended TID has the 0-15     \
+         * value of the QoS TID.                                               \
+         * If the tx frame is non-QoS data, then the extended TID is set to    \
+         * HTT_TX_EXT_TID_NON_QOS.                                             \
+         * If the tx frame is multicast or broadcast, then the extended TID    \
+         * is set to HTT_TX_EXT_TID_MCAST_BCAST.                               \
+         */                                                                    \
+        ext_tid: 5,                                                            \
+                                                                               \
+        /* postponed -                                                         \
+         * This flag indicates whether the tx frame has been downloaded to     \
+         * the target before but discarded by the target, and now is being     \
+         * downloaded again; or if this is a new frame that is being           \
+         * downloaded for the first time.                                      \
+         * This flag allows the target to determine the correct order for      \
+         * transmitting new vs. old frames.                                    \
+         * value: 0 -> new frame, 1 -> re-send of a previously sent frame      \
+         * This flag only applies to HL systems, since in LL systems,          \
+         * the tx flow control is handled entirely within the target.          \
+         */                                                                    \
+        postponed: 1,                                                          \
+                                                                               \
+        /* extension -                                                         \
+         * This flag indicates whether a HTT tx MSDU extension descriptor      \
+         * (htt_tx_msdu_desc_ext_t) follows this HTT tx MSDU descriptor.       \
+         *                                                                     \
+         * 0x0 - no extension MSDU descriptor is present                       \
+         * 0x1 - an extension MSDU descriptor immediately follows the          \
+         *       regular MSDU descriptor                                       \
+         */                                                                    \
+        extension: 1,                                                          \
+                                                                               \
+        /* cksum_offload -                                                     \
+         * This flag indicates whether checksum offload is enabled or not      \
+         * for this frame. Target FW use this flag to turn on HW checksumming  \
+         *  0x0 - No checksum offload                                          \
+         *  0x1 - L3 header checksum only                                      \
+         *  0x2 - L4 checksum only                                             \
+         *  0x3 - L3 header checksum + L4 checksum                             \
+         */                                                                    \
+        cksum_offload: 2,                                                      \
+                                                                               \
+        /* tx_comp_req -                                                       \
+         * This flag indicates whether Tx Completion                           \
+         * from fw is required or not.                                         \
+         * This  flag is only relevant if tx completion is not                 \
+         * universally enabled.                                                \
+         * For all LL systems, tx completion is mandatory,                     \
+         * so this flag will be irrelevant.                                    \
+         * For HL systems tx completion is optional, but HL systems in which   \
+         * the bus throughput exceeds the WLAN throughput will                 \
+         * probably want to always use tx completion, and thus                 \
+         * would not check this flag.                                          \
+         * This flag is required when tx completions are not used universally, \
+         * but are still required for certain tx frames for which              \
+         * an OTA delivery acknowledgment is needed by the host.               \
+         * In practice, this would be for HL systems in which the              \
+         * bus throughput is less than the WLAN throughput.                    \
+         *                                                                     \
+         * 0x0 - Tx Completion Indication from Fw not required                 \
+         * 0x1 - Tx Completion Indication from Fw is required                  \
+         */                                                                    \
+        tx_compl_req: 1;                                                       \
+                                                                               \
+                                                                               \
+        /* DWORD 1: MSDU length and ID */                                      \
+        A_UINT32                                                               \
+            len: 16, /* MSDU length, in bytes */                               \
+            id:  16; /* MSDU ID used to identify the MSDU to the host,         \
+                      * and this id is used to calculate fragmentation         \
+                      * descriptor pointer inside the target based on          \
+                      * the base address, configured inside the target.        \
+                      */                                                       \
+                                                                               \
+        /* DWORD 2 (or 2-3): fragmentation descriptor bus address */           \
+        /* frags_desc_ptr -                                                    \
+         * The fragmentation descriptor pointer tells the HW's MAC DMA         \
+         * where the tx frame's fragments reside in memory.                    \
+         * This field only applies to LL systems, since in HL systems the      \
+         * (degenerate single-fragment) fragmentation descriptor is created    \
+         * within the target.                                                  \
+         */                                                                    \
+        _paddr__frags_desc_ptr_;                                               \
+                                                                               \
+        /* DWORD 3 (or 4): peerid, chanfreq */                                 \
+        /*                                                                     \
+         * Peer ID : Target can use this value to know which peer-id packet    \
+         *           destined to.                                              \
+         *           It's intended to be specified by host in case of NAWDS.   \
+         */                                                                    \
+        A_UINT16 peerid;                                                       \
+                                                                               \
+        /*                                                                     \
+         * Channel frequency: This identifies the desired channel              \
+         * frequency (in mhz) for tx frames. This is used by FW to help        \
+         * determine when it is safe to transmit or drop frames for            \
+         * off-channel operation.                                              \
+         * The default value of zero indicates to FW that the corresponding    \
+         * VDEV's home channel (if there is one) is the desired channel        \
+         * frequency.                                                          \
+         */                                                                    \
+        A_UINT16 chanfreq;                                                     \
+                                                                               \
+        /* Reason reserved is commented is increasing the htt structure size   \
+         * leads to some wierd issues. Contact Raj/Kyeyoon for more info       \
+         * A_UINT32 reserved_dword3_bits0_31;                                  \
+         */                                                                    \
+} POSTPACK
+/* define a htt_tx_msdu_desc32_t type */
+TEMPLATE_HTT_TX_MSDU_DESC_T(32, HTT_VAR_PADDR32(frags_desc_ptr));
+/* define a htt_tx_msdu_desc64_t type */
+TEMPLATE_HTT_TX_MSDU_DESC_T(64, HTT_VAR_PADDR64_LE(frags_desc_ptr));
+/*
+ * Make htt_tx_msdu_desc_t be an alias for either
+ * htt_tx_msdu_desc32_t or htt_tx_msdu_desc64_t
+ */
+#if HTT_PADDR64
+    #define htt_tx_msdu_desc_t htt_tx_msdu_desc64_t
+#else
+    #define htt_tx_msdu_desc_t htt_tx_msdu_desc32_t
+#endif
 
 /* decriptor information for Management frame*/
+/*
+ * THIS htt_mgmt_tx_desc_t STRUCT IS DEPRECATED - DON'T USE IT.
+ * BOTH MANAGEMENT AND DATA FRAMES SHOULD USE htt_tx_msdu_desc_t.
+ */
 #define HTT_MGMT_FRM_HDR_DOWNLOAD_LEN    32
 extern A_UINT32 mgmt_hdr_len;
 PREPACK struct htt_mgmt_tx_desc_t {
     A_UINT32    msg_type;
+#if HTT_PADDR64
+    A_UINT64    frag_paddr; /* DMAble address of the data */
+#else
     A_UINT32    frag_paddr; /* DMAble address of the data */
+#endif
     A_UINT32    desc_id;    /* returned to host during completion
                              * to free the meory*/
     A_UINT32    len;    /* Fragment length */
@@ -378,6 +830,13 @@ PREPACK struct htt_mgmt_tx_compl_ind {
 #define HTT_TX_HDR_SIZE_ETHERNET 14
 
 #define HTT_TX_HDR_SIZE_OUTER_HDR_MAX HTT_TX_HDR_SIZE_802_11_RAW
+A_COMPILE_TIME_ASSERT(
+    htt_encap_hdr_size_max_check_nwifi,
+    HTT_TX_HDR_SIZE_OUTER_HDR_MAX >= HTT_TX_HDR_SIZE_NATIVE_WIFI);
+A_COMPILE_TIME_ASSERT(
+    htt_encap_hdr_size_max_check_enet,
+    HTT_TX_HDR_SIZE_OUTER_HDR_MAX >= HTT_TX_HDR_SIZE_ETHERNET);
+
 #define HTT_HL_TX_HDR_SIZE_IP 1600    /* also include payload */
 #define HTT_LL_TX_HDR_SIZE_IP 16      /* up to the end of UDP header for IPv4 case */
 
@@ -429,15 +888,15 @@ PREPACK struct htt_mgmt_tx_compl_ind {
 #define HTT_TX_DESC_POSTPONED_M        0x08000000
 #define HTT_TX_DESC_POSTPONED_S        27
 
-#define HTT_TX_DESC_MORE_BATCH_OFFSET_BYTES 0
-#define HTT_TX_DESC_MORE_BATCH_OFFSET_DWORD 0
-#define HTT_TX_DESC_MORE_BATCH_M       0x10000000
-#define HTT_TX_DESC_MORE_BATCH_S       28
-
 #define HTT_TX_DESC_CKSUM_OFFLOAD_OFFSET_BYTES 0
 #define HTT_TX_DESC_CKSUM_OFFLOAD_OFFSET_DWORD 0
 #define HTT_TX_DESC_CKSUM_OFFLOAD_M 0x60000000
 #define HTT_TX_DESC_CKSUM_OFFLOAD_S 29
+
+#define HTT_TX_DESC_TX_COMP_OFFSET_BYTES 0
+#define HTT_TX_DESC_TX_COMP_OFFSET_DWORD 0
+#define HTT_TX_DESC_TX_COMP_M 0x80000000
+#define HTT_TX_DESC_TX_COMP_S 31
 
 /* dword 1 */
 #define HTT_TX_DESC_FRM_LEN_OFFSET_BYTES 4
@@ -453,14 +912,66 @@ PREPACK struct htt_mgmt_tx_compl_ind {
 /* dword 2 */
 #define HTT_TX_DESC_FRAGS_DESC_PADDR_OFFSET_BYTES 8
 #define HTT_TX_DESC_FRAGS_DESC_PADDR_OFFSET_DWORD 2
-#define HTT_TX_DESC_FRAGS_DESC_PADDR_M 0xffffffff
-#define HTT_TX_DESC_FRAGS_DESC_PADDR_S 0
+/* for systems using 64-bit format for bus addresses */
+#define HTT_TX_DESC_FRAGS_DESC_PADDR_HI_M 0xffffffff
+#define HTT_TX_DESC_FRAGS_DESC_PADDR_HI_S 0
+#define HTT_TX_DESC_FRAGS_DESC_PADDR_LO_M 0xffffffff
+#define HTT_TX_DESC_FRAGS_DESC_PADDR_LO_S 0
+/* for systems using 32-bit format for bus addresses */
+#define HTT_TX_DESC_FRAGS_DESC_PADDR_M    0xffffffff
+#define HTT_TX_DESC_FRAGS_DESC_PADDR_S    0
 
 /* dword 3 */
-#define HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_BYTES 12
-#define HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_DWORD 3
-#define HTT_TX_DESC_PEERID_DESC_PADDR_M 0xffffffff
-#define HTT_TX_DESC_PEERID_DESC_PADDR_S 0
+#define HTT_TX_DESC_PEER_ID_OFFSET_BYTES_64 16
+#define HTT_TX_DESC_PEER_ID_OFFSET_BYTES_32 12
+#define HTT_TX_DESC_PEER_ID_OFFSET_DWORD_64 \
+        (HTT_TX_DESC_PEER_ID_OFFSET_BYTES_64 >> 2)
+#define HTT_TX_DESC_PEER_ID_OFFSET_DWORD_32 \
+        (HTT_TX_DESC_PEER_ID_OFFSET_BYTES_32 >> 2)
+
+#if HTT_PADDR64
+#define HTT_TX_DESC_PEER_ID_OFFSET_BYTES HTT_TX_DESC_PEER_ID_OFFSET_BYTES_64
+#define HTT_TX_DESC_PEER_ID_OFFSET_DWORD HTT_TX_DESC_PEER_ID_OFFSET_DWORD_64
+#else
+#define HTT_TX_DESC_PEER_ID_OFFSET_BYTES HTT_TX_DESC_PEER_ID_OFFSET_BYTES_32
+#define HTT_TX_DESC_PEER_ID_OFFSET_DWORD HTT_TX_DESC_PEER_ID_OFFSET_DWORD_32
+#endif
+
+#define HTT_TX_DESC_PEER_ID_M 0x0000ffff
+#define HTT_TX_DESC_PEER_ID_S 0
+    /*
+     * TEMPORARY:
+     * The original definitions for the PEER_ID fields contained typos
+     * (with _DESC_PADDR appended to this PEER_ID field name).
+     * Retain deprecated original names for PEER_ID fields until all code that
+     * refers to them has been updated.
+     */
+    #define HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_BYTES \
+        HTT_TX_DESC_PEER_ID_OFFSET_BYTES
+    #define HTT_TX_DESC_PEERID_DESC_PADDR_OFFSET_DWORD \
+        HTT_TX_DESC_PEER_ID_OFFSET_DWORD
+    #define HTT_TX_DESC_PEERID_DESC_PADDR_M \
+        HTT_TX_DESC_PEER_ID_M
+    #define HTT_TX_DESC_PEERID_DESC_PADDR_S \
+        HTT_TX_DESC_PEER_ID_S
+
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES_64 16 // to dword with chan freq
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES_32 12 // to dword with chan freq
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_DWORD_64 \
+        (HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES_64 >> 2)
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_DWORD_32 \
+        (HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES_32 >> 2)
+
+#if HTT_PADDR64
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES_64
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_DWORD HTT_TX_DESC_CHAN_FREQ_OFFSET_DWORD_64
+#else
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES HTT_TX_DESC_CHAN_FREQ_OFFSET_BYTES_32
+#define HTT_TX_DESC_CHAN_FREQ_OFFSET_DWORD HTT_TX_DESC_CHAN_FREQ_OFFSET_DWORD_32
+#endif
+
+#define HTT_TX_DESC_CHAN_FREQ_M 0xffff0000
+#define HTT_TX_DESC_CHAN_FREQ_S 16
 
 #define HTT_TX_DESC_PKT_SUBTYPE_GET(_var) \
     (((_var) & HTT_TX_DESC_PKT_SUBTYPE_M) >> HTT_TX_DESC_PKT_SUBTYPE_S)
@@ -534,6 +1045,413 @@ PREPACK struct htt_mgmt_tx_compl_ind {
         ((_var) |= ((_val) << HTT_TX_DESC_CKSUM_OFFLOAD_S)); \
     } while (0)
 
+#define HTT_TX_DESC_TX_COMP_GET(_var) \
+    (((_var) & HTT_TX_DESC_TX_COMP_M) >> HTT_TX_DESC_TX_COMP_S)
+#define HTT_TX_DESC_TX_COMP_SET(_var, _val)             \
+     do {                                               \
+         HTT_CHECK_SET_VAL(HTT_TX_DESC_TX_COMP, _val);  \
+         ((_var) |= ((_val) << HTT_TX_DESC_TX_COMP_S)); \
+     } while (0)
+
+#define HTT_TX_DESC_PEER_ID_GET(_var) \
+    (((_var) & HTT_TX_DESC_PEER_ID_M) >> HTT_TX_DESC_PEER_ID_S)
+#define HTT_TX_DESC_PEER_ID_SET(_var, _val)             \
+     do {                                               \
+         HTT_CHECK_SET_VAL(HTT_TX_DESC_PEER_ID, _val);  \
+         ((_var) |= ((_val) << HTT_TX_DESC_PEER_ID_S)); \
+     } while (0)
+
+#define HTT_TX_DESC_CHAN_FREQ_GET(_var) \
+    (((_var) & HTT_TX_DESC_CHAN_FREQ_M) >> HTT_TX_DESC_CHAN_FREQ_S)
+#define HTT_TX_DESC_CHAN_FREQ_SET(_var, _val)             \
+     do {                                               \
+         HTT_CHECK_SET_VAL(HTT_TX_DESC_CHAN_FREQ, _val);  \
+         ((_var) |= ((_val) << HTT_TX_DESC_CHAN_FREQ_S)); \
+     } while (0)
+
+
+/* enums used in the HTT tx MSDU extension descriptor */
+enum {
+    htt_tx_guard_interval_regular = 0,
+    htt_tx_guard_interval_short   = 1,
+};
+
+enum {
+    htt_tx_preamble_type_ofdm = 0,
+    htt_tx_preamble_type_cck  = 1,
+    htt_tx_preamble_type_ht   = 2,
+    htt_tx_preamble_type_vht  = 3,
+};
+
+enum {
+    htt_tx_bandwidth_5MHz   = 0,
+    htt_tx_bandwidth_10MHz  = 1,
+    htt_tx_bandwidth_20MHz  = 2,
+    htt_tx_bandwidth_40MHz  = 3,
+    htt_tx_bandwidth_80MHz  = 4,
+    htt_tx_bandwidth_160MHz = 5, /* includes 80+80 */
+};
+
+/**
+ * @brief HTT tx MSDU extension descriptor
+ * @details
+ *  If the target supports HTT tx MSDU extension descriptors, the host has
+ *  the option of appending the following struct following the regular
+ *  HTT tx MSDU descriptor (and setting the "extension" flag in the regular
+ *  HTT tx MSDU descriptor, to show that the extension descriptor is present).
+ *  The HTT tx MSDU extension descriptors allows the host to provide detailed
+ *  tx specs for each frame.
+ */
+PREPACK struct htt_tx_msdu_desc_ext_t {
+    /* DWORD 0: flags */
+    A_UINT32
+        valid_pwr:            1, /* bit 0: if set, tx pwr spec is valid */
+        valid_mcs_mask:       1, /* bit 1: if set, tx MCS mask spec is valid */
+        valid_nss_mask:       1, /* bit 2: if set, tx Nss mask spec is valid */
+        valid_guard_interval: 1, /* bit 3: if set, tx guard intv spec is valid*/
+        valid_preamble_type_mask: 1, /* 4: if set, tx preamble mask is valid */
+        valid_chainmask:      1, /* bit 5: if set, tx chainmask spec is valid */
+        valid_retries:        1, /* bit 6: if set, tx retries spec is valid */
+        valid_bandwidth:      1, /* bit 7: if set, tx bandwidth spec is valid */
+        valid_expire_tsf:     1, /* bit 8: if set, tx expire TSF spec is valid*/
+        is_dsrc:              1, /* bit 9: if set, MSDU is a DSRC frame */
+        reserved0_31_7:      22; /* bits 31:10 - unused, set to 0x0 */
+
+    /* DWORD 1: tx power, tx rate, tx BW */
+    A_UINT32
+        /* pwr -
+         * Specify what power the tx frame needs to be transmitted at.
+         * The power a signed (two's complement) value is in units of 0.5 dBm.
+         * The value needs to be appropriately sign-extended when extracting
+         * the value from the message and storing it in a variable that is
+         * larger than A_INT8.  (The HTT_TX_MSDU_EXT_DESC_FLAG_PWR_GET macro
+         * automatically handles this sign-extension.)
+         * If the transmission uses multiple tx chains, this power spec is
+         * the total transmit power, assuming incoherent combination of
+         * per-chain power to produce the total power.
+         */
+        pwr: 8,
+
+        /* mcs_mask -
+         * Specify the allowable values for MCS index (modulation and coding)
+         * to use for transmitting the frame.
+         *
+         * For HT / VHT preamble types, this mask directly corresponds to
+         * the HT or VHT MCS indices that are allowed.  For each bit N set
+         * within the mask, MCS index N is allowed for transmitting the frame.
+         * For legacy CCK and OFDM rates, separate bits are provided for CCK
+         * rates versus OFDM rates, so the host has the option of specifying
+         * that the target must transmit the frame with CCK or OFDM rates
+         * (not HT or VHT), but leaving the decision to the target whether
+         * to use CCK or OFDM.
+         *
+         * For CCK and OFDM, the bits within this mask are interpreted as
+         * follows:
+         *     bit  0 -> CCK 1 Mbps rate is allowed
+         *     bit  1 -> CCK 2 Mbps rate is allowed
+         *     bit  2 -> CCK 5.5 Mbps rate is allowed
+         *     bit  3 -> CCK 11 Mbps rate is allowed
+         *     bit  4 -> OFDM BPSK modulation, 1/2 coding rate is allowed
+         *     bit  5 -> OFDM QPSK modulation, 1/2 coding rate is allowed
+         *     bit  6 -> OFDM QPSK modulation, 3/4 coding rate is allowed
+         *     bit  7 -> OFDM 16-QAM modulation, 1/2 coding rate is allowed
+         *     bit  8 -> OFDM 16-QAM modulation, 3/4 coding rate is allowed
+         *     bit  9 -> OFDM 64-QAM modulation, 2/3 coding rate is allowed
+         *     bit 10 -> OFDM 64-QAM modulation, 3/4 coding rate is allowed
+         *     bit 11 -> OFDM 64-QAM modulation, 5/6 coding rate is allowed
+         *
+         * The MCS index specification needs to be compatible with the
+         * bandwidth mask specification.  For example, a MCS index == 9
+         * specification is inconsistent with a preamble type == VHT,
+         * Nss == 1, and channel bandwidth == 20 MHz.
+         *
+         * Furthermore, the host has only a limited ability to specify to
+         * the target to select from HT + legacy rates, or VHT + legacy rates,
+         * since this mcs_mask can specify either HT/VHT rates or legacy rates.
+         */
+        mcs_mask: 12,
+
+        /* nss_mask -
+         * Specify which numbers of spatial streams (MIMO factor) are permitted.
+         * Each bit in this mask corresponds to a Nss value:
+         *     bit 0: if set, Nss = 1 (non-MIMO) is permitted
+         *     bit 1: if set, Nss = 2 (2x2 MIMO) is permitted
+         *     bit 2: if set, Nss = 3 (3x3 MIMO) is permitted
+         *     bit 3: if set, Nss = 4 (4x4 MIMO) is permitted
+         * The values in the Nss mask must be suitable for the recipient, e.g.
+         * a value of 0x4 (Nss = 3) cannot be specified for a tx frame to a
+         * recipient which only supports 2x2 MIMO.
+         */
+        nss_mask: 4,
+
+        /* guard_interval -
+         * Specify a htt_tx_guard_interval enum value to indicate whether
+         * the transmission should use a regular guard interval or a
+         * short guard interval.
+         */
+        guard_interval: 1,
+
+        /* preamble_type_mask -
+         * Specify which preamble types (CCK, OFDM, HT, VHT) the target
+         * may choose from for transmitting this frame.
+         * The bits in this mask correspond to the values in the
+         * htt_tx_preamble_type enum.  For example, to allow the target
+         * to transmit the frame as either CCK or OFDM, this field would
+         * be set to
+         *     (1 << htt_tx_preamble_type_ofdm) |
+         *     (1 << htt_tx_preamble_type_cck)
+         */
+        preamble_type_mask: 4,
+
+        reserved1_31_29: 3; /* unused, set to 0x0 */
+
+    /* DWORD 2: tx chain mask, tx retries */
+    A_UINT32
+        /* chain_mask - specify which chains to transmit from */
+        chain_mask: 4,
+
+        /* retry_limit -
+         * Specify the maximum number of transmissions, including the
+         * initial transmission, to attempt before giving up if no ack
+         * is received.
+         * If the tx rate is specified, then all retries shall use the
+         * same rate as the initial transmission.
+         * If no tx rate is specified, the target can choose whether to
+         * retain the original rate during the retransmissions, or to
+         * fall back to a more robust rate.
+         */
+        retry_limit: 4,
+
+        /* bandwidth_mask -
+         * Specify what channel widths may be used for the transmission.
+         * A value of zero indicates "don't care" - the target may choose
+         * the transmission bandwidth.
+         * The bits within this mask correspond to the htt_tx_bandwidth
+         * enum values - bit 0 is for 5 MHz, bit 1 is for 10 MHz, etc.
+         * The bandwidth_mask must be consistent with the preamble_type_mask
+         * and mcs_mask specs, if they are provided.  For example, 80 MHz and
+         * 160 MHz can only be enabled in the mask if preamble_type == VHT.
+         */
+        bandwidth_mask: 6,
+
+        reserved2_31_14: 18; /* unused, set to 0x0 */
+
+    /* DWORD 3: tx expiry time (TSF) LSBs */
+    A_UINT32 expire_tsf_lo;
+
+    /* DWORD 4: tx expiry time (TSF) MSBs */
+    A_UINT32 expire_tsf_hi;
+
+    A_UINT32 reserved_for_future_expansion_set_to_zero[3];
+} POSTPACK;
+
+/* DWORD 0 */
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_M                0x00000001
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_S                0
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_M           0x00000002
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_S           1
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_NSS_MASK_M           0x00000004
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_NSS_MASK_S           2
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_M     0x00000008
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_S     3
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_M 0x00000010
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_S 4
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_M         0x00000020
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_S         5
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_M            0x00000040
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_S            6
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_M          0x00000080
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_S          7
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_M        0x00000100
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_S        8
+#define HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_M                  0x00000200
+#define HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_S                  9
+
+/* DWORD 1 */
+#define HTT_TX_MSDU_EXT_DESC_PWR_M                           0x000000ff
+#define HTT_TX_MSDU_EXT_DESC_PWR_S                           0
+#define HTT_TX_MSDU_EXT_DESC_MCS_MASK_M                      0x000fff00
+#define HTT_TX_MSDU_EXT_DESC_MCS_MASK_S                      8
+#define HTT_TX_MSDU_EXT_DESC_NSS_MASK_M                      0x00f00000
+#define HTT_TX_MSDU_EXT_DESC_NSS_MASK_S                      20
+#define HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_M                0x01000000
+#define HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_S                24
+#define HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_M            0x1c000000
+#define HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_S            25
+
+/* DWORD 2 */
+#define HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_M                    0x0000000f
+#define HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_S                    0
+#define HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_M                   0x000000f0
+#define HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_S                   4
+#define HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_M                0x00003f00
+#define HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_S                8
+
+
+/* DWORD 0 */
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PWR_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_MCS_MASK_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL( \
+             HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL, _val); \
+         ((_var) |= ((_val) \
+             << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_GUARD_INTERVAL_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL( \
+             HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK, _val); \
+         ((_var) |= ((_val) \
+             << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_PREAMBLE_TYPE_MASK_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_CHAIN_MASK_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_RETRIES_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_BANDWIDTH_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_VALID_EXPIRE_TIME_S));\
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_M) >> \
+    HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_S)
+#define HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_FLAG_IS_DSRC_S)); \
+     } while (0)
+
+
+/* DWORD 1 */
+#define HTT_TX_MSDU_EXT_DESC_PWR_GET_BASE(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_PWR_M) >> \
+    HTT_TX_MSDU_EXT_DESC_PWR_S)
+#define HTT_TX_MSDU_EXT_DESC_PWR_GET(_var) \
+    (HTT_TX_MSDU_EXT_DESC_PWR_GET_BASE(_var)  | \
+    HTT_SIGN_BIT_EXTENSION_MASK(_var, HTT_TX_MSDU_EXT_DESC_PWR))
+#define HTT_TX_MSDU_EXT_DESC_PWR_SET(_var, _val) \
+    ((_var) |= (((_val) << HTT_TX_MSDU_EXT_DESC_PWR_S)) & \
+    HTT_TX_MSDU_EXT_DESC_PWR_M)
+
+#define HTT_TX_MSDU_EXT_DESC_MCS_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_MCS_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_MCS_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_MCS_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_MCS_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_MCS_MASK_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_NSS_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_NSS_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_NSS_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_NSS_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_NSS_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_NSS_MASK_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_M) >> \
+    HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_S)
+#define HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_GUARD_INTERVAL_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_PREAMBLE_TYPE_MASK_S)); \
+     } while (0)
+
+
+/* DWORD 2 */
+#define HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_CHAIN_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_CHAIN_MASK_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_M) >> \
+    HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_S)
+#define HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_RETRY_LIMIT_S)); \
+     } while (0)
+
+#define HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_GET(_var) \
+    (((_var) & HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_M) >> \
+    HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_S)
+#define HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK, _val); \
+         ((_var) |= ((_val) << HTT_TX_MSDU_EXT_DESC_BANDWIDTH_MASK_S)); \
+     } while (0)
+
+
 /**
  * @brief MAC DMA rx ring setup specification
  * @details
@@ -548,9 +1466,15 @@ PREPACK struct htt_mgmt_tx_compl_ind {
  *            |---------------------------------------------------------------|
  * header:    |            reserved           |   num rings   |    msg type   |
  *            |---------------------------------------------------------------|
- * payload 1: |             FW_IDX shadow register physical address           |
+ * payload 1: |       FW_IDX shadow register physical address (bits 31:0)     |
+#if HTT_PADDR64
+ *            |       FW_IDX shadow register physical address (bits 63:32)    |
+#endif
  *            |---------------------------------------------------------------|
- *            |                   rx ring base physical address               |
+ *            |                 rx ring base physical address (bits 31:0)     |
+#if HTT_PADDR64
+ *            |                 rx ring base physical address (bits 63:32)    |
+#endif
  *            |---------------------------------------------------------------|
  *            |      rx ring buffer size      |        rx ring length         |
  *            |---------------------------------------------------------------|
@@ -577,18 +1501,34 @@ PREPACK struct htt_mgmt_tx_compl_ind {
  *     Purpose: indicates whether the host is setting up one rx ring or two
  *     Value: 1 or 2
  * Payload:
- *   - IDX_SHADOW_REG_PADDR
- *     Bits 31:0
- *     Value: physical address of the host's FW_IDX shadow register
- *   - RING_BASE_PADDR
- *     Bits 31:0
- *     Value: physical address of the host's rx ring
+ *     for systems using 64-bit format for bus addresses:
+ *       - IDX_SHADOW_REG_PADDR_LO
+ *         Bits 31:0
+ *         Value: lower 4 bytes of physical address of the host's
+ *                FW_IDX shadow register
+ *       - IDX_SHADOW_REG_PADDR_HI
+ *         Bits 31:0
+ *         Value: upper 4 bytes of physical address of the host's
+ *                FW_IDX shadow register
+ *       - RING_BASE_PADDR_LO
+ *         Bits 31:0
+ *         Value: lower 4 bytes of physical address of the host's rx ring
+ *       - RING_BASE_PADDR_HI
+ *         Bits 31:0
+ *         Value: uppper 4 bytes of physical address of the host's rx ring
+ *     for systems using 32-bit format for bus addresses:
+ *       - IDX_SHADOW_REG_PADDR
+ *         Bits 31:0
+ *         Value: physical address of the host's FW_IDX shadow register
+ *       - RING_BASE_PADDR
+ *         Bits 31:0
+ *         Value: physical address of the host's rx ring
  *   - RING_LEN
  *     Bits 15:0
  *     Value: number of elements in the rx ring
  *   - RING_BUF_SZ
  *     Bits 31:16
- *     Value: size of the buffers reference by the rx ring, in byte units
+ *     Value: size of the buffers referenced by the rx ring, in byte units
  *   - ENABLED_FLAGS
  *     Bits 15:0
  *     Value: 1-bit flags to show whether different rx fields are enabled
@@ -646,11 +1586,24 @@ PREPACK struct htt_mgmt_tx_compl_ind {
 /* header fields */
 #define HTT_RX_RING_CFG_NUM_RINGS_M      0xff00
 #define HTT_RX_RING_CFG_NUM_RINGS_S      8
+
 /* payload fields */
-#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_M 0xffffffff
-#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_S 0
-#define HTT_RX_RING_CFG_BASE_PADDR_M      0xffffffff
-#define HTT_RX_RING_CFG_BASE_PADDR_S      0
+/* for systems using a 64-bit format for bus addresses */
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_HI_M 0xffffffff
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_HI_S 0
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_LO_M 0xffffffff
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_LO_S 0
+#define HTT_RX_RING_CFG_BASE_PADDR_HI_M           0xffffffff
+#define HTT_RX_RING_CFG_BASE_PADDR_HI_S           0
+#define HTT_RX_RING_CFG_BASE_PADDR_LO_M           0xffffffff
+#define HTT_RX_RING_CFG_BASE_PADDR_LO_S           0
+
+/* for systems using a 32-bit format for bus addresses */
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_M    0xffffffff
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_S    0
+#define HTT_RX_RING_CFG_BASE_PADDR_M              0xffffffff
+#define HTT_RX_RING_CFG_BASE_PADDR_S              0
+
 #define HTT_RX_RING_CFG_LEN_M             0xffff
 #define HTT_RX_RING_CFG_LEN_S             0
 #define HTT_RX_RING_CFG_BUF_SZ_M          0xffff0000
@@ -711,7 +1664,13 @@ PREPACK struct htt_mgmt_tx_compl_ind {
 #define HTT_RX_RING_CFG_OFFSET_FRAG_INFO_S     16
 
 #define HTT_RX_RING_CFG_HDR_BYTES 4
-#define HTT_RX_RING_CFG_PAYLD_BYTES 36
+#define HTT_RX_RING_CFG_PAYLD_BYTES_64 44
+#define HTT_RX_RING_CFG_PAYLD_BYTES_32 36
+#if HTT_PADDR64
+    #define HTT_RX_RING_CFG_PAYLD_BYTES HTT_RX_RING_CFG_PAYLD_BYTES_64
+#else
+    #define HTT_RX_RING_CFG_PAYLD_BYTES HTT_RX_RING_CFG_PAYLD_BYTES_32
+#endif
 #define HTT_RX_RING_CFG_BYTES(num_rings) \
     (HTT_RX_RING_CFG_HDR_BYTES + (num_rings) * HTT_RX_RING_CFG_PAYLD_BYTES)
 
@@ -725,10 +1684,18 @@ PREPACK struct htt_mgmt_tx_compl_ind {
     } while (0)
 
 /* degenerate case for 32-bit fields */
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_HI_GET(_var) (_var)
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_HI_SET(_var, _val) (_var) = (_val)
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_LO_GET(_var) (_var)
+#define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_LO_SET(_var, _val) (_var) = (_val)
 #define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_GET(_var) (_var)
 #define HTT_RX_RING_CFG_IDX_SHADOW_REG_PADDR_SET(_var, _val) (_var) = (_val)
 
 /* degenerate case for 32-bit fields */
+#define HTT_RX_RING_CFG_BASE_PADDR_HI_GET(_var) (_var)
+#define HTT_RX_RING_CFG_BASE_PADDR_HI_SET(_var, _val) (_var) = (_val)
+#define HTT_RX_RING_CFG_BASE_PADDR_LO_GET(_var) (_var)
+#define HTT_RX_RING_CFG_BASE_PADDR_LO_SET(_var, _val) (_var) = (_val)
 #define HTT_RX_RING_CFG_BASE_PADDR_GET(_var) (_var)
 #define HTT_RX_RING_CFG_BASE_PADDR_SET(_var, _val) (_var) = (_val)
 
@@ -1177,29 +2144,805 @@ PREPACK struct htt_mgmt_tx_compl_ind {
     } while (0)
 
 
+/**
+ * @brief host -> target HTT configure max amsdu info per vdev
+ *
+ * @details
+ *  The HTT AGGR CFG EX tells the target to configure max_amsdu info per vdev
+ *
+ * |31             21|20       16|15           8|7            0|
+ * |-----------------------------------------------------------|
+ * |       reserved  | vdev id   |   max amsdu  |   msg type   |
+ * |-----------------------------------------------------------|
+ * Header fields:
+ *  - MSG_TYPE
+ *    Bits 7:0
+ *    Purpose: identifies this as a aggr cfg ex message
+ *    Value: 0xa
+ *  - MAX_NUM_AMSDU_SUBFRM
+ *    Bits 15:8
+ *    Purpose: max MSDUs per A-MSDU
+ *  - VDEV_ID
+ *    Bits 20:16
+ *    Purpose: ID of the vdev to which this limit is applied
+ */
+#define HTT_AGGR_CFG_EX_MSG_SZ                     4
+
+#define HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_M     0xff00
+#define HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_S     8
+#define HTT_AGGR_CFG_EX_VDEV_ID_M                  0x1f0000
+#define HTT_AGGR_CFG_EX_VDEV_ID_S                  16
+
+#define HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_GET(_var) \
+            (((_var) & HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_M) >> \
+             HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_S)
+#define HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_SET(_var, _val) \
+            do {                                                     \
+                HTT_CHECK_SET_VAL(HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM, _val);  \
+                ((_var) |= ((_val) << HTT_AGGR_CFG_EX_MAX_NUM_AMSDU_SUBFRM_S)); \
+            } while (0)
+
+#define HTT_AGGR_CFG_EX_VDEV_ID_GET(_var) \
+            (((_var) & HTT_AGGR_CFG_EX_VDEV_ID_M) >> \
+             HTT_AGGR_CFG_EX_VDEV_ID_S)
+#define HTT_AGGR_CFG_EX_VDEV_ID_SET(_var, _val) \
+            do {                                                     \
+                HTT_CHECK_SET_VAL(HTT_AGGR_CFG_EX_VDEV_ID, _val);  \
+                ((_var) |= ((_val) << HTT_AGGR_CFG_EX_VDEV_ID_S)); \
+            } while (0)
+
+/**
+ * @brief HTT WDI_IPA Config Message
+ *
+ * @details
+ *  The HTT WDI_IPA config message is created/sent by host at driver
+ *  init time. It contains information about data structures used on
+ *  WDI_IPA TX and RX path.
+ *  TX CE ring is used for pushing packet metadata from IPA uC
+ *  to WLAN FW
+ *  TX Completion ring is used for generating TX completions from
+ *  WLAN FW to IPA uC
+ *  RX Indication ring is used for indicating RX packets from FW
+ *  to IPA uC
+ *  RX Ring2 is used as either completion ring or as second
+ *  indication ring. when Ring2 is used as completion ring, IPA uC
+ *  puts completed RX packet meta data to Ring2. when Ring2 is used
+ *  as second indication ring, RX packets for LTE-WLAN aggregation are
+ *  indicated in Ring2, other RX packets (e.g. hotspot related) are
+ *  indicated in RX Indication ring. Please see WDI_IPA specification
+ *  for more details.
+ *     |31            24|23            16|15             8|7              0|
+ *     |----------------+----------------+----------------+----------------|
+ *     |        tx pkt pool size         |      Rsvd      |     msg_type   |
+ *     |-------------------------------------------------------------------|
+ *     |                 tx comp ring base (bits 31:0)                     |
+#if HTT_PADDR64
+ *     |                 tx comp ring base (bits 63:32)                    |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |                         tx comp ring size                         |
+ *     |-------------------------------------------------------------------|
+ *     |            tx comp WR_IDX physical address (bits 31:0)            |
+#if HTT_PADDR64
+ *     |            tx comp WR_IDX physical address (bits 63:32)           |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |            tx CE WR_IDX physical address (bits 31:0)              |
+#if HTT_PADDR64
+ *     |            tx CE WR_IDX physical address (bits 63:32)             |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |             rx indication ring base (bits 31:0)                   |
+#if HTT_PADDR64
+ *     |             rx indication ring base (bits 63:32)                  |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |                      rx indication ring size                      |
+ *     |-------------------------------------------------------------------|
+ *     |             rx ind RD_IDX physical address (bits 31:0)            |
+#if HTT_PADDR64
+ *     |             rx ind RD_IDX physical address (bits 63:32)           |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |             rx ind WR_IDX physical address (bits 31:0)            |
+#if HTT_PADDR64
+ *     |             rx ind WR_IDX physical address (bits 63:32)           |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |-------------------------------------------------------------------|
+ *     |                    rx ring2 base (bits 31:0)                      |
+#if HTT_PADDR64
+ *     |                    rx ring2 base (bits 63:32)                     |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |                        rx ring2 size                              |
+ *     |-------------------------------------------------------------------|
+ *     |             rx ring2 RD_IDX physical address (bits 31:0)          |
+#if HTT_PADDR64
+ *     |             rx ring2 RD_IDX physical address (bits 63:32)         |
+#endif
+ *     |-------------------------------------------------------------------|
+ *     |             rx ring2 WR_IDX physical address (bits 31:0)          |
+#if HTT_PADDR64
+ *     |             rx ring2 WR_IDX physical address (bits 63:32)         |
+#endif
+ *     |-------------------------------------------------------------------|
+ *
+ * Header fields:
+ * Header fields:
+ *   - MSG_TYPE
+ *     Bits 7:0
+ *     Purpose: Identifies this as WDI_IPA config message
+ *     value: = 0x8
+ *   - TX_PKT_POOL_SIZE
+ *     Bits 15:0
+ *     Purpose: Total number of TX packet buffer pool allocated by Host for
+ *              WDI_IPA TX path
+ *   For systems using 32-bit format for bus addresses:
+ *     - TX_COMP_RING_BASE_ADDR
+ *       Bits 31:0
+ *       Purpose: TX Completion Ring base address in DDR
+ *     - TX_COMP_RING_SIZE
+ *       Bits 31:0
+ *       Purpose: TX Completion Ring size (must be power of 2)
+ *     - TX_COMP_WR_IDX_ADDR
+ *       Bits 31:0
+ *       Purpose: IPA doorbell register address OR DDR address where WIFI FW
+ *                updates the Write Index for WDI_IPA TX completion ring
+ *     - TX_CE_WR_IDX_ADDR
+ *       Bits 31:0
+ *       Purpose: DDR address where IPA uC
+ *                updates the WR Index for TX CE ring
+ *                (needed for fusion platforms)
+ *     - RX_IND_RING_BASE_ADDR
+ *       Bits 31:0
+ *       Purpose: RX Indication Ring base address in DDR
+ *     - RX_IND_RING_SIZE
+ *       Bits 31:0
+ *       Purpose: RX Indication Ring size
+ *     - RX_IND_RD_IDX_ADDR
+ *       Bits 31:0
+ *       Purpose: DDR address where IPA uC updates the Read Index for WDI_IPA
+ *                RX indication ring
+ *     - RX_IND_WR_IDX_ADDR
+ *       Bits 31:0
+ *       Purpose: IPA doorbell register address OR DDR address where WIFI FW
+ *                updates the Write Index for WDI_IPA RX indication ring
+ *     - RX_RING2_BASE_ADDR
+ *       Bits 31:0
+ *       Purpose: Second RX Ring(Indication or completion)base address in DDR
+ *     - RX_RING2_SIZE
+ *       Bits 31:0
+ *       Purpose: Second RX  Ring size (must be >= RX_IND_RING_SIZE)
+ *     - RX_RING2_RD_IDX_ADDR
+ *       Bits 31:0
+ *       Purpose: If Second RX ring is Indication ring, DDR address where
+ *                IPA uC updates the Read Index for Ring2.
+ *                If Second RX ring is completion ring, this is NOT used
+ *     - RX_RING2_WR_IDX_ADDR
+ *       Bits 31:0
+ *       Purpose: If Second RX ring is Indication ring,  DDR address where
+ *                WIFI FW updates the Write Index for WDI_IPA RX ring2
+ *                If second RX ring is completion ring, DDR address where
+ *                IPA uC updates the Write Index for Ring 2.
+ *   For systems using 64-bit format for bus addresses:
+ *     - TX_COMP_RING_BASE_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of TX Completion Ring base physical address in DDR
+ *     - TX_COMP_RING_BASE_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of TX Completion Ring base physical address in DDR
+ *     - TX_COMP_RING_SIZE
+ *       Bits 31:0
+ *       Purpose: TX Completion Ring size (must be power of 2)
+ *     - TX_COMP_WR_IDX_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of IPA doorbell register address OR
+ *                Lower 4 bytes of DDR address where WIFI FW
+ *                updates the Write Index for WDI_IPA TX completion ring
+ *     - TX_COMP_WR_IDX_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of IPA doorbell register address OR
+ *                Higher 4 bytes of DDR address where WIFI FW
+ *                updates the Write Index for WDI_IPA TX completion ring
+ *     - TX_CE_WR_IDX_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of DDR address where IPA uC
+ *                updates the WR Index for TX CE ring
+ *                (needed for fusion platforms)
+ *     - TX_CE_WR_IDX_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of DDR address where IPA uC
+ *                updates the WR Index for TX CE ring
+ *                (needed for fusion platforms)
+ *     - RX_IND_RING_BASE_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of RX Indication Ring base address in DDR
+ *     - RX_IND_RING_BASE_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of RX Indication Ring base address in DDR
+ *     - RX_IND_RING_SIZE
+ *       Bits 31:0
+ *       Purpose: RX Indication Ring size
+ *     - RX_IND_RD_IDX_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of DDR address where IPA uC updates the Read Index
+ *                for WDI_IPA RX indication ring
+ *     - RX_IND_RD_IDX_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of DDR address where IPA uC updates the Read Index
+ *                for WDI_IPA RX indication ring
+ *     - RX_IND_WR_IDX_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of IPA doorbell register address OR
+ *                Lower 4 bytes of DDR address where WIFI FW
+ *                updates the Write Index for WDI_IPA RX indication ring
+ *     - RX_IND_WR_IDX_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of IPA doorbell register address OR
+ *                Higher 4 bytes of DDR address where WIFI FW
+ *                updates the Write Index for WDI_IPA RX indication ring
+ *     - RX_RING2_BASE_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: Lower 4 bytes of Second RX Ring(Indication OR completion)base address in DDR
+ *     - RX_RING2_BASE_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: Higher 4 bytes of Second RX Ring(Indication OR completion)base address in DDR
+ *     - RX_RING2_SIZE
+ *       Bits 31:0
+ *       Purpose: Second RX  Ring size (must be >= RX_IND_RING_SIZE)
+ *     - RX_RING2_RD_IDX_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: If Second RX ring is Indication ring, lower 4 bytes of
+ *                DDR address where IPA uC updates the Read Index for Ring2.
+ *                If Second RX ring is completion ring, this is NOT used
+ *     - RX_RING2_RD_IDX_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: If Second RX ring is Indication ring, higher 4 bytes of
+ *                DDR address where IPA uC updates the Read Index for Ring2.
+ *                If Second RX ring is completion ring, this is NOT used
+ *     - RX_RING2_WR_IDX_ADDR_LO
+ *       Bits 31:0
+ *       Purpose: If Second RX ring is Indication ring, lower 4 bytes of
+ *                DDR address where WIFI FW updates the Write Index
+ *                for WDI_IPA RX ring2
+ *                If second RX ring is completion ring, lower 4 bytes of
+ *                DDR address where IPA uC updates the Write Index for Ring 2.
+ *     - RX_RING2_WR_IDX_ADDR_HI
+ *       Bits 31:0
+ *       Purpose: If Second RX ring is Indication ring, higher 4 bytes of
+ *                DDR address where WIFI FW updates the Write Index
+ *                for WDI_IPA RX ring2
+ *                If second RX ring is completion ring, higher 4 bytes of
+ *                DDR address where IPA uC updates the Write Index for Ring 2.
+ */
+
+#if HTT_PADDR64
+#define HTT_WDI_IPA_CFG_SZ                           88 /* bytes */
+#else
+#define HTT_WDI_IPA_CFG_SZ                           52 /* bytes */
+#endif
+
+#define HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_M           0xffff0000
+#define HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_S           16
+
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_M     0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_S     0
+
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_M  0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_S  0
+
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_M  0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_S  0
+
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_M          0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_S          0
+
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_M        0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_S        0
+
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_M     0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_S     0
+
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_M     0xffffffff
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_S     0
+
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_M          0xffffffff
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_S          0
+
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_M       0xffffffff
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_S       0
+
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_M       0xffffffff
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_S       0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_S      0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_M   0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_S   0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_M   0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_S   0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_M           0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_S           0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_M         0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_S         0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_S      0
+
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_S      0
+
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_M         0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_S         0
+
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_S      0
+
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_S      0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_M         0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_S         0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_S      0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_M      0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_S      0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_SIZE_M              0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_SIZE_S              0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_M       0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_S       0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_M    0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_S    0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_M    0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_S    0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_M       0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_S       0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_M    0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_S    0
+
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_M    0xffffffff
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_S    0
+
+#define HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_M) >> HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_S)
+#define HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_PKT_POOL_SIZE_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_M) >> HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_M) >> HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_M) >> HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_RING_BASE_ADDR_LO_S)); \
+    } while (0)
+
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_M) >> HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_RING_SIZE_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_M) >> HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_M) >> HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_M) >> HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_COMP_WR_IDX_ADDR_LO_S)); \
+    } while (0)
+
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_M) >> HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_S)
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_M) >> HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_M) >> HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_TX_CE_WR_IDX_ADDR_LO_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_M) >> HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_M) >> HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_M) >> HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RING_BASE_ADDR_LO_S)); \
+    } while (0)
+
+#define HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_M) >> HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RING_SIZE, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RING_SIZE_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_M) >> HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_M) >> HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_M) >> HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_RD_IDX_ADDR_LO_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_M) >> HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_S)
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_M) >> HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_M) >> HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_IND_WR_IDX_ADDR_LO_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_M) >> HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_M) >> HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_M) >> HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_BASE_ADDR_LO_S)); \
+    } while (0)
+
+#define HTT_WDI_IPA_CFG_RX_RING2_SIZE_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_SIZE_M) >> HTT_WDI_IPA_CFG_RX_RING2_SIZE_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_SIZE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_SIZE, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_SIZE_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_M) >> HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_M) >> HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_M) >> HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_RD_IDX_ADDR_LO_S)); \
+    } while (0)
+
+/* for systems using 32-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_M) >> HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_M) >> HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_HI_S)); \
+    } while (0)
+
+/* for systems using 64-bit format for bus addr */
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_GET(_var) \
+    (((_var) & HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_M) >> HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_S)
+#define HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_CFG_RX_RING2_WR_IDX_ADDR_LO_S)); \
+    } while (0)
+
+/*
+ * TEMPLATE_HTT_WDI_IPA_CONFIG_T:
+ * This macro defines a htt_wdi_ipa_configXXX_t in which any physical
+ * addresses are stored in a XXX-bit field.
+ * This macro is used to define both htt_wdi_ipa_config32_t and
+ * htt_wdi_ipa_config64_t structs.
+ */
+#define TEMPLATE_HTT_WDI_IPA_CONFIG_T(_paddr_bits_, \
+                                      _paddr__tx_comp_ring_base_addr_, \
+                                      _paddr__tx_comp_wr_idx_addr_, \
+                                      _paddr__tx_ce_wr_idx_addr_, \
+                                      _paddr__rx_ind_ring_base_addr_, \
+                                      _paddr__rx_ind_rd_idx_addr_, \
+                                      _paddr__rx_ind_wr_idx_addr_, \
+                                      _paddr__rx_ring2_base_addr_,\
+                                      _paddr__rx_ring2_rd_idx_addr_,\
+                                      _paddr__rx_ring2_wr_idx_addr_)      \
+PREPACK struct htt_wdi_ipa_cfg ## _paddr_bits_ ## _t \
+{ \
+  /* DWORD 0: flags and meta-data */ \
+    A_UINT32 \
+        msg_type: 8, /* HTT_H2T_MSG_TYPE_WDI_IPA_CFG */ \
+        reserved: 8, \
+        tx_pkt_pool_size: 16;\
+    /* DWORD 1  */\
+    _paddr__tx_comp_ring_base_addr_;\
+    /* DWORD 2 (or 3)*/\
+    A_UINT32 tx_comp_ring_size;\
+    /* DWORD 3 (or 4)*/\
+    _paddr__tx_comp_wr_idx_addr_;\
+    /* DWORD 4 (or 6)*/\
+    _paddr__tx_ce_wr_idx_addr_;\
+    /* DWORD 5 (or 8)*/\
+    _paddr__rx_ind_ring_base_addr_;\
+    /* DWORD 6 (or 10)*/\
+    A_UINT32 rx_ind_ring_size;\
+    /* DWORD 7 (or 11)*/\
+    _paddr__rx_ind_rd_idx_addr_;\
+    /* DWORD 8 (or 13)*/\
+    _paddr__rx_ind_wr_idx_addr_;\
+    /* DWORD 9 (or 15)*/\
+    _paddr__rx_ring2_base_addr_;\
+    /* DWORD 10 (or 17) */\
+    A_UINT32 rx_ring2_size;\
+    /* DWORD 11 (or 18) */\
+    _paddr__rx_ring2_rd_idx_addr_;\
+    /* DWORD 12 (or 20) */\
+    _paddr__rx_ring2_wr_idx_addr_;\
+} POSTPACK
+
+/* define a htt_wdi_ipa_config32_t type */
+TEMPLATE_HTT_WDI_IPA_CONFIG_T(32, HTT_VAR_PADDR32(tx_comp_ring_base_addr), HTT_VAR_PADDR32(tx_comp_wr_idx_addr), HTT_VAR_PADDR32(tx_ce_wr_idx_addr), HTT_VAR_PADDR32(rx_ind_ring_base_addr), HTT_VAR_PADDR32(rx_ind_rd_idx_addr),HTT_VAR_PADDR32(rx_ind_wr_idx_addr), HTT_VAR_PADDR32(rx_ring2_base_addr), HTT_VAR_PADDR32(rx_ring2_rd_idx_addr), HTT_VAR_PADDR32(rx_ring2_wr_idx_addr));
+
+/* define a htt_wdi_ipa_config64_t type */
+TEMPLATE_HTT_WDI_IPA_CONFIG_T(64, HTT_VAR_PADDR64_LE(tx_comp_ring_base_addr), HTT_VAR_PADDR64_LE(tx_comp_wr_idx_addr), HTT_VAR_PADDR64_LE(tx_ce_wr_idx_addr), HTT_VAR_PADDR64_LE(rx_ind_ring_base_addr), HTT_VAR_PADDR64_LE(rx_ind_rd_idx_addr), HTT_VAR_PADDR64_LE(rx_ind_wr_idx_addr), HTT_VAR_PADDR64_LE(rx_ring2_base_addr), HTT_VAR_PADDR64_LE(rx_ring2_rd_idx_addr), HTT_VAR_PADDR64_LE(rx_ring2_wr_idx_addr));
+
+#if HTT_PADDR64
+    #define htt_wdi_ipa_cfg_t htt_wdi_ipa_cfg64_t
+#else
+    #define htt_wdi_ipa_cfg_t htt_wdi_ipa_cfg32_t
+#endif
+
+enum htt_wdi_ipa_op_code {
+    HTT_WDI_IPA_OPCODE_TX_SUSPEND           = 0,
+    HTT_WDI_IPA_OPCODE_TX_RESUME            = 1,
+    HTT_WDI_IPA_OPCODE_RX_SUSPEND           = 2,
+    HTT_WDI_IPA_OPCODE_RX_RESUME            = 3,
+    HTT_WDI_IPA_OPCODE_DBG_STATS            = 4,
+    /* keep this last */
+    HTT_WDI_IPA_OPCODE_MAX
+};
+
+/**
+ * @brief HTT WDI_IPA Operation Request Message
+ *
+ * @details
+ *  HTT WDI_IPA Operation Request message is sent by host
+ *  to either suspend or resume WDI_IPA TX or RX path.
+ *     |31            24|23            16|15             8|7              0|
+ *     |----------------+----------------+----------------+----------------|
+ *     |             op_code             |      Rsvd      |     msg_type   |
+ *     |-------------------------------------------------------------------|
+ *
+ * Header fields:
+ *   - MSG_TYPE
+ *     Bits 7:0
+ *     Purpose: Identifies this as WDI_IPA Operation Request message
+ *     value: = 0x9
+ *   - OP_CODE
+ *     Bits 31:16
+ *     Purpose: Identifies operation host is requesting (e.g. TX suspend)
+ *     value: = enum htt_wdi_ipa_op_code
+ */
+
+PREPACK struct htt_wdi_ipa_op_request_t
+{
+    /* DWORD 0: flags and meta-data */
+    A_UINT32
+        msg_type: 8, /* HTT_H2T_MSG_TYPE_WDI_IPA_OP_REQUEST */
+        reserved: 8,
+        op_code: 16;
+} POSTPACK;
+
+#define HTT_WDI_IPA_OP_REQUEST_SZ                    4 /* bytes */
+
+#define HTT_WDI_IPA_OP_REQUEST_OP_CODE_M             0xffff0000
+#define HTT_WDI_IPA_OP_REQUEST_OP_CODE_S             16
+
+#define HTT_WDI_IPA_OP_REQUEST_OP_CODE_GET(_var) \
+    (((_var) & HTT_WDI_IPA_OP_REQUEST_OP_CODE_M) >> HTT_WDI_IPA_OP_REQUEST_OP_CODE_S)
+#define HTT_WDI_IPA_OP_REQUEST_OP_CODE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_OP_REQUEST_OP_CODE, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_OP_REQUEST_OP_CODE_S)); \
+    } while (0)
+
+
+
+
 /*=== target -> host messages ===============================================*/
 
 
 enum htt_t2h_msg_type {
-    HTT_T2H_MSG_TYPE_VERSION_CONF     = 0x0,
-    HTT_T2H_MSG_TYPE_RX_IND           = 0x1,
-    HTT_T2H_MSG_TYPE_RX_FLUSH         = 0x2,
-    HTT_T2H_MSG_TYPE_PEER_MAP         = 0x3,
-    HTT_T2H_MSG_TYPE_PEER_UNMAP       = 0x4,
-    HTT_T2H_MSG_TYPE_RX_ADDBA         = 0x5,
-    HTT_T2H_MSG_TYPE_RX_DELBA         = 0x6,
-    HTT_T2H_MSG_TYPE_TX_COMPL_IND     = 0x7,
-    HTT_T2H_MSG_TYPE_PKTLOG           = 0x8,
-    HTT_T2H_MSG_TYPE_STATS_CONF       = 0x9,
-    HTT_T2H_MSG_TYPE_RX_FRAG_IND      = 0xa,
-    HTT_T2H_MSG_TYPE_SEC_IND          = 0xb,
-    HTT_T2H_MSG_TYPE_RC_UPDATE_IND    = 0xc,
-    HTT_T2H_MSG_TYPE_TX_INSPECT_IND   = 0xd,
-    HTT_T2H_MSG_TYPE_MGMT_TX_COMPL_IND= 0xe,
+    HTT_T2H_MSG_TYPE_VERSION_CONF             = 0x0,
+    HTT_T2H_MSG_TYPE_RX_IND                   = 0x1,
+    HTT_T2H_MSG_TYPE_RX_FLUSH                 = 0x2,
+    HTT_T2H_MSG_TYPE_PEER_MAP                 = 0x3,
+    HTT_T2H_MSG_TYPE_PEER_UNMAP               = 0x4,
+    HTT_T2H_MSG_TYPE_RX_ADDBA                 = 0x5,
+    HTT_T2H_MSG_TYPE_RX_DELBA                 = 0x6,
+    HTT_T2H_MSG_TYPE_TX_COMPL_IND             = 0x7,
+    HTT_T2H_MSG_TYPE_PKTLOG                   = 0x8,
+    HTT_T2H_MSG_TYPE_STATS_CONF               = 0x9,
+    HTT_T2H_MSG_TYPE_RX_FRAG_IND              = 0xa,
+    HTT_T2H_MSG_TYPE_SEC_IND                  = 0xb,
+    DEPRECATED_HTT_T2H_MSG_TYPE_RC_UPDATE_IND = 0xc, /* no longer used */
+    HTT_T2H_MSG_TYPE_TX_INSPECT_IND           = 0xd,
+    HTT_T2H_MSG_TYPE_MGMT_TX_COMPL_IND        = 0xe,
     /* only used for HL, add HTT MSG for HTT CREDIT update */
-    HTT_T2H_MSG_TYPE_TX_CREDIT_UPDATE_IND   = 0xf,
-    HTT_T2H_MSG_TYPE_RX_PN_IND              = 0x10,
-    HTT_T2H_MSG_TYPE_RX_OFFLOAD_DELIVER_IND = 0x11,
+    HTT_T2H_MSG_TYPE_TX_CREDIT_UPDATE_IND     = 0xf,
+    HTT_T2H_MSG_TYPE_RX_PN_IND                = 0x10,
+    HTT_T2H_MSG_TYPE_RX_OFFLOAD_DELIVER_IND   = 0x11,
+    HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND      = 0x12,
+    /* 0x13 is reserved for RX_RING_LOW_IND (RX Full reordering related) */
+    HTT_T2H_MSG_TYPE_WDI_IPA_OP_RESPONSE      = 0x14,
+    HTT_T2H_MSG_TYPE_CHAN_CHANGE              = 0x15,
+    HTT_T2H_MSG_TYPE_RX_OFLD_PKT_ERR          = 0x16,
+    HTT_T2H_MSG_TYPE_RATE_REPORT              = 0x17,
+    HTT_T2H_MSG_TYPE_FLOW_POOL_MAP            = 0x18,
+    HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP          = 0x19,
+
     HTT_T2H_MSG_TYPE_TEST,
     /* keep this last */
     HTT_T2H_NUM_MSGS
@@ -1227,6 +2970,17 @@ enum htt_t2h_msg_type {
  *     |----------------+----------------+----------------+----------------|
  *     |    reserved    |  major number  |  minor number  |    msg type    |
  *     |-------------------------------------------------------------------|
+ *     :                    option request TLV (optional)                  |
+ *     :...................................................................:
+ *
+ * The VER_CONF message may consist of a single 4-byte word, or may be
+ * extended with TLVs that specify HTT options selected by the target.
+ * The following option TLVs may be appended to the VER_CONF message:
+ *   - LL_BUS_ADDR_SIZE
+ *   - HL_SUPPRESS_TX_COMPL_IND
+ *   - MAX_TX_QUEUE_GROUPS
+ * These TLVs may appear in an arbitrary order.  Any number of these TLVs
+ * may be appended to the VER_CONF message (but only one TLV of each type).
  *
  * Header fields:
  *   - MSG_TYPE
@@ -1279,6 +3033,225 @@ enum htt_t2h_msg_type {
 
 
 #define HTT_VER_CONF_BYTES 4
+
+
+/**
+ * @brief - target -> host HTT Rx In order indication message
+ *
+ * @details
+ *
+ * |31            24|23                 |15|14|13|12|11|10|9|8|7|6|5|4       0|
+ * |----------------+-------------------+---------------------+---------------|
+ * |                  peer ID           |  | F| O| ext TID    |   msg type    |
+ * |--------------------------------------------------------------------------|
+ * |                  MSDU count        |        Reserved     |   vdev id     |
+ * |--------------------------------------------------------------------------|
+ * |                        MSDU 0 bus address (bits 31:0)                    |
+#if HTT_PADDR64
+ * |                        MSDU 0 bus address (bits 63:32)                   |
+#endif
+ * |--------------------------------------------------------------------------|
+ * |    MSDU info   | MSDU 0 FW Desc    |         MSDU 0 Length               |
+ * |--------------------------------------------------------------------------|
+ * |                        MSDU 1 bus address (bits 31:0)                    |
+#if HTT_PADDR64
+ * |                        MSDU 1 bus address (bits 63:32)                   |
+#endif
+ * |--------------------------------------------------------------------------|
+ * |    MSDU info   | MSDU 1 FW Desc    |         MSDU 1 Length               |
+ * |--------------------------------------------------------------------------|
+ */
+
+
+/** @brief - MSDU info byte for TCP_CHECKSUM_OFFLOAD use
+ *
+ * @details
+ *                            bits
+ * |  7  | 6  |   5   |    4   |   3    |    2    |    1    |     0     |
+ * |-----+----+-------+--------+--------+---------+---------+-----------|
+ * | reserved | is IP | is UDP | is TCP | is IPv6 |IP chksum|  TCP/UDP  |
+ * |          | frag  |        |        |         | fail    |chksum fail|
+ * |-----+----+-------+--------+--------+---------+---------+-----------|
+ * (see fw_rx_msdu_info def in wal_rx_desc.h)
+ */
+
+struct htt_rx_in_ord_paddr_ind_hdr_t
+{
+    A_UINT32 /* word 0 */
+        msg_type:   8,
+        ext_tid:    5,
+        offload:    1,
+        frag:       1,
+        reserved_0: 1,
+        peer_id:    16;
+
+    A_UINT32 /* word 1 */
+        vap_id:     8,
+        reserved_1: 8,
+        msdu_cnt:   16;
+};
+
+struct htt_rx_in_ord_paddr_ind_msdu32_t
+{
+    A_UINT32 dma_addr;
+    A_UINT32
+        length: 16,
+        fw_desc: 8,
+        msdu_info:8;
+};
+struct htt_rx_in_ord_paddr_ind_msdu64_t
+{
+    A_UINT32 dma_addr_lo;
+    A_UINT32 dma_addr_hi;
+    A_UINT32
+        length: 16,
+        fw_desc: 8,
+        msdu_info:8;
+};
+#if HTT_PADDR64
+    #define htt_rx_in_ord_paddr_ind_msdu_t htt_rx_in_ord_paddr_ind_msdu64_t
+#else
+    #define htt_rx_in_ord_paddr_ind_msdu_t htt_rx_in_ord_paddr_ind_msdu32_t
+#endif
+
+
+#define HTT_RX_IN_ORD_PADDR_IND_HDR_BYTES (sizeof(struct htt_rx_in_ord_paddr_ind_hdr_t))
+#define HTT_RX_IN_ORD_PADDR_IND_HDR_DWORDS (HTT_RX_IN_ORD_PADDR_IND_HDR_BYTES >> 2)
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTE_OFFSET  HTT_RX_IN_ORD_PADDR_IND_HDR_BYTES
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORD_OFFSET HTT_RX_IN_ORD_PADDR_IND_HDR_DWORDS
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTES_64 (sizeof(struct htt_rx_in_ord_paddr_ind_msdu64_t))
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS_64 (HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTES_64 >> 2)
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTES_32 (sizeof(struct htt_rx_in_ord_paddr_ind_msdu32_t))
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS_32 (HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTES_32 >> 2)
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTES (sizeof(struct htt_rx_in_ord_paddr_ind_msdu_t))
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS (HTT_RX_IN_ORD_PADDR_IND_MSDU_BYTES >> 2)
+
+#define HTT_RX_IN_ORD_PADDR_IND_EXT_TID_M      0x00001f00
+#define HTT_RX_IN_ORD_PADDR_IND_EXT_TID_S      8
+#define HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_M      0x00002000
+#define HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_S      13
+#define HTT_RX_IN_ORD_PADDR_IND_FRAG_M         0x00004000
+#define HTT_RX_IN_ORD_PADDR_IND_FRAG_S         14
+#define HTT_RX_IN_ORD_PADDR_IND_PEER_ID_M      0xffff0000
+#define HTT_RX_IN_ORD_PADDR_IND_PEER_ID_S      16
+#define HTT_RX_IN_ORD_PADDR_IND_VAP_ID_M       0x000000ff
+#define HTT_RX_IN_ORD_PADDR_IND_VAP_ID_S       0
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_M     0xffff0000
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_S     16
+/* for systems using 64-bit format for bus addresses */
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_M     0xffffffff
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_S     0
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_M     0xffffffff
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_S     0
+/* for systems using 32-bit format for bus addresses */
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_M        0xffffffff
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_S        0
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_M     0x0000ffff
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_S     0
+#define HTT_RX_IN_ORD_PADDR_IND_FW_DESC_M      0x00ff0000
+#define HTT_RX_IN_ORD_PADDR_IND_FW_DESC_S      16
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_M    0xff000000
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_S    24
+
+
+#define HTT_RX_IN_ORD_PADDR_IND_EXT_TID_SET(word, value)                              \
+    do {                                                                        \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_EXT_TID, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_EXT_TID_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_EXT_TID_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_EXT_TID_M) >> HTT_RX_IN_ORD_PADDR_IND_EXT_TID_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_PEER_ID_SET(word, value)                              \
+    do {                                                                        \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_PEER_ID, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_PEER_ID_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_PEER_ID_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_PEER_ID_M) >> HTT_RX_IN_ORD_PADDR_IND_PEER_ID_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_VAP_ID_SET(word, value)                              \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_VAP_ID, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_VAP_ID_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_VAP_ID_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_VAP_ID_M) >> HTT_RX_IN_ORD_PADDR_IND_VAP_ID_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_SET(word, value)                              \
+    do {                                                                        \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_M) >> HTT_RX_IN_ORD_PADDR_IND_MSDU_CNT_S)
+
+/* for systems using 64-bit format for bus addresses */
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_SET(word, value)                     \
+    do {                                                                      \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_PADDR_HI, value);           \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_S;             \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_M) >> HTT_RX_IN_ORD_PADDR_IND_PADDR_HI_S)
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_SET(word, value)                     \
+        do {                                                                  \
+            HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_PADDR_LO, value);       \
+            (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_S;         \
+        } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_GET(word) \
+        (((word) & HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_M) >> HTT_RX_IN_ORD_PADDR_IND_PADDR_LO_S)
+
+/* for systems using 32-bit format for bus addresses */
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_SET(word, value)                        \
+    do {                                                                      \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_PADDR, value);              \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_PADDR_S;                \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_PADDR_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_PADDR_M) >> HTT_RX_IN_ORD_PADDR_IND_PADDR_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_SET(word, value)                              \
+    do {                                                                         \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_M) >> HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_FW_DESC_SET(word, value)                              \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_FW_DESC, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_FW_DESC_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_FW_DESC_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_FW_DESC_M) >> HTT_RX_IN_ORD_PADDR_IND_FW_DESC_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_SET(word, value)                              \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_M) >> HTT_RX_IN_ORD_PADDR_IND_MSDU_INFO_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_SET(word, value)                              \
+    do {                                                                        \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_IND_OFFLOAD, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_IND_OFFLOAD_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_M) >> HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_S)
+
+#define HTT_RX_IN_ORD_PADDR_IND_FRAG_SET(word, value)                              \
+    do {                                                                        \
+        HTT_CHECK_SET_VAL(HTT_RX_IN_ORD_IND_FRAG, value);                    \
+        (word) |= (value)  << HTT_RX_IN_ORD_IND_FRAG_S;                      \
+    } while (0)
+#define HTT_RX_IN_ORD_PADDR_IND_FRAG_GET(word) \
+    (((word) & HTT_RX_IN_ORD_PADDR_IND_FRAG_M) >> HTT_RX_IN_ORD_PADDR_IND_FRAG_S)
+
+/* definitions used within target -> host rx indication message */
 
 PREPACK struct htt_rx_ind_hdr_prefix_t
 {
@@ -1403,6 +3376,10 @@ PREPACK struct htt_rx_ind_hdr_t
 
 #define HTT_RX_IND_HDR_BYTES (sizeof(struct htt_rx_ind_hdr_t))
 #define HTT_RX_IND_HDR_SIZE32 (HTT_RX_IND_HDR_BYTES >> 2)
+
+/* confirm that HTT_RX_IND_HDR_BYTES is a multiple of 4 */
+A_COMPILE_TIME_ASSERT(HTT_RX_IND_hdr_size_quantum,
+    (HTT_RX_IND_HDR_BYTES & 0x3) == 0);
 
 /*
  * HTT_RX_IND_FW_RX_PPDU_DESC_BYTE_OFFSET:
@@ -1556,7 +3533,7 @@ PREPACK struct htt_rx_ind_hdr_t
  *         corresponding MPDU is actually present.
  *         This field is only valid if the FV bit is set.
  *   - REL_SEQ_NUM_START
- *     Bits 5:0
+ *     Bits 17:12
  *     Purpose: Indicate the start of a series of MPDUs to release.
  *         All MPDUs within this series are present and valid - the host
  *         need not check each sequence number within this range to see if
@@ -1566,7 +3543,7 @@ PREPACK struct htt_rx_ind_hdr_t
  *         The sequence number for the first MPDUs to check to release.
  *         The sequence number is masked by 0x3f.
  *   - REL_SEQ_NUM_END
- *     Bits 11:6
+ *     Bits 23:18
  *     Purpose: Indicate the end of a series of MPDUs to release.
  *     Value:
  *         The sequence number one larger than the sequence number of the
@@ -1576,6 +3553,12 @@ PREPACK struct htt_rx_ind_hdr_t
  *         need not check each sequence number within this range to see if
  *         the corresponding MPDU is actually present.
  *         This field is only valid if the RV bit is set.
+ *   - NUM_MPDU_RANGES
+ *     Bits 31:24
+ *     Purpose: Indicate how many ranges of MPDUs are present.
+ *         Each MPDU range consists of a series of contiguous MPDUs within the
+ *         rx frame sequence which all have the same MPDU status.
+ *     Value: 1-63 (typically a small number, like 1-3)
  *
  * Rx PPDU descriptor fields:
  *   - RSSI_CMB
@@ -1843,14 +3826,14 @@ PREPACK struct htt_rx_ind_hdr_t
 #define HTT_RX_IND_START_VALID_M           0x80000000
 #define HTT_RX_IND_START_VALID_S           31
 
-#define HTT_RX_IND_RSSI_PRI20_S            0x000000ff
-#define HTT_RX_IND_RSSI_PRI20_M            0
-#define HTT_RX_IND_RSSI_EXT20_S            0x0000ff00
-#define HTT_RX_IND_RSSI_EXT20_M            8
-#define HTT_RX_IND_RSSI_EXT40_S            0x00ff0000
-#define HTT_RX_IND_RSSI_EXT40_M            16
-#define HTT_RX_IND_RSSI_EXT80_S            0xff000000
-#define HTT_RX_IND_RSSI_EXT80_M            24
+#define HTT_RX_IND_RSSI_PRI20_M            0x000000ff
+#define HTT_RX_IND_RSSI_PRI20_S            0
+#define HTT_RX_IND_RSSI_EXT20_M            0x0000ff00
+#define HTT_RX_IND_RSSI_EXT20_S            8
+#define HTT_RX_IND_RSSI_EXT40_M            0x00ff0000
+#define HTT_RX_IND_RSSI_EXT40_S            16
+#define HTT_RX_IND_RSSI_EXT80_M            0xff000000
+#define HTT_RX_IND_RSSI_EXT80_S            24
 
 #define HTT_RX_IND_VHT_SIG_A1_M            0x00ffffff
 #define HTT_RX_IND_VHT_SIG_A1_S            0
@@ -1912,6 +3895,7 @@ PREPACK struct htt_rx_ind_hdr_t
     } while (0)
 #define HTT_RX_IND_FW_RX_DESC_BYTES_GET(word) \
     (((word) & HTT_RX_IND_FW_RX_DESC_BYTES_M) >> HTT_RX_IND_FW_RX_DESC_BYTES_S)
+
 
 #define HTT_RX_IND_FLUSH_SEQ_NUM_START_SET(word, value)              \
     do {                                                             \
@@ -2191,10 +4175,12 @@ PREPACK struct hl_htt_rx_desc_base {
     A_UINT32
         seq_num:12,
         encrypted:1,
-        resv0:3,
+        chan_info_present:1,
+        resv0:2,
         mcast_bcast:1,
         fragment:1,
-        resv1:14;
+        key_id_oct:8,
+        resv1:6;
     A_UINT32
         pn_31_0;
     union {
@@ -2210,6 +4196,24 @@ PREPACK struct hl_htt_rx_desc_base {
         pn_127_96;
 } POSTPACK;
 
+
+/*
+ * Channel information can optionally be appended after hl_htt_rx_desc_base.
+ * If so, the len field in htt_rx_ind_hl_rx_desc_t will be updated accordingly,
+ * and the chan_info_present flag in hl_htt_rx_desc_base will be set.
+ * Please see htt_chan_change_t for description of the fields.
+ */
+PREPACK struct htt_chan_info_t
+{
+    A_UINT32    primary_chan_center_freq_mhz: 16,
+                contig_chan1_center_freq_mhz: 16;
+    A_UINT32    contig_chan2_center_freq_mhz: 16,
+                phy_mode: 8,
+                reserved: 8;
+} POSTPACK;
+
+#define HTT_CHAN_INFO_SIZE      sizeof(struct htt_chan_info_t)
+
 #define HL_RX_DESC_SIZE         (sizeof(struct hl_htt_rx_desc_base))
 #define HL_RX_DESC_SIZE_DWORD   (HL_RX_STD_DESC_SIZE >> 2)
 
@@ -2217,13 +4221,65 @@ PREPACK struct hl_htt_rx_desc_base {
 #define HTT_HL_RX_DESC_MPDU_SEQ_NUM_S       0
 #define HTT_HL_RX_DESC_MPDU_ENC_M           0x1000
 #define HTT_HL_RX_DESC_MPDU_ENC_S           12
+#define HTT_HL_RX_DESC_CHAN_INFO_PRESENT_M  0x2000
+#define HTT_HL_RX_DESC_CHAN_INFO_PRESENT_S  13
 #define HTT_HL_RX_DESC_MCAST_BCAST_M        0x10000
 #define HTT_HL_RX_DESC_MCAST_BCAST_S        16
 #define HTT_HL_RX_DESC_FRAGMENT_M           0x20000
 #define HTT_HL_RX_DESC_FRAGMENT_S           17
+#define HTT_HL_RX_DESC_KEY_ID_OCT_M         0x3fc0000
+#define HTT_HL_RX_DESC_KEY_ID_OCT_S         18
 
 #define HTT_HL_RX_DESC_PN_OFFSET            offsetof(struct hl_htt_rx_desc_base, pn_31_0)
 #define HTT_HL_RX_DESC_PN_WORD_OFFSET       (HTT_HL_RX_DESC_PN_OFFSET >> 2)
+
+
+/* Channel information */
+#define HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_M   0x0000ffff
+#define HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_S   0
+#define HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_M   0xffff0000
+#define HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_S   16
+#define HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_M   0x0000ffff
+#define HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_S   0
+#define HTT_CHAN_INFO_PHY_MODE_M                   0x00ff0000
+#define HTT_CHAN_INFO_PHY_MODE_S                   16
+
+
+#define HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_SET(word, value)            \
+    do {                                                                \
+        HTT_CHECK_SET_VAL(HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ, value);  \
+        (word) |= (value)  << HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_S;    \
+    } while (0)
+#define HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_GET(word)                   \
+    (((word) & HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_M) >> HTT_CHAN_INFO_PRIMARY_CHAN_CENTER_FREQ_S)
+
+
+#define HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_SET(word, value)            \
+    do {                                                                \
+        HTT_CHECK_SET_VAL(HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ, value);  \
+        (word) |= (value)  << HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_S;    \
+    } while (0)
+#define HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_GET(word)                   \
+    (((word) & HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_M) >> HTT_CHAN_INFO_CONTIG_CHAN1_CENTER_FREQ_S)
+
+
+#define HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_SET(word, value)            \
+    do {                                                                \
+        HTT_CHECK_SET_VAL(HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ, value);  \
+        (word) |= (value)  << HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_S;    \
+    } while (0)
+#define HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_GET(word)                   \
+    (((word) & HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_M) >> HTT_CHAN_INFO_CONTIG_CHAN2_CENTER_FREQ_S)
+
+
+#define HTT_CHAN_INFO_PHY_MODE_SET(word, value)            \
+    do {                                                \
+        HTT_CHECK_SET_VAL(HTT_CHAN_INFO_PHY_MODE, value);  \
+        (word) |= (value)  << HTT_CHAN_INFO_PHY_MODE_S;    \
+    } while (0)
+#define HTT_CHAN_INFO_PHY_MODE_GET(word)                   \
+    (((word) & HTT_CHAN_INFO_PHY_MODE_M) >> HTT_CHAN_INFO_PHY_MODE_S)
+
 
 /*
  * @brief target -> host rx reorder flush message definition
@@ -2586,10 +4642,10 @@ PREPACK struct hl_htt_rx_desc_base {
     } while(0)                                                                                      \
 
 /**
- * @brief target -> host rx connection map/unmap message definition
+ * @brief target -> host rx peer map/unmap message definition
  *
  * @details
- * The following diagram shows the format of the rx conn map message sent
+ * The following diagram shows the format of the rx peer map message sent
  * from the target to the host.  This layout assumes the target operates
  * as little-endian.
  *
@@ -2603,23 +4659,23 @@ PREPACK struct hl_htt_rx_desc_base {
  * |-----------------------------------------------------------------------|
  *
  *
- * The following diagram shows the format of the rx conn unmap message sent
+ * The following diagram shows the format of the rx peer unmap message sent
  * from the target to the host.
  *
  * |31             24|23             16|15              8|7               0|
  * |-----------------------------------------------------------------------|
- * |              peer ID              |     reserved    |     msg type    |
+ * |              peer ID              |     VDEV ID     |     msg type    |
  * |-----------------------------------------------------------------------|
  *
- * The following field definitions describe the format of the rx conn map
- * and conn unmap messages sent from the target to the host.
+ * The following field definitions describe the format of the rx peer map
+ * and peer unmap messages sent from the target to the host.
  *   - MSG_TYPE
  *     Bits 7:0
- *     Purpose: identifies this as an rx conn map or conn unmap message
- *     Value: conn map -> 0x3, conn unmap -> 0x4
- *   - VDEV_ID (conn map only)
+ *     Purpose: identifies this as an rx peer map or peer unmap message
+ *     Value: peer map -> 0x3, peer unmap -> 0x4
+ *   - VDEV_ID
  *     Bits 15:8
- *     Purpose: Indicates which virtual device the connection is associated
+ *     Purpose: Indicates which virtual device the peer is associated
  *         with.
  *     Value: vdev ID (used in the host to look up the vdev object)
  *   - PEER_ID
@@ -2627,11 +4683,11 @@ PREPACK struct hl_htt_rx_desc_base {
  *     Purpose: The peer ID (index) that WAL is allocating (map) or
  *         freeing (unmap)
  *     Value: (rx) peer ID
- *   - MAC_ADDR_L32 (conn map only)
+ *   - MAC_ADDR_L32 (peer map only)
  *     Bits 31:0
  *     Purpose: Identifies which peer node the peer ID is for.
  *     Value: lower 4 bytes of peer node's MAC address
- *   - MAC_ADDR_U16 (conn map only)
+ *   - MAC_ADDR_U16 (peer map only)
  *     Bits 15:0
  *     Purpose: Identifies which peer node the peer ID is for.
  *     Value: upper 2 bytes of peer node's MAC address
@@ -2673,6 +4729,9 @@ PREPACK struct hl_htt_rx_desc_base {
 
 #define HTT_RX_PEER_UNMAP_PEER_ID_SET HTT_RX_PEER_MAP_PEER_ID_SET
 #define HTT_RX_PEER_UNMAP_PEER_ID_GET HTT_RX_PEER_MAP_PEER_ID_GET
+
+#define HTT_RX_PEER_UNMAP_VDEV_ID_SET HTT_RX_PEER_MAP_VDEV_ID_SET
+#define HTT_RX_PEER_UNMAP_VDEV_ID_GET HTT_RX_PEER_MAP_VDEV_ID_GET
 
 #define HTT_RX_PEER_UNMAP_BYTES 4
 
@@ -2876,19 +4935,174 @@ PREPACK struct hl_htt_rx_desc_base {
 #define HTT_RX_DELBA_BYTES 4
 
 /**
+ * @brief tx queue group information element definition
+ *
+ * @details
+ * The following diagram shows the format of the tx queue group
+ * information element, which can be included in target --> host
+ * messages to specify the number of tx "credits" (tx descriptors
+ * for LL, or tx buffers for HL) available to a particular group
+ * of host-side tx queues, and which host-side tx queues belong to
+ * the group.
+ *
+ * |31|30          24|23             16|15|14|13                           0|
+ * |------------------------------------------------------------------------|
+ * | X|   reserved   | tx queue grp ID | A| S|     credit count             |
+ * |------------------------------------------------------------------------|
+ * |            vdev ID mask           |               AC mask              |
+ * |------------------------------------------------------------------------|
+ *
+ * The following definitions describe the fields within the tx queue group
+ * information element:
+ * - credit_count
+ *   Bits 13:1
+ *   Purpose: specify how many tx credits are available to the tx queue group
+ *   Value: An absolute or relative, positive or negative credit value
+ *       The 'A' bit specifies whether the value is absolute or relative.
+ *       The 'S' bit specifies whether the value is positive or negative.
+ *       A negative value can only be relative, not absolute.
+ *       An absolute value replaces any prior credit value the host has for
+ *       the tx queue group in question.
+ *       A relative value is added to the prior credit value the host has for
+ *       the tx queue group in question.
+ * - sign
+ *   Bit 14
+ *   Purpose: specify whether the credit count is positive or negative
+ *   Value: 0 -> positive, 1 -> negative
+ * - absolute
+ *   Bit 15
+ *   Purpose: specify whether the credit count is absolute or relative
+ *   Value: 0 -> relative, 1 -> absolute
+ * - txq_group_id
+ *   Bits 23:16
+ *   Purpose: indicate which tx queue group's credit and/or membership are
+ *       being specified
+ *   Value: 0 to max_tx_queue_groups-1
+ * - reserved
+ *   Bits 30:16
+ *   Value: 0x0
+ * - eXtension
+ *   Bit 31
+ *   Purpose: specify whether another tx queue group info element follows
+ *   Value: 0 -> no more tx queue group information elements
+ *          1 -> another tx queue group information element immediately follows
+ * - ac_mask
+ *   Bits 15:0
+ *   Purpose: specify which Access Categories belong to the tx queue group
+ *   Value: bit-OR of masks for the ACs (WMM and extension) that belong to
+ *       the tx queue group.
+ *       The AC bit-mask values are obtained by left-shifting by the
+ *       corresponding HTT_AC_WMM enum values, e.g. (1 << HTT_AC_WMM_BE) == 0x1
+ * - vdev_id_mask
+ *   Bits 31:16
+ *   Purpose: specify which vdev's tx queues belong to the tx queue group
+ *   Value: bit-OR of masks based on the IDs of the vdevs whose tx queues
+ *       belong to the tx queue group.
+ *       For example, if vdev IDs 1 and 4 belong to a tx queue group, the
+ *       vdev_id_mask would be (1 << 1) | (1 << 4) = 0x12
+ */
+PREPACK struct htt_txq_group {
+    A_UINT32
+        credit_count:      14,
+        sign:               1,
+        absolute:           1,
+        tx_queue_group_id:  8,
+        reserved0:          7,
+        extension:          1;
+    A_UINT32
+        ac_mask:           16,
+        vdev_id_mask:      16;
+} POSTPACK;
+
+/* first word */
+#define HTT_TXQ_GROUP_CREDIT_COUNT_S 0
+#define HTT_TXQ_GROUP_CREDIT_COUNT_M 0x00003fff
+#define HTT_TXQ_GROUP_SIGN_S         14
+#define HTT_TXQ_GROUP_SIGN_M         0x00004000
+#define HTT_TXQ_GROUP_ABS_S          15
+#define HTT_TXQ_GROUP_ABS_M          0x00008000
+#define HTT_TXQ_GROUP_ID_S           16
+#define HTT_TXQ_GROUP_ID_M           0x00ff0000
+#define HTT_TXQ_GROUP_EXT_S          31
+#define HTT_TXQ_GROUP_EXT_M          0x80000000
+/* second word */
+#define HTT_TXQ_GROUP_AC_MASK_S      0
+#define HTT_TXQ_GROUP_AC_MASK_M      0x0000ffff
+#define HTT_TXQ_GROUP_VDEV_ID_MASK_S 16
+#define HTT_TXQ_GROUP_VDEV_ID_MASK_M 0xffff0000
+
+#define HTT_TXQ_GROUP_CREDIT_COUNT_SET(_info, _val)            \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_CREDIT_COUNT, _val);   \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_CREDIT_COUNT_S)); \
+    } while (0)
+#define HTT_TXQ_GROUP_CREDIT_COUNT_GET(_info)                  \
+    (((_info) & HTT_TXQ_GROUP_CREDIT_COUNT_M) >> HTT_TXQ_GROUP_CREDIT_COUNT_S)
+
+#define HTT_TXQ_GROUP_SIGN_SET(_info, _val)                    \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_SIGN, _val);           \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_SIGN_S));         \
+    } while (0)
+#define HTT_TXQ_GROUP_SIGN_GET(_info)                          \
+    (((_info) & HTT_TXQ_GROUP_SIGN_M) >> HTT_TXQ_GROUP_SIGN_S)
+
+#define HTT_TXQ_GROUP_ABS_SET(_info, _val)                     \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_ABS, _val);            \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_ABS_S));          \
+    } while (0)
+#define HTT_TXQ_GROUP_ABS_GET(_info)                           \
+    (((_info) & HTT_TXQ_GROUP_ABS_M) >> HTT_TXQ_GROUP_ABS_S)
+
+#define HTT_TXQ_GROUP_ID_SET(_info, _val)                      \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_ID, _val);             \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_ID_S));           \
+    } while (0)
+#define HTT_TXQ_GROUP_ID_GET(_info)                            \
+    (((_info) & HTT_TXQ_GROUP_ID_M) >> HTT_TXQ_GROUP_ID_S)
+
+#define HTT_TXQ_GROUP_EXT_SET(_info, _val)                     \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_EXT, _val);            \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_EXT_S));          \
+    } while (0)
+#define HTT_TXQ_GROUP_EXT_GET(_info)                           \
+    (((_info) & HTT_TXQ_GROUP_EXT_M) >> HTT_TXQ_GROUP_EXT_S)
+
+#define HTT_TXQ_GROUP_AC_MASK_SET(_info, _val)                 \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_AC_MASK, _val);        \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_AC_MASK_S));      \
+    } while (0)
+#define HTT_TXQ_GROUP_AC_MASK_GET(_info)                       \
+    (((_info) & HTT_TXQ_GROUP_AC_MASK_M) >> HTT_TXQ_GROUP_AC_MASK_S)
+
+#define HTT_TXQ_GROUP_VDEV_ID_MASK_SET(_info, _val)            \
+    do {                                                       \
+        HTT_CHECK_SET_VAL(HTT_TXQ_GROUP_VDEV_ID_MASK, _val);   \
+        ((_info) |= ((_val) << HTT_TXQ_GROUP_VDEV_ID_MASK_S)); \
+    } while (0)
+#define HTT_TXQ_GROUP_VDEV_ID_MASK_GET(_info)                  \
+    (((_info) & HTT_TXQ_GROUP_VDEV_ID_MASK_M) >> HTT_TXQ_GROUP_VDEV_ID_MASK_S)
+
+/**
  * @brief target -> host TX completion indication message definition
  *
  * @details
  * The following diagram shows the format of the TX completion indication sent
  * from the target to the host
  *
- *          |31             24|23        16| 15 |14 11|10   8|7          0|
+ *          |31      25|    24|23        16| 15 |14 11|10   8|7          0|
  *          |-------------------------------------------------------------|
- * header:  |     reserved    |     num    | t_i| tid |status|  msg_type  |
+ * header:  | reserved |append|     num    | t_i| tid |status|  msg_type  |
  *          |-------------------------------------------------------------|
  * payload: |            MSDU1 ID          |         MSDU0 ID             |
  *          |-------------------------------------------------------------|
  *          :            MSDU3 ID          :         MSDU2 ID             :
+ *          |-------------------------------------------------------------|
+ *          |          struct htt_tx_compl_ind_append_retries             |
  *          - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
  *
  * The following field definitions describe the format of the TX completion
@@ -2915,6 +5129,11 @@ PREPACK struct hl_htt_rx_desc_base {
  *   Bits 23:16
  *   Purpose: the number of payload in this indication
  *   Value: 1 to 255
+ * - append
+ *   Bits 24:24
+ *   Purpose: append the struct htt_tx_compl_ind_append_retries which contains
+ *            the number of tx retries for one MSDU at the end of this message
+ *   Value: 0 indicates no appending; 1 indicates appending
  * Payload fields:
  * - hmsdu_id
  *   Bits 15:0
@@ -2923,13 +5142,15 @@ PREPACK struct hl_htt_rx_desc_base {
  */
 
 #define HTT_TX_COMPL_IND_STATUS_S      8
-#define HTT_TX_COMPL_IND_STATUS_M      0x700
+#define HTT_TX_COMPL_IND_STATUS_M      0x00000700
 #define HTT_TX_COMPL_IND_TID_S         11
-#define HTT_TX_COMPL_IND_TID_M         0x7800
+#define HTT_TX_COMPL_IND_TID_M         0x00007800
 #define HTT_TX_COMPL_IND_TID_INV_S     15
-#define HTT_TX_COMPL_IND_TID_INV_M     0x8000
+#define HTT_TX_COMPL_IND_TID_INV_M     0x00008000
 #define HTT_TX_COMPL_IND_NUM_S         16
-#define HTT_TX_COMPL_IND_NUM_M         0xff0000
+#define HTT_TX_COMPL_IND_NUM_M         0x00ff0000
+#define HTT_TX_COMPL_IND_APPEND_S      24
+#define HTT_TX_COMPL_IND_APPEND_M      0x01000000
 
 #define HTT_TX_COMPL_IND_STATUS_SET(_info, _val)                        \
     do {                                                                \
@@ -2960,6 +5181,13 @@ PREPACK struct hl_htt_rx_desc_base {
 #define HTT_TX_COMPL_IND_TID_INV_GET(_info)                         \
     (((_info) & HTT_TX_COMPL_IND_TID_INV_M) >>                      \
      HTT_TX_COMPL_IND_TID_INV_S)
+#define HTT_TX_COMPL_IND_APPEND_SET(_info, _val)                           \
+    do {                                                                \
+        HTT_CHECK_SET_VAL(HTT_TX_COMPL_IND_APPEND, _val);                  \
+        ((_info) |= ((_val) << HTT_TX_COMPL_IND_APPEND_S));                \
+    } while (0)
+#define HTT_TX_COMPL_IND_APPEND_GET(_info)                             \
+    (((_info) & HTT_TX_COMPL_IND_APPEND_M) >> HTT_TX_COMPL_IND_APPEND_S)
 
 #define HTT_TX_COMPL_CTXT_SZ                sizeof(A_UINT16)
 #define HTT_TX_COMPL_CTXT_NUM(_bytes)       ((_bytes) >> 1)
@@ -2970,12 +5198,29 @@ PREPACK struct hl_htt_rx_desc_base {
 #define HTT_TX_COMPL_IND_STAT_DISCARD     1
 #define HTT_TX_COMPL_IND_STAT_NO_ACK      2
 #define HTT_TX_COMPL_IND_STAT_POSTPONE    3
+/*
+ * The PEER_DEL tx completion status is used for HL cases
+ * where the peer the frame is for has been deleted.
+ * The host has already discarded its copy of the frame, but
+ * it still needs the tx completion to restore its credit.
+ */
+#define HTT_TX_COMPL_IND_STAT_PEER_DEL    4
+
+
+#define HTT_TX_COMPL_IND_APPEND_SET_MORE_RETRY(f)  ((f) |= 0x1)
+#define HTT_TX_COMPL_IND_APPEND_CLR_MORE_RETRY(f)  ((f) &= (~0x1))
 
 PREPACK struct htt_tx_compl_ind_base {
     A_UINT32 hdr;
     A_UINT16 payload[1/*or more*/];
 } POSTPACK;
 
+PREPACK struct htt_tx_compl_ind_append_retries {
+    A_UINT16 msdu_id;
+    A_UINT8  tx_retries;
+    A_UINT8  flag; /* Bit 0, 1: another append_retries struct is appended
+                             0: this is the last append_retries struct */
+} POSTPACK;
 
 /**
  * @brief target -> host rate-control update indication message
@@ -3065,7 +5310,6 @@ typedef struct {
 
 #define HTT_RC_UPDATE_NUM_ELEMS_GET(_info)                  \
     (((_info) & HTT_RC_UPDATE_NUM_ELEMS_M) >> HTT_RC_UPDATE_NUM_ELEMS_S)
-
 
 /**
  * @brief target -> host rx fragment indication message definition
@@ -3273,7 +5517,7 @@ struct rx_reorder_stats {
     A_UINT32 fcs_error;
     /* MPDUs dropped due to monitor mode non-data packet */
     A_UINT32 mgmt_ctrl;
-    /* MPDUs dropped due to invalid peer */
+    /* Unicast-data MPDUs dropped due to invalid peer */
     A_UINT32 invalid_peer;
     /* MPDUs dropped due to duplication (non aggregation) */
     A_UINT32 dup_non_aggr;
@@ -3287,8 +5531,154 @@ struct rx_reorder_stats {
     A_UINT32 invalid_bar_ssn;
     /* reorder reset due to bar ssn */
     A_UINT32 ssn_reset;
-
+    /* Flush due to delete peer */
+    A_UINT32 deliver_flush_delpeer;
+    /* Flush due to offload*/
+    A_UINT32 deliver_flush_offload;
+    /* Flush due to out of buffer*/
+    A_UINT32 deliver_flush_oob;
+    /* MPDUs dropped due to PN check fail */
+    A_UINT32 pn_fail;
+    /* MPDUs dropped due to unable to allocate memory  */
+    A_UINT32 store_fail;
+    /* Number of times the tid pool alloc succeeded */
+    A_UINT32 tid_pool_alloc_succ;
+    /* Number of times the MPDU pool alloc succeeded */
+    A_UINT32 mpdu_pool_alloc_succ;
+    /* Number of times the MSDU pool alloc succeeded */
+    A_UINT32 msdu_pool_alloc_succ;
+    /* Number of times the tid pool alloc failed */
+    A_UINT32 tid_pool_alloc_fail;
+    /* Number of times the MPDU pool alloc failed */
+    A_UINT32 mpdu_pool_alloc_fail;
+    /* Number of times the MSDU pool alloc failed */
+    A_UINT32 msdu_pool_alloc_fail;
+    /* Number of times the tid pool freed */
+    A_UINT32 tid_pool_free;
+    /* Number of times the MPDU pool freed */
+    A_UINT32 mpdu_pool_free;
+    /* Number of times the MSDU pool freed */
+    A_UINT32 msdu_pool_free;
+    /* number of MSDUs undelivered to HTT and queued to Data Rx MSDU free list*/
+    A_UINT32 msdu_queued;
+    /* Number of MSDUs released from Data Rx MSDU list to MAC ring */
+    A_UINT32 msdu_recycled;
+    /* Number of MPDUs with invalid peer but A2 found in AST */
+    A_UINT32 invalid_peer_a2_in_ast;
+    /* Number of MPDUs with invalid peer but A3 found in AST */
+    A_UINT32 invalid_peer_a3_in_ast;
+    /* Number of MPDUs with invalid peer, Broadcast or Multicast frame */
+    A_UINT32 invalid_peer_bmc_mpdus;
+    /* Number of MSDUs with err attention word */
+    A_UINT32 rxdesc_err_att;
+    /* Number of MSDUs with flag of peer_idx_invalid */
+    A_UINT32 rxdesc_err_peer_idx_inv;
+    /* Number of MSDUs with flag of peer_idx_timeout */
+    A_UINT32 rxdesc_err_peer_idx_to;
+    /* Number of MSDUs with flag of overflow */
+    A_UINT32 rxdesc_err_ov;
+    /* Number of MSDUs with flag of msdu_length_err */
+    A_UINT32 rxdesc_err_msdu_len;
+    /* Number of MSDUs with flag of mpdu_length_err */
+    A_UINT32 rxdesc_err_mpdu_len;
+    /* Number of MSDUs with flag of tkip_mic_err */
+    A_UINT32 rxdesc_err_tkip_mic;
+    /* Number of MSDUs with flag of decrypt_err */
+    A_UINT32 rxdesc_err_decrypt;
+    /* Number of MSDUs with flag of fcs_err */
+    A_UINT32 rxdesc_err_fcs;
+    /* Number of Unicast (bc_mc bit is not set in attention word)
+     * frames with invalid peer handler
+     */
+    A_UINT32 rxdesc_uc_msdus_inv_peer;
+    /* Number of unicast frame directly (direct bit is set in attention word)
+     * to DUT with invalid peer handler
+     */
+    A_UINT32 rxdesc_direct_msdus_inv_peer;
+    /* Number of Broadcast/Multicast (bc_mc bit set in attention word)
+     * frames with invalid peer handler
+     */
+    A_UINT32 rxdesc_bmc_msdus_inv_peer;
+    /* Number of MSDUs dropped due to no first MSDU flag */
+    A_UINT32 rxdesc_no_1st_msdu;
+    /* Number of MSDUs droped due to ring overflow */
+    A_UINT32 msdu_drop_ring_ov;
+    /* Number of MSDUs dropped due to FC mismatch */
+    A_UINT32 msdu_drop_fc_mismatch;
+    /* Number of MSDUs dropped due to mgt frame in Remote ring */
+    A_UINT32 msdu_drop_mgmt_remote_ring;
+    /* Number of MSDUs dropped due to errors not reported in attention word */
+    A_UINT32 msdu_drop_misc;
+    /* Number of MSDUs go to offload before reorder */
+    A_UINT32 offload_msdu_wal;
+    /* Number of data frame dropped by offload after reorder */
+    A_UINT32 offload_msdu_reorder;
+    /* Number of MPDUs with sequence number in the past and within
+       the BA window */
+    A_UINT32 dup_past_within_window;
+    /* Number of MPDUs with sequence number in the past and
+     * outside the BA window */
+    A_UINT32 dup_past_outside_window;
+    /* Number of MSDUs with decrypt/MIC error */
+    A_UINT32 rxdesc_err_decrypt_mic;
+    /* Number of data MSDUs received on both local and remote rings */
+    A_UINT32 data_msdus_on_both_rings;
 };
+
+
+/*
+ * Rx Remote buffer statistics
+ * NB: all the fields must be defined in 4 octets size.
+ */
+struct rx_remote_buffer_mgmt_stats {
+    /* Total number of MSDUs reaped for Rx processing */
+    A_UINT32 remote_reaped;
+    /* MSDUs recycled within firmware */
+    A_UINT32 remote_recycled;
+    /* MSDUs stored by Data Rx */
+    A_UINT32 data_rx_msdus_stored;
+    /* Number of HTT indications from WAL Rx MSDU */
+    A_UINT32 wal_rx_ind;
+    /* Number of unconsumed HTT indications from WAL Rx MSDU */
+    A_UINT32 wal_rx_ind_unconsumed;
+    /* Number of HTT indications from Data Rx MSDU */
+    A_UINT32 data_rx_ind;
+    /* Number of unconsumed HTT indications from Data Rx MSDU */
+    A_UINT32 data_rx_ind_unconsumed;
+    /* Number of HTT indications from ATHBUF */
+    A_UINT32 athbuf_rx_ind;
+    /* Number of remote buffers requested for refill */
+    A_UINT32 refill_buf_req;
+    /* Number of remote buffers filled by the host */
+    A_UINT32 refill_buf_rsp;
+    /* Number of times MAC hw_index = f/w write_index */
+    A_INT32 mac_no_bufs;
+    /* Number of times f/w write_index = f/w read_index for MAC Rx ring */
+    A_INT32 fw_indices_equal;
+    /* Number of times f/w finds no buffers to post */
+    A_INT32 host_no_bufs;
+};
+
+/*
+ * TXBF MU/SU packets and NDPA statistics
+ * NB: all the fields must be defined in 4 octets size.
+ */
+struct rx_txbf_musu_ndpa_pkts_stats {
+    /* number of TXBF MU packets received */
+    A_UINT32 number_mu_pkts;
+    /* number of TXBF SU packets received */
+    A_UINT32 number_su_pkts;
+    /* number of TXBF directed NDPA */
+    A_UINT32 txbf_directed_ndpa_count;
+    /* number of TXBF retried NDPA */
+    A_UINT32 txbf_ndpa_retry_count;
+    /* total number of TXBF NDPA */
+    A_UINT32 txbf_total_ndpa_count;
+    /* must be set to 0x0 */
+    A_UINT32 reserved[3];
+};
+
+
 
 /*
  * htt_dbg_stats_status -
@@ -3397,6 +5787,9 @@ enum htt_dbg_stats_status {
  *       subsequent stats entry header will begin on a 4-byte aligned
  *       boundary.
  */
+#define HTT_T2H_STATS_COOKIE_SIZE         8
+
+#define HTT_T2H_STATS_CONF_TAIL_SIZE      4
 
 #define HTT_T2H_STATS_CONF_HDR_SIZE       4
 
@@ -3437,6 +5830,7 @@ enum htt_dbg_stats_status {
     HTT_T2H_STATS_CONF_TLV_LENGTH_S)
 
 #define HL_HTT_FW_RX_DESC_RSVD_SIZE 18
+#define HTT_MAX_AGGR 64
 #define HTT_HL_MAX_AGGR 18
 
 /**
@@ -3460,11 +5854,17 @@ enum htt_dbg_stats_status {
  * |------------------------------------------------------------|
  * | DESC_SIZE    |  NUM_BANKS   | RES |SWP|pdev|    msg type   |
  * |------------------------------------------------------------|
- * |                     BANK0_BASE_ADDRESS                     |
+ * |                 BANK0_BASE_ADDRESS (bits 31:0)             |
+#if HTT_PADDR64
+ * |                 BANK0_BASE_ADDRESS (bits 63:32)            |
+#endif
  * |------------------------------------------------------------|
  * |                            ...                             |
  * |------------------------------------------------------------|
- * |                    BANK15_BASE_ADDRESS                     |
+ * |                 BANK15_BASE_ADDRESS (bits 31:0)            |
+#if HTT_PADDR64
+ * |                 BANK15_BASE_ADDRESS (bits 63:32)           |
+#endif
  * |------------------------------------------------------------|
  * |       BANK0_MAX_ID          |       BANK0_MIN_ID           |
  * |------------------------------------------------------------|
@@ -3476,10 +5876,23 @@ enum htt_dbg_stats_status {
  *  - MSG_TYPE
  *    Bits 7:0
  *    Value: 0x6
- *  - BANKx_BASE_ADDRESS
- *    Bits 31:0
- *    Purpose: Provide a mechanism to specify the base address of the MSDU_EXT
- *         bank physical/bus address.
+ *  for systems with 64-bit format for bus addresses:
+ *      - BANKx_BASE_ADDRESS_LO
+ *        Bits 31:0
+ *        Purpose: Provide a mechanism to specify the base address of the
+ *             MSDU_EXT bank physical/bus address.
+ *        Value: lower 4 bytes of MSDU_EXT bank physical / bus address
+ *      - BANKx_BASE_ADDRESS_HI
+ *        Bits 31:0
+ *        Purpose: Provide a mechanism to specify the base address of the
+ *             MSDU_EXT bank physical/bus address.
+ *        Value: higher 4 bytes of MSDU_EXT bank physical / bus address
+ *  for systems with 32-bit format for bus addresses:
+ *      - BANKx_BASE_ADDRESS
+ *        Bits 31:0
+ *        Purpose: Provide a mechanism to specify the base address of the
+ *             MSDU_EXT bank physical/bus address.
+ *        Value: MSDU_EXT bank physical / bus address
  *  - BANKx_MIN_ID
  *    Bits 15:0
  *    Purpose: Provide a mechanism to specify the min index that needs to
@@ -3564,29 +5977,56 @@ enum htt_dbg_stats_status {
     (((word) & HTT_H2T_FRAG_DESC_BANK_MAX_IDX_M) >> HTT_H2T_FRAG_DESC_BANK_MAX_IDX_S)
 
 
-PREPACK struct htt_tx_frag_desc_bank_cfg_t {
-      /** word 0
-       * msg_type:      8,
-       * pdev_id:      2,
-       * swap:         1,
-       * reserved0:    5,
-       * num_banks:    8,
-       * desc_size:    8;
-       */
-    A_UINT32 word0;
-    A_UINT32 bank_base_address[HTT_TX_MSDU_EXT_BANK_MAX];
-    A_UINT32 bank_info[HTT_TX_MSDU_EXT_BANK_MAX];
-} POSTPACK;
-
+/*
+ * TEMPLATE_HTT_TX_FRAG_DESC_BANK_CFG_T:
+ * This macro defines a htt_tx_frag_descXXX_bank_cfg_t in which any physical
+ * addresses are stored in a XXX-bit field.
+ * This macro is used to define both htt_tx_frag_desc32_bank_cfg_t and
+ * htt_tx_frag_desc64_bank_cfg_t structs.
+ */
+#define TEMPLATE_HTT_TX_FRAG_DESC_BANK_CFG_T(                                  \
+    _paddr_bits_,                                                              \
+    _paddr__bank_base_address_)                                                \
+PREPACK struct htt_tx_frag_desc ## _paddr_bits_ ## _bank_cfg_t {               \
+      /** word 0                                                               \
+       * msg_type:     8,                                                      \
+       * pdev_id:      2,                                                      \
+       * swap:         1,                                                      \
+       * reserved0:    5,                                                      \
+       * num_banks:    8,                                                      \
+       * desc_size:    8;                                                      \
+       */                                                                      \
+    A_UINT32 word0;                                                            \
+    /*                                                                         \
+     * If bank_base_address is 64 bits, the upper / lower halves are stored    \
+     * in little-endian order (bytes 0-3 in the first A_UINT32, bytes 4-7 in   \
+     * the second A_UINT32).                                                   \
+     */                                                                        \
+    _paddr__bank_base_address_[HTT_TX_MSDU_EXT_BANK_MAX];                      \
+    A_UINT32 bank_info[HTT_TX_MSDU_EXT_BANK_MAX];                              \
+} POSTPACK
+/* define htt_tx_frag_desc32_bank_cfg_t */
+TEMPLATE_HTT_TX_FRAG_DESC_BANK_CFG_T(32, HTT_VAR_PADDR32(bank_base_address));
+/* define htt_tx_frag_desc64_bank_cfg_t */
+TEMPLATE_HTT_TX_FRAG_DESC_BANK_CFG_T(64, HTT_VAR_PADDR64_LE(bank_base_address));
+/*
+ * Make htt_tx_frag_desc_bank_cfg_t be an alias for either
+ * htt_tx_frag_desc32_bank_cfg_t or htt_tx_frag_desc64_bank_cfg_t
+ */
+#if HTT_PADDR64
+    #define htt_tx_frag_desc_bank_cfg_t htt_tx_frag_desc64_bank_cfg_t
+#else
+    #define htt_tx_frag_desc_bank_cfg_t htt_tx_frag_desc32_bank_cfg_t
+#endif
 
 
 /**
  * @brief target -> host HTT TX Credit total count update message definition
  *
- *|31                 16|15       9|  8    |7       0 |
- *|---------------------+----------+-------+----------|
- *|cur htt credit delta | reserved | sign  | msg type |
- *|---------------------------------------------------|
+ *|31                 16|15|14       9|  8    |7       0 |
+ *|---------------------+--+----------+-------+----------|
+ *|cur htt credit delta | Q| reserved | sign  | msg type |
+ *|------------------------------------------------------|
  *
  * Header fields:
  *   - MSG_TYPE
@@ -3597,20 +6037,26 @@ PREPACK struct htt_tx_frag_desc_bank_cfg_t {
  *     Bits 8
  *      identifies whether credit delta is positive or negative
  *     Value:
- *       - 0x0: credti delta is positive, rebalance in some buffers
- *       - 0x1: credti delta is negative, rebalance out some buffers
- *     Bits 15:9
- *       - reserved
+ *       - 0x0: credit delta is positive, rebalance in some buffers
+ *       - 0x1: credit delta is negative, rebalance out some buffers
+ *   - reserved
+ *     Bits 14:9
+ *     Value: 0x0
+ *   - TXQ_GRP
+ *     Bit 15
+ *     Purpose: indicates whether any tx queue group information elements
+ *         are appended to the tx credit update message
+ *     Value: 0 -> no tx queue group information element is present
+ *            1 -> a tx queue group information element immediately follows
  *   - DELTA_COUNT
  *     Bits 31:16
  *     Purpose: Specify current htt credit delta absolute count
  */
 
-
-
-
 #define HTT_TX_CREDIT_SIGN_BIT_M       0x00000100
 #define HTT_TX_CREDIT_SIGN_BIT_S       8
+#define HTT_TX_CREDIT_TXQ_GRP_M        0x00008000
+#define HTT_TX_CREDIT_TXQ_GRP_S        15
 #define HTT_TX_CREDIT_DELTA_ABS_M      0xffff0000
 #define HTT_TX_CREDIT_DELTA_ABS_S      16
 
@@ -3623,6 +6069,15 @@ PREPACK struct htt_tx_frag_desc_bank_cfg_t {
 
 #define HTT_TX_CREDIT_SIGN_BIT_GET(word) \
     (((word) & HTT_TX_CREDIT_SIGN_BIT_M) >> HTT_TX_CREDIT_SIGN_BIT_S)
+
+#define HTT_TX_CREDIT_TXQ_GRP_SET(word, value)                              \
+    do {                                                                    \
+        HTT_CHECK_SET_VAL(HTT_TX_CREDIT_TXQ_GRP, value);                    \
+        (word) |= (value)  << HTT_TX_CREDIT_TXQ_GRP_S;                      \
+    } while (0)
+
+#define HTT_TX_CREDIT_TXQ_GRP_GET(word) \
+    (((word) & HTT_TX_CREDIT_TXQ_GRP_M) >> HTT_TX_CREDIT_TXQ_GRP_S)
 
 #define HTT_TX_CREDIT_DELTA_ABS_SET(word, value)                              \
     do {                                                                      \
@@ -3639,6 +6094,831 @@ PREPACK struct htt_tx_frag_desc_bank_cfg_t {
 #define HTT_TX_CREDIT_SIGN_BIT_POSITIVE  0x0
 #define HTT_TX_CREDIT_SIGN_BIT_NEGATIVE  0x1
 
-#define DEBUG_DMA_DONE
+
+/**
+ * @brief HTT WDI_IPA Operation Response Message
+ *
+ * @details
+ *  HTT WDI_IPA Operation Response message is sent by target
+ *  to host confirming suspend or resume operation.
+ *     |31            24|23            16|15             8|7              0|
+ *     |----------------+----------------+----------------+----------------|
+ *     |             op_code             |      Rsvd      |     msg_type   |
+ *     |-------------------------------------------------------------------|
+ *     |             Rsvd                |          Response len           |
+ *     |-------------------------------------------------------------------|
+ *     |                                                                   |
+ *     |                  Response-type specific info                      |
+ *     |                                                                   |
+ *     |                                                                   |
+ *     |-------------------------------------------------------------------|
+ * Header fields:
+ *   - MSG_TYPE
+ *     Bits 7:0
+ *     Purpose: Identifies this as WDI_IPA Operation Response message
+ *     value: = 0x13
+ *   - OP_CODE
+ *     Bits 31:16
+ *     Purpose: Identifies the operation target is responding to (e.g. TX suspend)
+ *     value: = enum htt_wdi_ipa_op_code
+ *   - RSP_LEN
+ *     Bits 16:0
+ *     Purpose: length for the response-type specific info
+ *     value: = length in bytes for response-type specific info
+ *              For example, if OP_CODE == HTT_WDI_IPA_OPCODE_DBG_STATS, the
+ *              length value will be sizeof(struct wlan_wdi_ipa_dbg_stats_t).
+ */
+
+PREPACK struct htt_wdi_ipa_op_response_t
+{
+    /* DWORD 0: flags and meta-data */
+    A_UINT32
+        msg_type:   8, /* HTT_T2H_MSG_TYPE_WDI_IPA_OP_RESPONSE */
+        reserved1:  8,
+        op_code:   16;
+    A_UINT32
+        rsp_len:   16,
+        reserved2: 16;
+} POSTPACK;
+
+#define HTT_WDI_IPA_OP_RESPONSE_SZ                    8 /* bytes */
+
+#define HTT_WDI_IPA_OP_RESPONSE_OP_CODE_M             0xffff0000
+#define HTT_WDI_IPA_OP_RESPONSE_OP_CODE_S             16
+
+#define HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_M             0x0000ffff
+#define HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_S             0
+
+#define HTT_WDI_IPA_OP_RESPONSE_OP_CODE_GET(_var) \
+    (((_var) & HTT_WDI_IPA_OP_RESPONSE_OP_CODE_M) >> HTT_WDI_IPA_OP_RESPONSE_OP_CODE_S)
+#define HTT_WDI_IPA_OP_RESPONSE_OP_CODE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_OP_RESPONSE_OP_CODE, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_OP_RESPONSE_OP_CODE_S)); \
+    } while (0)
+
+#define HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_GET(_var) \
+    (((_var) & HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_M) >> HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_S)
+#define HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_WDI_IPA_OP_RESPONSE_RSP_LEN, _val);  \
+        ((_var) |= ((_val) << HTT_WDI_IPA_OP_RESPONSE_RSP_LEN_S)); \
+    } while (0)
+
+
+enum htt_phy_mode {
+    htt_phy_mode_11a            = 0,
+    htt_phy_mode_11g            = 1,
+    htt_phy_mode_11b            = 2,
+    htt_phy_mode_11g_only       = 3,
+    htt_phy_mode_11na_ht20      = 4,
+    htt_phy_mode_11ng_ht20      = 5,
+    htt_phy_mode_11na_ht40      = 6,
+    htt_phy_mode_11ng_ht40      = 7,
+    htt_phy_mode_11ac_vht20     = 8,
+    htt_phy_mode_11ac_vht40     = 9,
+    htt_phy_mode_11ac_vht80     = 10,
+    htt_phy_mode_11ac_vht20_2g  = 11,
+    htt_phy_mode_11ac_vht40_2g  = 12,
+    htt_phy_mode_11ac_vht80_2g  = 13,
+    htt_phy_mode_11ac_vht80_80  = 14, /* 80+80 */
+    htt_phy_mode_11ac_vht160    = 15,
+
+    htt_phy_mode_max,
+};
+
+/**
+ * @brief target -> host HTT channel change indication
+ * @details
+ *  Specify when a channel change occurs.
+ *  This allows the host to precisely determine which rx frames arrived
+ *  on the old channel and which rx frames arrived on the new channel.
+ *
+ *|31                                         |7       0 |
+ *|-------------------------------------------+----------|
+ *|                  reserved                 | msg type |
+ *|------------------------------------------------------|
+ *|              primary_chan_center_freq_mhz            |
+ *|------------------------------------------------------|
+ *|            contiguous_chan1_center_freq_mhz          |
+ *|------------------------------------------------------|
+ *|            contiguous_chan2_center_freq_mhz          |
+ *|------------------------------------------------------|
+ *|                        phy_mode                      |
+ *|------------------------------------------------------|
+ *
+ * Header fields:
+ *   - MSG_TYPE
+ *     Bits 7:0
+ *     Purpose: identifies this as a htt channel change indication message
+ *     Value: 0x15
+ *   - PRIMARY_CHAN_CENTER_FREQ_MHZ
+ *     Bits 31:0
+ *     Purpose: identify the (center of the) new 20 MHz primary channel
+ *     Value: center frequency of the 20 MHz primary channel, in MHz units
+ *   - CONTIG_CHAN1_CENTER_FREQ_MHZ
+ *     Bits 31:0
+ *     Purpose: identify the (center of the) contiguous frequency range
+ *         comprising the new channel.
+ *         For example, if the new channel is a 80 MHz channel extending
+ *         60 MHz beyond the primary channel, this field would be 30 larger
+ *         than the primary channel center frequency field.
+ *     Value: center frequency of the contiguous frequency range comprising
+ *         the full channel in MHz units
+ *         (80+80 channels also use the CONTIG_CHAN2 field)
+ *   - CONTIG_CHAN2_CENTER_FREQ_MHZ
+ *     Bits 31:0
+ *     Purpose: Identify the (center of the) 80 MHz extension frequency range
+ *         within a VHT 80+80 channel.
+ *         This field is only relevant for VHT 80+80 channels.
+ *     Value: center frequency of the 80 MHz extension channel in a VHT 80+80
+ *         channel (arbitrary value for cases besides VHT 80+80)
+ *   - PHY_MODE
+ *     Bits 31:0
+ *     Purpose: specify the PHY channel's type (legacy vs. HT vs. VHT), width,
+ *         and band
+ *     Value: htt_phy_mode enum value
+ */
+
+PREPACK struct htt_chan_change_t
+{
+    /* DWORD 0: flags and meta-data */
+    A_UINT32
+        msg_type:   8, /* HTT_T2H_MSG_TYPE_WDI_IPA_OP_RESPONSE */
+        reserved1: 24;
+    A_UINT32 primary_chan_center_freq_mhz;
+    A_UINT32 contig_chan1_center_freq_mhz;
+    A_UINT32 contig_chan2_center_freq_mhz;
+    A_UINT32 phy_mode;
+} POSTPACK;
+
+#define HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_M  0xffffffff
+#define HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_S  0
+#define HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_M  0xffffffff
+#define HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_S  0
+#define HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_M  0xffffffff
+#define HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_S  0
+#define HTT_CHAN_CHANGE_PHY_MODE_M                      0xffffffff
+#define HTT_CHAN_CHANGE_PHY_MODE_S                      0
+
+
+#define HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_SET(word, value)          \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ, value);\
+        (word) |= (value)  << HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_S;  \
+    } while (0)
+#define HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_GET(word) \
+    (((word) & HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_M) \
+     >> HTT_CHAN_CHANGE_PRIMARY_CHAN_CENTER_FREQ_MHZ_S)
+
+#define HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_SET(word, value)          \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ, value);\
+        (word) |= (value)  << HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_S;  \
+    } while (0)
+#define HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_GET(word) \
+    (((word) & HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_M) \
+     >> HTT_CHAN_CHANGE_CONTIG_CHAN1_CENTER_FREQ_MHZ_S)
+
+#define HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_SET(word, value)          \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ, value);\
+        (word) |= (value)  << HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_S;  \
+    } while (0)
+#define HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_GET(word) \
+    (((word) & HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_M) \
+     >> HTT_CHAN_CHANGE_CONTIG_CHAN2_CENTER_FREQ_MHZ_S)
+
+#define HTT_CHAN_CHANGE_PHY_MODE_SET(word, value)          \
+    do {                                                                       \
+        HTT_CHECK_SET_VAL(HTT_CHAN_CHANGE_PHY_MODE, value);\
+        (word) |= (value)  << HTT_CHAN_CHANGE_PHY_MODE_S;  \
+    } while (0)
+#define HTT_CHAN_CHANGE_PHY_MODE_GET(word) \
+    (((word) & HTT_CHAN_CHANGE_PHY_MODE_M) \
+     >> HTT_CHAN_CHANGE_PHY_MODE_S)
+
+#define HTT_CHAN_CHANGE_BYTES sizeof(struct htt_chan_change_t)
+
+
+/**
+ * @brief rx offload packet error message
+ *
+ * @details
+ *  HTT_RX_OFLD_PKT_ERR message is sent by target to host to indicate err
+ *  of target payload like mic err.
+ *
+ *     |31            24|23            16|15             8|7              0|
+ *     |----------------+----------------+----------------+----------------|
+ *     |      tid       |     vdev_id    |  msg_sub_type  |    msg_type    |
+ *     |-------------------------------------------------------------------|
+ *     :                    (sub-type dependent content)                   :
+ *     :- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -:
+ * Header fields:
+ *   - msg_type
+ *     Bits 7:0
+ *     Purpose: Identifies this as HTT_RX_OFLD_PKT_ERR message
+ *     value: 0x16 (HTT_T2H_MSG_TYPE_RX_OFLD_PKT_ERR)
+ *   - msg_sub_type
+ *     Bits 15:8
+ *     Purpose: Identifies which type of rx error is reported by this message
+ *     value: htt_rx_ofld_pkt_err_type
+ *   - vdev_id
+ *     Bits 23:16
+ *     Purpose: Identifies which vdev received the erroneous rx frame
+ *     value:
+ *   - tid
+ *     Bits 31:24
+ *     Purpose: Identifies the traffic type of the rx frame
+ *     value:
+ *
+ *   - The payload fields used if the sub-type == MIC error are shown below.
+ *     Note - MIC err is per MSDU, while PN is per MPDU.
+ *     The FW will discard the whole MPDU if any MSDU within the MPDU is marked
+ *     with MIC err in A-MSDU case, so FW will send only one HTT message
+ *     with the PN of this MPDU attached to indicate MIC err for one MPDU
+ *     instead of sending separate HTT messages for each wrong MSDU within
+ *     the MPDU.
+ *
+ *     |31            24|23            16|15             8|7              0|
+ *     |----------------+----------------+----------------+----------------|
+ *     |     Rsvd       |     key_id     |             peer_id             |
+ *     |-------------------------------------------------------------------|
+ *     |                        receiver MAC addr 31:0                     |
+ *     |-------------------------------------------------------------------|
+ *     |              Rsvd               |    receiver MAC addr 47:32      |
+ *     |-------------------------------------------------------------------|
+ *     |                     transmitter MAC addr 31:0                     |
+ *     |-------------------------------------------------------------------|
+ *     |              Rsvd               |    transmitter MAC addr 47:32   |
+ *     |-------------------------------------------------------------------|
+ *     |                              PN 31:0                              |
+ *     |-------------------------------------------------------------------|
+ *     |              Rsvd               |              PN 47:32           |
+ *     |-------------------------------------------------------------------|
+ *   - peer_id
+ *     Bits 15:0
+ *     Purpose: identifies which peer is frame is from
+ *     value:
+ *   - key_id
+ *     Bits 23:16
+ *     Purpose: identifies key_id of rx frame
+ *     value:
+ *   - RA_31_0 (receiver MAC addr 31:0)
+ *     Bits 31:0
+ *     Purpose: identifies by MAC address which vdev received the frame
+ *     value: MAC address lower 4 bytes
+ *   - RA_47_32 (receiver MAC addr 47:32)
+ *     Bits 15:0
+ *     Purpose: identifies by MAC address which vdev received the frame
+ *     value: MAC address upper 2 bytes
+ *   - TA_31_0 (transmitter MAC addr 31:0)
+ *     Bits 31:0
+ *     Purpose: identifies by MAC address which peer transmitted the frame
+ *     value: MAC address lower 4 bytes
+ *   - TA_47_32 (transmitter MAC addr 47:32)
+ *     Bits 15:0
+ *     Purpose: identifies by MAC address which peer transmitted the frame
+ *     value: MAC address upper 2 bytes
+ *   - PN_31_0
+ *     Bits 31:0
+ *     Purpose: Identifies pn of rx frame
+ *     value: PN lower 4 bytes
+ *   - PN_47_32
+ *     Bits 15:0
+ *     Purpose: Identifies pn of rx frame
+ *     value:
+ *         TKIP or CCMP: PN upper 2 bytes
+ *         WAPI: PN bytes 6:5 (bytes 15:7 not included in this message)
+ */
+
+enum htt_rx_ofld_pkt_err_type {
+    HTT_RX_OFLD_PKT_ERR_TYPE_NONE = 0,
+    HTT_RX_OFLD_PKT_ERR_TYPE_MIC_ERR,
+};
+
+/* definition for HTT_RX_OFLD_PKT_ERR msg hdr */
+#define HTT_RX_OFLD_PKT_ERR_HDR_BYTES 4
+
+#define HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_M     0x0000ff00
+#define HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_S     8
+
+#define HTT_RX_OFLD_PKT_ERR_VDEV_ID_M          0x00ff0000
+#define HTT_RX_OFLD_PKT_ERR_VDEV_ID_S          16
+
+#define HTT_RX_OFLD_PKT_ERR_TID_M              0xff000000
+#define HTT_RX_OFLD_PKT_ERR_TID_S              24
+
+#define HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_M) \
+    >> HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_S)
+#define HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_VDEV_ID_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_VDEV_ID_M) >> HTT_RX_OFLD_PKT_ERR_VDEV_ID_S)
+#define HTT_RX_OFLD_PKT_ERR_VDEV_ID_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_VDEV_ID, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_VDEV_ID_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_TID_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_TID_M) >> HTT_RX_OFLD_PKT_ERR_TID_S)
+#define HTT_RX_OFLD_PKT_ERR_TID_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_TID, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_TID_S)); \
+    } while (0)
+
+/* definition for HTT_RX_OFLD_PKT_ERR_MIC_ERR msg sub-type payload */
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_BYTES   28
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_M          0x0000ffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_S          0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_M            0x00ff0000
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_S            16
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_M          0xffffffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_S          0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_M         0x0000ffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_S         0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_M          0xffffffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_S          0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_M         0x0000ffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_S         0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_M          0xffffffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_S          0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_M         0x0000ffff
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_S         0
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_PEER_ID_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_KEYID_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_31_0_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_RA_47_32_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_31_0_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_TA_47_32_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_31_0_S)); \
+    } while (0)
+
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_GET(_var) \
+    (((_var) & HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_M) >> \
+    HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_S)
+#define HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32, _val);  \
+        ((_var) |= ((_val) << HTT_RX_OFLD_PKT_ERR_MIC_ERR_PN_47_32_S)); \
+    } while (0)
+
+/**
+ * @brief peer rate report message
+ *
+ * @details
+ *  HTT_T2H_MSG_TYPE_RATE_REPORT message is sent by target to host to
+ *  indicate the justified rate of all the peers.
+ *
+ *     |31         24|23         16|15          8|7           0|
+ *     |-------------+-------------+-------------+-------------|
+ *     |     peer_count            | reserved    |    msg_type |
+ *     |-------------------------------------------------------|
+ *     :      Payload (variant number of peer rate report)     :
+ *     :- - -- - - - - - - - - - - - - - - - - - - - - - -  - -:
+ * Header fields:
+ *   - msg_type
+ *     Bits 7:0
+ *     Purpose: Identifies this as HTT_T2H_MSG_TYPE_RATE_REPORT message.
+ *     value: 0x17 (HTT_T2H_MSG_TYPE_RATE_REPORT)
+ *   - reserved
+ *     Bits 15:8
+ *     Purpose:
+ *     value:
+ *   - peer_count
+ *     Bits 31:16
+ *     Purpose: Specify how many peer rate report elements are present
+ *     in the payload.
+ *     value:
+ *
+ * Payload:
+ *     There are variant number of peer rate report follow the first 32
+ *     bits. The peer rate report is defined as follows.
+ *
+ *     |31            20|19    16|15                      0|
+ *     |----------------+--------+------------------------|-
+ *     |     reserved   |  phy   |        peer_id         | \
+ *     |--------------------------------------------------|  -> report #0
+ *     |                   rate                           | /
+ *     |----------------+--------+------------------------|-
+ *     |     reserved   |  phy   |        peer_id         | \
+ *     |--------------------------------------------------|  -> report #1
+ *     |                   rate                           | /
+ *     |----------------+--------+------------------------|-
+ *     |     reserved   |  phy   |        peer_id         | \
+ *     |--------------------------------------------------|  -> report #2
+ *     |                   rate                           | /
+ *     |---- ---------------------------------------------|-
+ *     :                                                  :
+ *     :                                                  :
+ *     :                                                  :
+ *     :--------------------------------------------------:
+ *
+ *   - peer_id
+ *     Bits 15:0
+ *     Purpose: identify the peer
+ *     value:
+ *   - phy
+ *     Bits 19:16
+ *     Purpose: identify which phy is in use
+ *     value: 0=11b, 1=11a/g, 2=11n, 3=11ac.
+ *         Please see enum htt_peer_report_phy_type for detail.
+ *   - reserved
+ *     Bits 31:20
+ *     Purpose:
+ *     value:
+ *   - rate
+ *     Bits 31:0
+ *     Purpose: represent the justified rate of the peer specified
+ *     by peer_id
+ *     value:
+ */
+
+enum htt_peer_rate_report_phy_type {
+    HTT_PEER_RATE_REPORT_11B = 0,
+    HTT_PEER_RATE_REPORT_11A_G,
+    HTT_PEER_RATE_REPORT_11N,
+    HTT_PEER_RATE_REPORT_11AC,
+};
+
+#define HTT_PEER_RATE_REPORT_SIZE                8
+
+#define HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_M    0xffff0000
+#define HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_S    16
+
+#define HTT_PEER_RATE_REPORT_MSG_PEER_ID_M       0x0000ffff
+#define HTT_PEER_RATE_REPORT_MSG_PEER_ID_S       0
+
+#define HTT_PEER_RATE_REPORT_MSG_PHY_M           0x000f0000
+#define HTT_PEER_RATE_REPORT_MSG_PHY_S           16
+
+#define HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_GET(_var) \
+    (((_var) & HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_M) \
+    >> HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_S)
+#define HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_PEER_RATE_REPORT_MSG_PEER_COUNT, _val);  \
+        ((_var) |= ((_val) << HTT_PEER_RATE_REPORT_MSG_PEER_COUNT_S)); \
+    } while (0)
+
+#define HTT_PEER_RATE_REPORT_MSG_PEER_ID_GET(_var) \
+    (((_var) & HTT_PEER_RATE_REPORT_MSG_PEER_ID_M) \
+    >> HTT_PEER_RATE_REPORT_MSG_PEER_ID_S)
+#define HTT_PEER_RATE_REPORT_MSG_PEER_ID_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_PEER_RATE_REPORT_MSG_PEER_ID, _val);  \
+        ((_var) |= ((_val) << HTT_PEER_RATE_REPORT_MSG_PEER_ID_S)); \
+    } while (0)
+
+#define HTT_PEER_RATE_REPORT_MSG_PHY_GET(_var) \
+    (((_var) & HTT_PEER_RATE_REPORT_MSG_PHY_M) \
+    >> HTT_PEER_RATE_REPORT_MSG_PHY_S)
+#define HTT_PEER_RATE_REPORT_MSG_PHY_SET(_var, _val) \
+    do {                                                     \
+        HTT_CHECK_SET_VAL(HTT_PEER_RATE_REPORT_MSG_PHY, _val);  \
+        ((_var) |= ((_val) << HTT_PEER_RATE_REPORT_MSG_PHY_S)); \
+    } while (0)
+
+/**
+ * @brief HTT_T2H_MSG_TYPE_FLOW_POOL_MAP Message
+ *
+ * @details
+ *  HTT_T2H_MSG_TYPE_FLOW_POOL_MAP message is sent by the target when setting up
+ *  a flow of descriptors.
+ *
+ *  This message is in TLV format and indicates the parameters to be setup a
+ *  flow in the host. Each entry indicates that a particular flow ID is ready to
+ *  receive descriptors from a specified pool.
+ *
+ *  The message would appear as follows:
+ *
+ *         |31            24|23            16|15             8|7              0|
+ *         |----------------+----------------+----------------+----------------|
+ * header  |            reserved             |   num_flows    |     msg_type   |
+ *         |-------------------------------------------------------------------|
+ *         |                                                                   |
+ *         :                              payload                              :
+ *         |                                                                   |
+ *         |-------------------------------------------------------------------|
+ *
+ * The header field is one DWORD long and is interpreted as follows:
+ * b'0:7   - msg_type:  This will be set to HTT_T2H_MSG_TYPE_FLOW_POOL_MAP
+ * b'8-15  - num_flows: This will indicate the number of flows being setup in
+ *                      this message
+ * b'16-31 - reserved:  These bits are reserved for future use
+ *
+ * Payload:
+ * The payload would contain multiple objects of the following structure. Each
+ * object represents a flow.
+ *
+ *         |31            24|23            16|15             8|7              0|
+ *         |----------------+----------------+----------------+----------------|
+ * header  |            reserved             |   num_flows    |     msg_type   |
+ *         |-------------------------------------------------------------------|
+ * payload0|                             flow_type                             |
+ *         |-------------------------------------------------------------------|
+ *         |                              flow_id                              |
+ *         |-------------------------------------------------------------------|
+ *         |            reserved0            |          flow_pool_id           |
+ *         |-------------------------------------------------------------------|
+ *         |            reserved1            |         flow_pool_size          |
+ *         |-------------------------------------------------------------------|
+ *         |                             reserved2                             |
+ *         |-------------------------------------------------------------------|
+ * payload1|                             flow_type                             |
+ *         |-------------------------------------------------------------------|
+ *         |                              flow_id                              |
+ *         |-------------------------------------------------------------------|
+ *         |            reserved0            |          flow_pool_id           |
+ *         |-------------------------------------------------------------------|
+ *         |            reserved1            |         flow_pool_size          |
+ *         |-------------------------------------------------------------------|
+ *         |                             reserved2                             |
+ *         |-------------------------------------------------------------------|
+ *         |                                 .                                 |
+ *         |                                 .                                 |
+ *         |                                 .                                 |
+ *         |-------------------------------------------------------------------|
+ *
+ * Each payload is 5 DWORDS long and is interpreted as follows:
+ * dword0 - b'0:31  - flow_type: This indicates the type of the entity to which
+ *                               this flow is associated. It can be VDEV, peer,
+ *                               or tid (AC). Based on enum htt_flow_type.
+ *
+ * dword1 - b'0:31  - flow_id: Identifier for the flow corresponding to this
+ *                             object. For flow_type vdev it is set to the
+ *                             vdevid, for peer it is peerid and for tid, it is
+ *                             tid_num.
+ *
+ * dword2 - b'0:15  - flow_pool_id: Identifier of the descriptor-pool being used
+ *                                  in the host for this flow
+ *          b'16:31 - reserved0: This field in reserved for the future. In case
+ *                               we have a hierarchical implementation (HCM) of
+ *                               pools, it can be used to indicate the ID of the
+ *                               parent-pool.
+ *
+ * dword3 - b'0:15  - flow_pool_size: Size of the pool in number of descriptors.
+ *                                    Descriptors for this flow will be
+ *                                    allocated from this pool in the host.
+ *          b'16:31 - reserved1: This field in reserved for the future. In case
+ *                               we have a hierarchical implementation of pools,
+ *                               it can be used to indicate the max number of
+ *                               descriptors in the pool. The b'0:15 can be used
+ *                               to indicate min number of descriptors in the
+ *                               HCM scheme.
+ *
+ * dword4 - b'0:31  - reserved2: This field in reserved for the future. In case
+ *                               we have a hierarchical implementation of pools,
+ *                               b'0:15 can be used to indicate the
+ *                               priority-based borrowing (PBB) threshold of
+ *                               the flow's pool. The b'16:31 are still left
+ *                               reserved.
+ */
+
+enum htt_flow_type {
+	FLOW_TYPE_VDEV = 0,
+	/* Insert new flow types above this line */
+};
+
+PREPACK struct htt_flow_pool_map_payload_t {
+	A_UINT32 flow_type;
+	A_UINT32 flow_id;
+	A_UINT32 flow_pool_id:16,
+		 reserved0:16;
+	A_UINT32 flow_pool_size:16,
+		 reserved1:16;
+	A_UINT32 reserved2;
+} POSTPACK;
+
+#define HTT_FLOW_POOL_MAP_HEADER_SZ    (sizeof(A_UINT32))
+
+#define HTT_FLOW_POOL_MAP_PAYLOAD_SZ    \
+    (sizeof(struct htt_flow_pool_map_payload_t))
+
+#define HTT_FLOW_POOL_MAP_NUM_FLOWS_M                    0x0000ff00
+#define HTT_FLOW_POOL_MAP_NUM_FLOWS_S                    8
+
+#define HTT_FLOW_POOL_MAP_FLOW_TYPE_M                    0xffffffff
+#define HTT_FLOW_POOL_MAP_FLOW_TYPE_S                    0
+
+#define HTT_FLOW_POOL_MAP_FLOW_ID_M                      0xffffffff
+#define HTT_FLOW_POOL_MAP_FLOW_ID_S                      0
+
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_ID_M                 0x0000ffff
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_ID_S                 0
+
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_M               0x0000ffff
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_S               0
+
+#define HTT_FLOW_POOL_MAP_NUM_FLOWS_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_MAP_NUM_FLOWS_M) >> HTT_FLOW_POOL_MAP_NUM_FLOWS_S)
+
+#define HTT_FLOW_POOL_MAP_FLOW_TYPE_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_MAP_FLOW_TYPE_M) >> HTT_FLOW_POOL_MAP_FLOW_TYPE_S)
+
+#define HTT_FLOW_POOL_MAP_FLOW_ID_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_MAP_FLOW_ID_M) >> HTT_FLOW_POOL_MAP_FLOW_ID_S)
+
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_ID_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_MAP_FLOW_POOL_ID_M) >> \
+		HTT_FLOW_POOL_MAP_FLOW_POOL_ID_S)
+
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_M) >> \
+		HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_S)
+
+#define HTT_FLOW_POOL_MAP_NUM_FLOWS_SET(_var, _val) \
+	do {						\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_MAP_NUM_FLOWS, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_MAP_NUM_FLOWS_S)); \
+	} while (0)
+
+#define HTT_FLOW_POOL_MAP_FLOW_TYPE_SET(_var, _val) \
+	do {						\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_MAP_FLOW_TYPE, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_MAP_FLOW_TYPE_S)); \
+	} while (0)
+
+#define HTT_FLOW_POOL_MAP_FLOW_ID_SET(_var, _val) \
+	do {						\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_MAP_FLOW_ID, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_MAP_FLOW_ID_S)); \
+	} while (0)
+
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_ID_SET(_var, _val) \
+	do {						\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_MAP_FLOW_POOL_ID, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_MAP_FLOW_POOL_ID_S)); \
+	} while (0)
+
+#define HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_SET(_var, _val) \
+	do {						\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_MAP_FLOW_POOL_SIZE_S)); \
+	} while (0)
+
+/**
+ * @brief HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP Message
+ *
+ * @details
+ *  HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP message is sent by the target when tearing
+ *  down a flow of descriptors.
+ *  This message indicates that for the flow (whose ID is provided) is wanting
+ *  to stop receiving descriptors. This flow ID corresponds to the ID of the
+ *  pool of descriptors from where descriptors are being allocated for this
+ *  flow. When a flow (and its pool) are unmapped, all the child-pools will also
+ *  be unmapped by the host.
+ *
+ *  The message would appear as follows:
+ *
+ *     |31            24|23            16|15             8|7              0|
+ *     |----------------+----------------+----------------+----------------|
+ *     |                     reserved0                    |     msg_type   |
+ *     |-------------------------------------------------------------------|
+ *     |                             flow_type                             |
+ *     |-------------------------------------------------------------------|
+ *     |                              flow_id                              |
+ *     |-------------------------------------------------------------------|
+ *     |             reserved1           |         flow_pool_id            |
+ *     |-------------------------------------------------------------------|
+ *
+ *  The message is interpreted as follows:
+ *  dword0 - b'0:7   - msg_type: This will be set to
+ *                               HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP
+ *           b'8:31  - reserved0: Reserved for future use
+ *
+ *  dword1 - b'0:31  - flow_type: This indicates the type of the entity to which
+ *                                this flow is associated. It can be VDEV, peer,
+ *                                or tid (AC). Based on enum htt_flow_type.
+ *
+ *  dword2 - b'0:31  - flow_id: Identifier for the flow corresponding to this
+ *                              object. For flow_type vdev it is set to the
+ *                              vdevid, for peer it is peerid and for tid, it is
+ *                              tid_num.
+ *
+ *  dword3 - b'0:15  - flow_pool_id: Identifier of the descriptor-pool being
+ *                                   used in the host for this flow
+ *           b'16:31 - reserved0: This field in reserved for the future.
+ *
+ */
+
+PREPACK struct htt_flow_pool_unmap_t {
+	A_UINT32 msg_type:8,
+		 reserved0:24;
+	A_UINT32 flow_type;
+	A_UINT32 flow_id;
+	A_UINT32 flow_pool_id:16,
+		 reserved1:16;
+} POSTPACK;
+
+#define HTT_FLOW_POOL_UNMAP_SZ  (sizeof(struct htt_flow_pool_unmap_t))
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_TYPE_M         0xffffffff
+#define HTT_FLOW_POOL_UNMAP_FLOW_TYPE_S         0
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_ID_M           0xffffffff
+#define HTT_FLOW_POOL_UNMAP_FLOW_ID_S           0
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_M      0x0000ffff
+#define HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_S      0
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_TYPE_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_UNMAP_FLOW_TYPE_M) >> \
+		HTT_FLOW_POOL_UNMAP_FLOW_TYPE_S)
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_ID_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_UNMAP_FLOW_ID_M) >> HTT_FLOW_POOL_UNMAP_FLOW_ID_S)
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_GET(_var) \
+	(((_var) & HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_M) >> \
+		HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_S)
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_TYPE_SET(_var, _val) \
+	do {						\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_UNMAP_FLOW_TYPE, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_UNMAP_FLOW_TYPE_S)); \
+	} while (0)
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_ID_SET(_var, _val) \
+	do {					\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_UNMAP_FLOW_ID, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_UNMAP_FLOW_ID_S)); \
+	} while (0)
+
+#define HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_SET(_var, _val) \
+	do {							\
+		HTT_CHECK_SET_VAL(HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID, _val);  \
+		((_var) |= ((_val) << HTT_FLOW_POOL_UNMAP_FLOW_POOL_ID_S)); \
+	} while (0)
 
 #endif

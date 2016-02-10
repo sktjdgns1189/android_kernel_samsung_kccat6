@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -45,7 +45,7 @@ extern "C" {
 typedef  enum  {
     WMI_SERVICE_BEACON_OFFLOAD=0,     /* beacon offload */
     WMI_SERVICE_SCAN_OFFLOAD,         /* scan offload */
-    WMI_SERVICE_ROAM_OFFLOAD,         /* roam offload */
+    WMI_SERVICE_ROAM_SCAN_OFFLOAD,    /* roam scan offload */
     WMI_SERVICE_BCN_MISS_OFFLOAD,     /* beacon miss offload */
     WMI_SERVICE_STA_PWRSAVE,          /* fake sleep + basic power save */
     WMI_SERVICE_STA_ADVANCED_PWRSAVE, /* uapsd, pspoll, force sleep */
@@ -59,7 +59,7 @@ typedef  enum  {
     WMI_SERVICE_WOW,                  /* WOW Support */
     WMI_SERVICE_RATECTRL_CACHE,       /* Rate-control caching */
     WMI_SERVICE_IRAM_TIDS,            /* TIDs in IRAM */
-    WMI_SERVICE_ARPNS_OFFLOAD,        /* ARP NS Offload support */
+    WMI_SERVICE_ARPNS_OFFLOAD,        /* ARP NS Offload support for STA vdev */
     WMI_SERVICE_NLO,                  /* Network list offload service */
     WMI_SERVICE_GTK_OFFLOAD,          /* GTK offload */
     WMI_SERVICE_SCAN_SCH,             /* Scan Scheduler Service */
@@ -93,7 +93,7 @@ typedef  enum  {
     WMI_SERVICE_QPOWER,               /* QPower service */
     WMI_SERVICE_PLMREQ,
     WMI_SERVICE_THERMAL_MGMT,
-    WMI_SERVICE_RMC,                  /* reliable multicast support */
+    WMI_SERVICE_RMC,                  /* RMC support */
     WMI_SERVICE_MHF_OFFLOAD,          /* multi-hop forwarding offload */
     WMI_SERVICE_COEX_SAR,             /* target support SAR tx limit from WMI_PDEV_PARAM_TXPOWER_LIMITxG */
     WMI_SERVICE_BCN_TXRATE_OVERRIDE,  /* Will support the bcn/prb rsp rate override */
@@ -107,11 +107,24 @@ typedef  enum  {
     WMI_SERVICE_IBSS_PWRSAVE,         /* IBSS power save support */
     WMI_SERVICE_LPASS,                /*Service to support LPASS*/
     WMI_SERVICE_EXTSCAN,              /* Extended Scans */
+    WMI_SERVICE_D0WOW,                /* D0-WOW Support */
+    WMI_SERVICE_HSOFFLOAD,            /* Hotspot offload feature Support */
+    WMI_SERVICE_ROAM_HO_OFFLOAD,      /* roam handover offload */
+    WMI_SERVICE_RX_FULL_REORDER,      /* target-based Rx full reorder */
+    WMI_SERVICE_DHCP_OFFLOAD,         /* DHCP offload support */
+    WMI_SERVICE_STA_RX_IPA_OFFLOAD_SUPPORT, /* STA RX DATA offload to IPA support */
+    WMI_SERVICE_MDNS_OFFLOAD,         /* mDNS responder offload support */
+    WMI_SERVICE_SAP_AUTH_OFFLOAD,     /* softap auth offload */
+    WMI_SERVICE_DUAL_BAND_SIMULTANEOUS_SUPPORT, /* Dual Band Simultaneous support */
+    WMI_SERVICE_OCB,                  /* OCB mode support */
+    WMI_SERVICE_AP_ARPNS_OFFLOAD,     /* arp offload support for ap mode vdev */
+    WMI_SERVICE_PER_BAND_CHAINMASK_SUPPORT, /* Per band chainmask support */
     WMI_MAX_SERVICE=128               /* max service */
 } WMI_SERVICE;
 
 #define WMI_SERVICE_BM_SIZE   ((WMI_MAX_SERVICE + sizeof(A_UINT32)- 1)/sizeof(A_UINT32))
 
+#define WMI_SERVICE_ROAM_OFFLOAD WMI_SERVICE_ROAM_SCAN_OFFLOAD /* depreciated the name WMI_SERVICE_ROAM_OFFLOAD, but here to help compiling with old host driver */
 
 /*
  * turn on the WMI service bit corresponding to  the WMI service.

@@ -121,6 +121,12 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
     vos_pkt_t  *pVosPkt = (vos_pkt_t *)pMsg->bodyptr;
     VOS_STATUS  vosStatus =
               WDA_DS_PeekRxPacketInfo( pVosPkt, (v_PVOID_t *)&pBd, VOS_FALSE );
+#ifdef WLAN_FEATURE_11W
+    tANI_U8         sessionId;
+    tpPESession     psessionEntry;
+    tpSirMacMgmtHdr pMacHdr;
+#endif /* WLAN_FEATURE_11W */
+
     pMac->sys.gSysBbtReceived++;
 
     if ( !VOS_IS_STATUS_SUCCESS(vosStatus) )
@@ -141,8 +147,21 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
                 tANI_U32 timeNow = adf_os_ticks();
                 tANI_U32 timeGap = adf_os_ticks_to_msecs(timeNow -
                                               lastDeauthPacketTime);
-                if (timeGap < 1000)
-                    goto fail;
+                if (timeGap < 1000) {
+#ifdef WLAN_FEATURE_11W
+                    pMacHdr = WDA_GET_RX_MAC_HEADER(pBd);
+                    psessionEntry = peFindSessionByPeerSta(pMac,
+                                        pMacHdr->sa, &sessionId);
+                    if(!psessionEntry) {
+                        PELOGE(sysLog(pMac, LOGE,
+                            FL("session does not exist for given STA [%pM]"),
+                            pMacHdr->sa););
+                        goto fail;
+                    }
+                    if (!psessionEntry->limRmfEnabled)
+#endif /* WLAN_FEATURE_11W */
+                        goto fail;
+                }
             }
 
             if (subType == SIR_MAC_MGMT_DEAUTH)
@@ -171,60 +190,15 @@ sysBbtProcessMessageCore(tpAniSirGlobal pMac, tpSirMsgQ pMsg, tANI_U32 type,
             ret = (tSirRetStatus) limPostMsgApi(pMac, pMsg);
             if (ret != eSIR_SUCCESS)
             {
-                PELOGE(sysLog(pMac, LOGE, FL("posting to LIM2 failed, ret %d\n"), ret);)
+                /* Print only one debug failure out of 512 failure messages */
+                if(pMac->sys.gSysBbtReceived & 0x0200)
+                   sysLog(pMac, LOGE, FL("posting to LIM2 failed, ret %d\n"), ret);
                 goto fail;
             }
             pMac->sys.gSysBbtPostedToLim++;
     }
     else if (type == SIR_MAC_DATA_FRAME)
     {
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-       /*
-        * if we reached here, probably this frame can be TDLS frame.
-        */
-       v_U16_t ethType = 0 ;
-       v_U8_t *mpduHdr =  NULL ;
-       v_U8_t *ethTypeOffset = NULL ;
-
-       /*
-        * Peek into payload and extract ethtype.
-        * In TDLS we can recieve TDLS frames with MAC HEADER (802.11) and also
-        * without MAC Header (Particularly TDLS action frames on direct link.
-        */
-       mpduHdr = (v_U8_t *)WDA_GET_RX_MAC_HEADER(pBd) ;
-
-#define SIR_MAC_ETH_HDR_LEN                       (14)
-       if(0 != WDA_GET_RX_FT_DONE(pBd))
-       {
-           ethTypeOffset = mpduHdr + SIR_MAC_ETH_HDR_LEN - sizeof(ethType) ;
-       }
-       else
-       {
-           ethTypeOffset = mpduHdr + WDA_GET_RX_MPDU_HEADER_LEN(pBd)
-                                                     + RFC1042_HDR_LENGTH ;
-       }
-
-       ethType = GET_BE16(ethTypeOffset) ;
-       if(ETH_TYPE_89_0d == ethType)
-       {
-
-           VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,
-                                                   ("TDLS Data Frame \n")) ;
-           /* Post the message to PE Queue */
-           PELOGE(sysLog(pMac, LOGE, FL("posting to TDLS frame to lim\n"));)
-
-           ret = (tSirRetStatus) limPostMsgApi(pMac, pMsg);
-           if (ret != eSIR_SUCCESS)
-           {
-               PELOGE(sysLog(pMac, LOGE, FL("posting to LIM2 failed, \
-                                                        ret %d\n"), ret);)
-               goto fail;
-           }
-           else
-               return eSIR_SUCCESS;
-       }
-       /* fall through if ethType != TDLS, which is error case */
-#endif
 #ifdef FEATURE_WLAN_ESE
         PELOGW(sysLog(pMac, LOGW, FL("IAPP Frame...\n")););
         //Post the message to PE Queue

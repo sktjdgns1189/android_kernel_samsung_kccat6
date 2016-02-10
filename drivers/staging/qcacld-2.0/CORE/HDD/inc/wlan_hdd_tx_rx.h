@@ -75,12 +75,14 @@
 #define SME_QOS_UAPSD_CFG_VI_CHANGED_MASK     0xF4
 #define SME_QOS_UAPSD_CFG_VO_CHANGED_MASK     0xF8
 
+#define HDD_ETH_HEADER_LEN      14
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------
-  Function declarations and documenation
+  Function declarations and documentation
   -------------------------------------------------------------------------*/
 
 /**============================================================================
@@ -91,7 +93,7 @@
   @param dev      : [in] pointer to Libra network device
 
   @return         : NET_XMIT_DROP if packets are dropped
-                  : NET_XMIT_SUCCESS if packet is enqueued succesfully
+                  : NET_XMIT_SUCCESS if packet is enqueued successfully
   ===========================================================================*/
 extern int hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *dev);
 
@@ -197,25 +199,6 @@ extern VOS_STATUS hdd_tx_fetch_packet_cbk( v_VOID_t *vosContext,
 extern VOS_STATUS hdd_tx_low_resource_cbk( vos_pkt_t *pVosPacket,
                                            v_VOID_t *userData );
 
-#ifndef QCA_WIFI_2_0
-/**============================================================================
-  @brief hdd_rx_packet_cbk() - Receive callback registered with TL.
-  TL will call this to notify the HDD when a packet was received
-  for a registered STA.
-
-  @param vosContext   : [in] pointer to VOS context
-  @param pVosPacket   : [in] pointer to VOS packet (conatining sk_buff)
-  @param staId        : [in] Station Id
-  @param pRxMetaInfo  : [in] pointer to meta info for the received pkt(s)
-
-  @return             : VOS_STATUS_E_FAILURE if any errors encountered,
-                      : VOS_STATUS_SUCCESS otherwise
-  ===========================================================================*/
-extern VOS_STATUS hdd_rx_packet_cbk( v_VOID_t *vosContext,
-                                     vos_pkt_t *pVosPacket,
-                                     v_U8_t staId,
-                                     WLANTL_RxMetaInfoType* pRxMetaInfo );
-#else
 /**============================================================================
   @brief hdd_rx_packet_cbk() - Receive callback registered with TL.
   TL will call this to notify the HDD when a packet was received
@@ -230,24 +213,6 @@ extern VOS_STATUS hdd_rx_packet_cbk( v_VOID_t *vosContext,
   ===========================================================================*/
 extern VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext, adf_nbuf_t rxBufChain,
                                     v_U8_t staId);
-
-#ifdef IPA_OFFLOAD
-/**============================================================================
-  @brief hdd_rx_mul_packet_cbk() - Receive callback registered with TL.
-  IPA integrated platform, TL Shim will give multiple RX frames with NETBUF
-  link. Linked frames should be un-link and send to NETDEV.
-
-  @param vosContext      : [in] pointer to VOS context
-  @param rx_buf_list     : [in] pointer to rx adf_nbuf linked list
-  @param staId           : [in] Station Id (Adress 1 Index)
-
-  @return                : VOS_STATUS_E_FAILURE if any errors encountered,
-                         : VOS_STATUS_SUCCESS otherwise
-  ===========================================================================*/
-VOS_STATUS hdd_rx_mul_packet_cbk(v_VOID_t *vosContext,
-                                    adf_nbuf_t rx_buf_list, v_U8_t staId);
-#endif /* IPA_OFFLOAD */
-#endif
 
 /**============================================================================
   @brief hdd_IsEAPOLPacket() - Checks the packet is EAPOL or not.
@@ -267,9 +232,10 @@ extern v_BOOL_t hdd_IsEAPOLPacket( vos_pkt_t *pVosPacket );
 void hdd_mon_tx_mgmt_pkt(hdd_adapter_t* pAdapter);
 
 /**============================================================================
-  @brief hdd_mon_tx_work_queue() - workqueue handler for transmitting mgmt packets..
+  @brief hdd_mon_tx_work_queue() - work queue handler for transmitting
+                                   mgmt packets.
 
-  @param work: [in] workqueue structure.
+  @param work: [in] work queue structure.
   ===========================================================================*/
 void hdd_mon_tx_work_queue(struct work_struct *work);
 
@@ -294,8 +260,8 @@ void hdd_tx_rx_pkt_cnt_stat_timer_handler( void *pAdapter);
 /**============================================================================
   @brief hdd_flush_ibss_tx_queues() -
                     Flush tx queues in IBSS mode
-  @param pHddStaCtx : Hdd adapter
-  @param STAId:       Sta index
+  @param pAdapter: Hdd adapter
+  @param STAId:    Sta index
   @return    : VOS_STATUS_SUCCESS/VOS_STATUS_E_FAILURE
   ===========================================================================*/
 void hdd_flush_ibss_tx_queues( hdd_adapter_t *pAdapter, v_U8_t STAId);
@@ -335,4 +301,27 @@ void hdd_tx_resume_cb(void *adapter_context,
   ===========================================================================*/
 void hdd_tx_resume_timer_expired_handler(void *adapter_context);
 #endif /* QCA_LL_TX_FLOW_CT */
+
+#ifdef FEATURE_WLAN_DIAG_SUPPORT
+/**
+ * wlan_hdd_log_eapol() - Function to check and extract EAPOL params
+ * @skb:               skb data
+ * @event_type:        One of enum wifi_connectivity_events to indicate Tx/Rx
+ *
+ * This function parses the input skb data to get the EAPOL params,if the
+ * packet is EAPOL and store it in the pointer passed as input
+ *
+ * Return: None
+ *
+ */
+void wlan_hdd_log_eapol(struct sk_buff *skb,
+			uint8_t event_type);
+#else
+static inline void wlan_hdd_log_eapol(struct sk_buff *skb,
+				      uint8_t event_type)
+{
+
+}
+#endif /* FEATURE_WLAN_DIAG_SUPPORT */
+
 #endif    // end #if !defined( WLAN_HDD_TX_RX_H )

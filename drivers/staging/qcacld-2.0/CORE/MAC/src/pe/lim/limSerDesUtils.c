@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -242,15 +242,23 @@ limGetBssDescription( tpAniSirGlobal pMac, tSirBssDescription *pBssDescription,
     len  -= sizeof(tANI_U16);
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
         return eSIR_FAILURE;
+
+    /* 4 reserved bytes for padding */
+    pBuf += sizeof(tANI_U32);
+    len  -= 4;
 #endif
     pBssDescription->fProbeRsp = *pBuf++;
     len  -= sizeof(tANI_U8);
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
         return eSIR_FAILURE;
 
-    /* 3 reserved bytes for padding */
-    pBuf += (3 * sizeof(tANI_U8));
-    len  -= 3;
+    /* Extract raw rssi value */
+    pBssDescription->rssi_raw = (tANI_S8) *pBuf++;
+    len--;
+
+    /* 2 reserved bytes for padding */
+    pBuf += (2 * sizeof(tANI_U8));
+    len  -= 2;
 
     pBssDescription->WscIeLen = limGetU32( pBuf );
     pBuf += sizeof(tANI_U32);
@@ -280,6 +288,12 @@ limGetBssDescription( tpAniSirGlobal pMac, tSirBssDescription *pBssDescription,
     /* 1 reserved byte padding */
     pBuf += (WSCIE_PROBE_RSP_LEN + 1);
     len -= (WSCIE_PROBE_RSP_LEN + 1);
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+        return eSIR_FAILURE;
+
+    pBssDescription->tsf_delta = limGetU32(pBuf);
+    pBuf += sizeof(tANI_U32);
+    len  -= sizeof(tANI_U32);
 
     if (len > 0)
     {
@@ -539,6 +553,14 @@ limStartBssReqSerDes(tpAniSirGlobal pMac, tpSirSmeStartBssReq pStartBssReq, tANI
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
         return eSIR_FAILURE;
 
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
+    // Extract mcc to scc switch mode
+    pStartBssReq->cc_switch_mode = *pBuf++;
+    len --;
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+        return eSIR_FAILURE;
+#endif
+
     // Extract bssType
     pStartBssReq->bssType = (tSirBssType) limGetU32(pBuf);
     pBuf += sizeof(tANI_U32);
@@ -749,6 +771,19 @@ limStartBssReqSerDes(tpAniSirGlobal pMac, tpSirSmeStartBssReq pStartBssReq, tANI
                  sizeof(tSirHTConfig));
     len -= sizeof(tSirHTConfig);
     pBuf += sizeof(tSirHTConfig);
+
+    vos_mem_copy(&(pStartBssReq->addIeParams), pBuf, sizeof(tSirAddIeParams));
+    len -= sizeof(tSirAddIeParams);
+    pBuf += sizeof(tSirAddIeParams);
+
+    /* extract obssEnabled */
+    pStartBssReq->obssEnabled = *pBuf++;
+    len--;
+
+    /* extract sap_dot11mc */
+    pStartBssReq->sap_dot11mc = *pBuf++;
+    len--;
+
     if (len)
     {
         limLog(pMac, LOGW, FL("Extra bytes left in SME_START_BSS_REQ, len=%d"), len);
@@ -964,6 +999,17 @@ limJoinReqSerDes(tpAniSirGlobal pMac, tpSirSmeJoinReq pJoinReq, tANI_U8 *pBuf)
         return eSIR_FAILURE;
     }
 
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
+    // Extract mcc to scc switch mode
+    pJoinReq->cc_switch_mode= *pBuf++;
+    len--;
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+    {
+        limLog(pMac, LOGE, FL("remaining len %d is too short"), len);
+        return eSIR_FAILURE;
+    }
+#endif
+
     // Extract bssPersona
     pJoinReq->staPersona = *pBuf++;
     len--;
@@ -1086,7 +1132,7 @@ limJoinReqSerDes(tpAniSirGlobal pMac, tpSirSmeJoinReq pJoinReq, tANI_U8 *pBuf)
     if (pJoinReq->addIEScan.length)
     {
         // Check for IE length (that includes length of type & length)
-        if (pJoinReq->addIEScan.length > SIR_MAC_MAX_IE_LENGTH + 2)
+        if (pJoinReq->addIEScan.length > SIR_MAC_MAX_ADD_IE_LENGTH + 2)
         {
             limLog(pMac, LOGE,
                    FL("Invalid addIE Scan length %d in SME_JOIN_REQ"),
@@ -1307,6 +1353,23 @@ limJoinReqSerDes(tpAniSirGlobal pMac, tpSirSmeJoinReq pJoinReq, tANI_U8 *pBuf)
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
         return eSIR_FAILURE;
 
+    pJoinReq->isWMEenabled = (tAniBool)limGetU32(pBuf);
+    pBuf += sizeof(tAniBool);
+    len -= sizeof(tAniBool);
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+        return eSIR_FAILURE;
+
+    pJoinReq->isQosEnabled = (tAniBool)limGetU32(pBuf);
+    pBuf += sizeof(tAniBool);
+    len -= sizeof(tAniBool);
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+        return eSIR_FAILURE;
+
+    pJoinReq->isOSENConnection = (tAniBool)limGetU32(pBuf);
+    pBuf += sizeof(tAniBool);
+    len -= sizeof(tAniBool);
+    if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
+        return eSIR_FAILURE;
     // Extract Titan CB Neighbor BSS info
     pJoinReq->cbNeighbors.cbBssFoundPri = *pBuf;
     pBuf++;
@@ -1871,16 +1934,6 @@ limSetContextReqSerDes(tpAniSirGlobal pMac, tpSirSmeSetContextReq pSetContextReq
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
         return eSIR_FAILURE;
 
-
-//    pSetContextReq->qosInfoPresent = limGetU32(pBuf);
-//    pBuf += sizeof(tAniBool);
-
-//    if (pSetContextReq->qosInfoPresent)
-//    {
-//        len   = limGetQosInfo(&pSetContextReq->qos, pBuf);
-//        pBuf += len;
-//    }
-
     pSetContextReq->keyMaterial.length = limGetU16(pBuf);
     pBuf += sizeof(tANI_U16);
     len  -= sizeof(tANI_U16);
@@ -2222,10 +2275,6 @@ limDeauthReqSerDes(tpAniSirGlobal pMac, tSirSmeDeauthReq *pDeauthReq, tANI_U8 *p
 
     return eSIR_SUCCESS;
 } /*** end limDisassocReqSerDes() ***/
-
-
-
-
 
 
 /**

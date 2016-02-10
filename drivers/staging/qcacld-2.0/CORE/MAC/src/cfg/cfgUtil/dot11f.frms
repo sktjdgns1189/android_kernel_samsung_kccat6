@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006-2007,2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2006-2007, 2014-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -101,6 +101,8 @@ const EID_RRM_MEAS_PILOT_TX_INFO     =  66;
 const EID_WAPI                       =  68;
 const EID_RRM_ENABLED_CAPS           =  70;
 const EID_MULTIPLE_BSSID             =  71;
+const EID_20_40_BSS_COEXISTENCE      =  72;
+const EID_20_40_BSS_INTOLERANT_REPORT=  73;
 const EID_OBSS_SCAN_PARAMETERS       =  74;
 const EID_FT_RIC_DESCRIPTOR          =  75;
 const EID_LINK_IDENTIFIER            = 101;
@@ -116,6 +118,7 @@ const EID_AID                        =  197;
 const EID_EXT_CAP           	     =  127;
 const EID_OPERATING_MODE             =  199;
 const EID_WIDER_BW_CHANNEL_SWITCH_ANN=  194;
+const EID_CHANNEL_SWITCH_WRAPPER     = 196;
 const EID_VENDOR_SPECIFIC            = 221;
 
 const SIR_MAC_PROP_EXT_RATES_TYPE    =   0;
@@ -140,6 +143,7 @@ const SIR_MAC_PROP_TAURUS            =  18;
 const ANI_WDS_INFO_MAX_LENGTH        =  64;
 const SIR_MAC_MAX_NUMBER_OF_RATES    =  12;
 const HT_MAX_SUPPORTED_MCS_SET       =  16;
+const MAX_SUPPORTED_NEIGHBOR_RPT     =  15;
 
 /////////////////////////////////////////////////////////////////////////////
 //                  Wi-Fi Protected Setup TLV Identifiers                  //
@@ -2127,6 +2131,25 @@ IE OBSSScanParameters (EID_OBSS_SCAN_PARAMETERS)
     obssScanActivityThreshold, 2;
 }
 
+IE HT2040BSSCoexistence (EID_20_40_BSS_COEXISTENCE)
+{
+     // 20/40 BSS Coexistence Information
+    {
+        infoRequest:             1;
+        fortyMHzIntolerant:      1;
+        twentyMHzBssWidthReq:    1;
+        obssScanExemptionReq:    1;
+        obssScanExemptionGrant:  1;
+        unused:                  3;
+    }
+}
+
+IE HT2040BSSIntolerantReport (EID_20_40_BSS_INTOLERANT_REPORT)
+{
+     operatingClass, 1;
+     channelList[0..50];
+}
+
 const EID_RRM_NBR_RPT_TSF              =    1;
 const EID_RRM_NBR_CD_COUNTRY           =    2;
 const EID_RRM_NBR_MSMT_PILOT_TX_INFO   =   66;
@@ -2661,65 +2684,13 @@ IE WiderBWChanSwitchAnn (EID_WIDER_BW_CHANNEL_SWITCH_ANN)
    newCenterChanFreq1,    1;
 }
 
+IE ChannelSwitchWrapper (EID_CHANNEL_SWITCH_WRAPPER)
+{
+    OPTIE IE  WiderBWChanSwitchAnn;
+}
 IE ExtCap (EID_EXT_CAP)
 {
-    {
-        bssCoexistMgmtSupport:          1;
-        reserved1:                      1;
-        extChanSwitch:                  1;
-        reserved2:                      1;
-        psmpCap:                        1;
-        reserved3:                      1;
-        spsmpCap:                       1;
-        event:                          1;
-        diagnostics:                    1;
-        multiDiagnostics:               1;
-        locTracking:                    1;
-        FMS:                            1;
-        proxyARPService:                1;
-        coLocIntfReporting:             1;
-        civicLoc:                       1;
-        geospatialLoc:                  1;
-        TFS:                            1;
-        wnmSleepMode:                   1;
-        timBroadcast:                   1;
-        bssTransition:                  1;
-        qosTrafficCap:                  1;
-        acStaCnt:                       1;
-        multiBSSID:                     1;
-        timingMeas:                     1;
-        chanUsage:                      1;
-        ssidList:                       1;
-        DMS:                            1;
-        UTCTSFOffset:                   1;
-        TDLSPeerUAPSDBufferSTA:         1;
-        TDLSPeerPSMSupp:                1;
-        TDLSChannelSwitching:           1;
-        interworkingService:            1;
-    }
-    {
-        qosMap:                         1;
-        EBR:                            1;
-        sspnInterface:                  1;
-        reserved4:                      1;
-        msgCFCap:                       1;
-        TDLSSupport:                    1;
-        TDLSProhibited:                 1;
-        TDLSChanSwitProhibited:         1;
-        rejectUnadmittedTraffic:        1;
-        serviceIntervalGranularity:     3;
-        identifierLoc:                  1;
-        uapsdCoexistence:               1;
-        wnmNotification:                1;
-        reserved5:                      1;
-    }
-    {
-        UTF8SSID:                       1;
-        reserved6:                      12;
-        TDLSWiderBW:                    1;
-        operModeNotification:           1;
-        reserved7:                      1;
-    }
+    bytes[8..9];
 }
 
 IE HTCaps (EID_HT_CAPABILITIES)
@@ -3358,6 +3329,8 @@ FRAME Beacon                              // C.f. Sec. 7.2.3.1
     OPTIE  Vendor1IE;
     OPTIE  Vendor2IE;
     OPTIE  Vendor3IE;
+    OPTIE  ChannelSwitchWrapper;
+    OPTIE  ESEVersion;
 } // End frame Beacon.
 
 // Ok, here's  the story on  Beacon1 & Beacon2.   We presumably beacon  a lot
@@ -3437,9 +3410,12 @@ FRAME Beacon2
     OPTIE  ExtCap;
     OPTIE  OperatingMode;
     OPTIE  WiderBWChanSwitchAnn;
+    OPTIE  OBSSScanParameters;
     OPTIE  Vendor1IE;
     OPTIE  Vendor2IE;
     OPTIE  Vendor3IE;
+    OPTIE  ChannelSwitchWrapper;
+    OPTIE  ESEVersion;
 }
 
 // This frame is just Beacon with its Fixed Fields stripped out.  It's handy
@@ -3500,6 +3476,7 @@ FRAME BeaconIEs
     OPTIE  Vendor1IE;
     OPTIE  Vendor2IE;
     OPTIE  Vendor3IE;
+    OPTIE  ChannelSwitchWrapper;
 
 } // End frame BeaconIEs.
 
@@ -3656,6 +3633,7 @@ FRAME ProbeRequest                        // 7.2.3.8
     OPTIE  WFATPC;
     OPTIE  P2PProbeReq;
     OPTIE  VHTCaps;
+    OPTIE  ExtCap;
 } // End frame ProbeRequest.
 
 FRAME ProbeResponse                       // 7.2.3.9
@@ -3708,6 +3686,8 @@ FRAME ProbeResponse                       // 7.2.3.9
     OPTIE  Vendor1IE;
     OPTIE  Vendor2IE;
     OPTIE  Vendor3IE;
+    OPTIE  ChannelSwitchWrapper;
+    OPTIE  ESEVersion;
 } // End frame ProbeResponse.
 
 FRAME Authentication                      // 7.2.3.10
@@ -3947,7 +3927,7 @@ FRAME NeighborReportResponse
    FF     Category;
    FF     Action;
    FF     DialogToken;
-   OPTIE  NeighborReport[1..4];
+   OPTIE  NeighborReport[1..MAX_SUPPORTED_NEIGHBOR_RPT];
 }
 
 FRAME GONegReq
@@ -4121,7 +4101,7 @@ FRAME TDLSDisRsp
     OPTIE  TimeoutInterval;
     OPTIE  RICData;
     OPTIE  HTCaps;
-   //Optional 20/40BSSCoexistence... ignoring
+    OPTIE  HT2040BSSCoexistence;
     MANDIE LinkIdentifier;
     OPTIE  VHTCaps;
 }
@@ -4144,7 +4124,7 @@ FRAME TDLSSetupReq
     OPTIE  TimeoutInterval;
     OPTIE  RICData;
     OPTIE  HTCaps;
-   //Optional 20/40BSSCoexistence... ignoring
+    OPTIE  HT2040BSSCoexistence;
     MANDIE LinkIdentifier;
     OPTIE  WMMInfoStation;
     OPTIE  AID;
@@ -4170,7 +4150,7 @@ FRAME TDLSSetupRsp
     OPTIE  TimeoutInterval;
     OPTIE  RICData;
     OPTIE  HTCaps;
-   //Optional 20/40BSSCoexistence... ignoring
+    OPTIE  HT2040BSSCoexistence;
     OPTIE  LinkIdentifier;
     OPTIE  WMMInfoStation;
     OPTIE  AID;
@@ -4190,7 +4170,7 @@ FRAME TDLSSetupCnf
     OPTIE  TimeoutInterval;
     OPTIE  HTInfo;
     OPTIE  LinkIdentifier;
-    OPTIE  WMMInfoStation;
+    OPTIE  WMMParams;
     OPTIE  VHTOperation;
     OPTIE  OperatingMode;
 }
@@ -4248,6 +4228,14 @@ FRAME VHTGidManagementActionFrame
     FF     Action;
     FF     VhtMembershipStatusArray;
     FF     VhtUserPositionArray;
+}
+
+FRAME HT2040BSSCoexistenceManagementActionFrame
+{
+    FF     Category;
+    FF     Action;
+    MANDIE HT2040BSSCoexistence;
+    MANDIE HT2040BSSIntolerantReport;
 }
 
 // Local Variables:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -50,6 +50,23 @@
 #include <ol_txrx_htt_api.h> /* ol_tx_msdu_id_storage */
 #include <htt_internal.h>
 
+#ifdef IPA_UC_OFFLOAD
+/* IPA Micro controler TX data packet HTT Header Preset */
+/* 31 | 30  29 | 28 | 27 | 26  22  | 21   16 | 15  13   | 12  8       | 7 0
+ *------------------------------------------------------------------------------
+ * R  | CS  OL | R  | PP | ext TID | vdev ID | pkt type | pkt subtype | msg type
+ * 0  | 0      | 0  |    | 0x1F    | 0       | 2        | 0           | 0x01
+ *------------------------------------------------------------------------------
+ * pkt ID                                    | pkt length
+ *------------------------------------------------------------------------------
+ *                                frag_desc_ptr
+ *------------------------------------------------------------------------------
+ *                                   peer_id
+ *------------------------------------------------------------------------------
+ */
+#define HTT_IPA_UC_OFFLOAD_TX_HEADER_DEFAULT 0x07C04001
+#endif /* IPA_UC_OFFLOAD */
+
 /*--- setup / tear-down functions -------------------------------------------*/
 
 #ifdef QCA_SUPPORT_TXDESC_SANITY_CHECKS
@@ -61,7 +78,7 @@ htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
 {
     int i, pool_size;
     u_int32_t **p;
-    adf_os_dma_addr_t pool_paddr;
+    adf_os_dma_addr_t pool_paddr = {0};
 
     if (pdev->cfg.is_high_latency) {
         pdev->tx_descs.size = sizeof(struct htt_host_tx_desc_t);
@@ -81,9 +98,7 @@ htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
             + (ol_cfg_netbuf_frags_max(pdev->ctrl_pdev)+1) * 8 // 2x u_int32_t
             + 4; /* u_int32_t fragmentation list terminator */
     }
-    if (pdev->tx_descs.size < sizeof(u_int32_t *)) {
-        pdev->tx_descs.size = sizeof(u_int32_t *);
-    }
+
     /*
      * Make sure tx_descs.size is a multiple of 4-bytes.
      * It should be, but round up just to be sure.
@@ -95,9 +110,13 @@ htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
 
     pool_size = pdev->tx_descs.pool_elems * pdev->tx_descs.size;
 
-    pdev->tx_descs.pool_vaddr = adf_os_mem_alloc_consistent(
-        pdev->osdev, pool_size, &pool_paddr,
-        adf_os_get_dma_mem_context((&pdev->tx_descs), memctx));
+    if (pdev->cfg.is_high_latency)
+        pdev->tx_descs.pool_vaddr = adf_os_mem_alloc(pdev->osdev, pool_size);
+    else
+        pdev->tx_descs.pool_vaddr =
+        adf_os_mem_alloc_consistent( pdev->osdev, pool_size, &pool_paddr,
+            adf_os_get_dma_mem_context((&pdev->tx_descs), memctx));
+
     pdev->tx_descs.pool_paddr = pool_paddr;
 
     if (!pdev->tx_descs.pool_vaddr) {
@@ -129,13 +148,19 @@ htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
 void
 htt_tx_detach(struct htt_pdev_t *pdev)
 {
-    adf_os_mem_free_consistent(
-        pdev->osdev,
-        pdev->tx_descs.pool_elems * pdev->tx_descs.size, /* pool_size */
-        pdev->tx_descs.pool_vaddr,
-        pdev->tx_descs.pool_paddr,
-        adf_os_get_dma_mem_context((&pdev->tx_descs), memctx));
+    if (pdev){
+        if (pdev->cfg.is_high_latency)
+            adf_os_mem_free(pdev->tx_descs.pool_vaddr);
+        else
+            adf_os_mem_free_consistent(
+            pdev->osdev,
+            pdev->tx_descs.pool_elems * pdev->tx_descs.size, /* pool_size */
+            pdev->tx_descs.pool_vaddr,
+            pdev->tx_descs.pool_paddr,
+            adf_os_get_dma_mem_context((&pdev->tx_descs), memctx));
+        }
 }
+
 
 /*--- descriptor allocation functions ---------------------------------------*/
 
@@ -249,7 +274,7 @@ htt_tx_desc_flag_batch_more(htt_pdev_handle pdev, void *desc)
 
 /*--- tx send function ------------------------------------------------------*/
 
-#if ATH_11AC_TXCOMPACT
+#ifdef ATH_11AC_TXCOMPACT
 
 /* Scheduling the Queued packets in HTT which could not be sent out because of No CE desc*/
 void
@@ -364,16 +389,39 @@ htt_tx_send_nonstd(
 
 #else  /*ATH_11AC_TXCOMPACT*/
 
+#ifdef QCA_TX_HTT2_SUPPORT
+static inline HTC_ENDPOINT_ID
+htt_tx_htt2_get_ep_id(
+    htt_pdev_handle pdev,
+    adf_nbuf_t msdu)
+{
+    /*
+     * TX HTT2 service mainly for small sized frame and check if
+     * this candidate frame allow or not.
+     */
+    if ((pdev->htc_tx_htt2_endpoint != ENDPOINT_UNUSED) &&
+        adf_nbuf_get_tx_parallel_dnload_frm(msdu) &&
+        (adf_nbuf_len(msdu) < pdev->htc_tx_htt2_max_size))
+        return pdev->htc_tx_htt2_endpoint;
+    else
+        return pdev->htc_endpoint;
+}
+#else
+#define htt_tx_htt2_get_ep_id(pdev, msdu)     (pdev->htc_endpoint)
+#endif /* QCA_TX_HTT2_SUPPORT */
+
 static inline int
 htt_tx_send_base(
     htt_pdev_handle pdev,
     adf_nbuf_t msdu,
     u_int16_t msdu_id,
-    int download_len)
+    int download_len,
+    u_int8_t more_data)
 {
     struct htt_host_tx_desc_t *htt_host_tx_desc;
     struct htt_htc_pkt *pkt;
     int packet_len;
+    HTC_ENDPOINT_ID ep_id;
 
     /*
      * The HTT tx descriptor was attached as the prefix fragment to the
@@ -405,17 +453,20 @@ htt_tx_send_base(
         download_len = packet_len;
     }
 
+    ep_id = htt_tx_htt2_get_ep_id(pdev, msdu);
+
     SET_HTC_PACKET_INFO_TX(
         &pkt->htc_pkt,
         pdev->tx_send_complete_part2,
         (unsigned char *) htt_host_tx_desc,
         download_len - HTC_HDR_LENGTH,
-        pdev->htc_endpoint,
+        ep_id,
         1); /* tag - not relevant here */
 
     SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msdu);
 
-    HTCSendDataPkt(pdev->htc_pdev, &pkt->htc_pkt);
+    adf_nbuf_trace_update(msdu, "HT:T:");
+    HTCSendDataPkt(pdev->htc_pdev, &pkt->htc_pkt, more_data);
 
     return 0; /* success */
 }
@@ -429,7 +480,6 @@ htt_tx_send_batch(
     u_int16_t *msdu_id_storage;
     u_int16_t msdu_id;
     adf_nbuf_t msdu;
-
     /*
      * FOR NOW, iterate through the batch, sending the frames singly.
      * Eventually HTC and HIF should be able to accept a batch of
@@ -441,8 +491,10 @@ htt_tx_send_batch(
          adf_nbuf_t next_msdu = adf_nbuf_next(msdu);
          msdu_id_storage = ol_tx_msdu_id_storage(msdu);
          msdu_id = *msdu_id_storage;
+
          /* htt_tx_send_base returns 0 as success and 1 as failure */
-         if (htt_tx_send_base(pdev, msdu, msdu_id, pdev->download_len)) {
+         if (htt_tx_send_base(pdev, msdu, msdu_id, pdev->download_len,
+                              num_msdus)) {
              adf_nbuf_set_next(msdu, rejected);
              rejected = msdu;
          }
@@ -472,7 +524,7 @@ htt_tx_send_nonstd(
         HTT_TX_HDR_SIZE_802_1Q +
         HTT_TX_HDR_SIZE_LLC_SNAP +
         ol_cfg_tx_download_size(pdev->ctrl_pdev);
-    return htt_tx_send_base(pdev, msdu, msdu_id, download_len);
+    return htt_tx_send_base(pdev, msdu, msdu_id, download_len, 0);
 }
 
 int
@@ -481,7 +533,7 @@ htt_tx_send_std(
     adf_nbuf_t msdu,
     u_int16_t msdu_id)
 {
-    return htt_tx_send_base(pdev, msdu, msdu_id, pdev->download_len);
+    return htt_tx_send_base(pdev, msdu, msdu_id, pdev->download_len, 0);
 }
 
 #endif /*ATH_11AC_TXCOMPACT*/
@@ -523,3 +575,158 @@ htt_tx_desc_display(void *tx_desc)
     }
 }
 #endif
+
+#ifdef IPA_UC_OFFLOAD
+int htt_tx_ipa_uc_attach(struct htt_pdev_t *pdev,
+    unsigned int uc_tx_buf_sz,
+    unsigned int uc_tx_buf_cnt,
+    unsigned int uc_tx_partition_base)
+{
+   unsigned int  tx_buffer_count;
+   adf_nbuf_t    buffer_vaddr;
+   u_int32_t     buffer_paddr;
+   u_int32_t    *header_ptr;
+   u_int32_t    *ring_vaddr;
+   int           return_code = 0;
+
+   /* Allocate CE Write Index WORD */
+   pdev->ipa_uc_tx_rsc.tx_ce_idx.vaddr =
+       adf_os_mem_alloc_consistent(pdev->osdev,
+                4,
+                &pdev->ipa_uc_tx_rsc.tx_ce_idx.paddr,
+                adf_os_get_dma_mem_context(
+                   (&pdev->ipa_uc_tx_rsc.tx_ce_idx), memctx));
+   if (!pdev->ipa_uc_tx_rsc.tx_ce_idx.vaddr) {
+      adf_os_print("%s: CE Write Index WORD alloc fail", __func__);
+      return -1;
+   }
+
+   /* Allocate TX COMP Ring */
+   pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr =
+       adf_os_mem_alloc_consistent(pdev->osdev,
+                uc_tx_buf_cnt * 4,
+                &pdev->ipa_uc_tx_rsc.tx_comp_base.paddr,
+                adf_os_get_dma_mem_context(
+                   (&pdev->ipa_uc_tx_rsc.tx_comp_base), memctx));
+   if (!pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr) {
+      adf_os_print("%s: TX COMP ring alloc fail", __func__);
+      return_code = -2;
+      goto free_tx_ce_idx;
+   }
+
+   adf_os_mem_zero(pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr, uc_tx_buf_cnt * 4);
+
+   /* Allocate TX BUF vAddress Storage */
+   pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg =
+         (adf_nbuf_t *)adf_os_mem_alloc(pdev->osdev,
+                          uc_tx_buf_cnt * sizeof(adf_nbuf_t));
+   if (!pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg) {
+      adf_os_print("%s: TX BUF POOL vaddr storage alloc fail",
+                   __func__);
+      return_code = -3;
+      goto free_tx_comp_base;
+   }
+   adf_os_mem_zero(pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg,
+                   uc_tx_buf_cnt * sizeof(adf_nbuf_t));
+
+   ring_vaddr = pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr;
+   /* Allocate TX buffers as many as possible */
+   for (tx_buffer_count = 0;
+        tx_buffer_count < (uc_tx_buf_cnt - 1);
+        tx_buffer_count++) {
+      buffer_vaddr = adf_nbuf_alloc(pdev->osdev,
+                uc_tx_buf_sz, 0, 4, FALSE);
+      if (!buffer_vaddr)
+      {
+         adf_os_print("%s: TX BUF alloc fail, allocated buffer count %d",
+                      __func__, tx_buffer_count);
+         return 0;
+      }
+
+      /* Init buffer */
+      adf_os_mem_zero(adf_nbuf_data(buffer_vaddr), uc_tx_buf_sz);
+      header_ptr = (u_int32_t *)adf_nbuf_data(buffer_vaddr);
+
+      *header_ptr = HTT_IPA_UC_OFFLOAD_TX_HEADER_DEFAULT;
+      header_ptr++;
+      *header_ptr |= ((u_int16_t)uc_tx_partition_base + tx_buffer_count) << 16;
+
+      adf_nbuf_map(pdev->osdev, buffer_vaddr, ADF_OS_DMA_BIDIRECTIONAL);
+      buffer_paddr = adf_nbuf_get_frag_paddr_lo(buffer_vaddr, 0);
+      header_ptr++;
+      *header_ptr = (u_int32_t)(buffer_paddr + 16);
+
+      header_ptr++;
+      *header_ptr = 0xFFFFFFFF;
+
+      /* FRAG Header */
+      header_ptr++;
+      *header_ptr = buffer_paddr + 32;
+
+      *ring_vaddr = buffer_paddr;
+      pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg[tx_buffer_count] =
+            buffer_vaddr;
+      /* Memory barrier to ensure actual value updated */
+
+      ring_vaddr++;
+   }
+
+   pdev->ipa_uc_tx_rsc.alloc_tx_buf_cnt = tx_buffer_count;
+
+   return 0;
+
+free_tx_comp_base:
+   adf_os_mem_free_consistent(pdev->osdev,
+                   ol_cfg_ipa_uc_tx_max_buf_cnt(pdev->ctrl_pdev) * 4,
+                   pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr,
+                   pdev->ipa_uc_tx_rsc.tx_comp_base.paddr,
+                   adf_os_get_dma_mem_context(
+                      (&pdev->ipa_uc_tx_rsc.tx_comp_base), memctx));
+free_tx_ce_idx:
+   adf_os_mem_free_consistent(pdev->osdev,
+                   4,
+                   pdev->ipa_uc_tx_rsc.tx_ce_idx.vaddr,
+                   pdev->ipa_uc_tx_rsc.tx_ce_idx.paddr,
+                   adf_os_get_dma_mem_context(
+                      (&pdev->ipa_uc_tx_rsc.tx_ce_idx), memctx));
+   return return_code;
+}
+
+int htt_tx_ipa_uc_detach(struct htt_pdev_t *pdev)
+{
+   u_int16_t idx;
+
+   if (pdev->ipa_uc_tx_rsc.tx_ce_idx.vaddr) {
+      adf_os_mem_free_consistent(pdev->osdev,
+                   4,
+                   pdev->ipa_uc_tx_rsc.tx_ce_idx.vaddr,
+                   pdev->ipa_uc_tx_rsc.tx_ce_idx.paddr,
+                   adf_os_get_dma_mem_context(
+                      (&pdev->ipa_uc_tx_rsc.tx_ce_idx), memctx));
+   }
+
+   if (pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr) {
+     adf_os_mem_free_consistent(pdev->osdev,
+                   ol_cfg_ipa_uc_tx_max_buf_cnt(pdev->ctrl_pdev) * 4,
+                   pdev->ipa_uc_tx_rsc.tx_comp_base.vaddr,
+                   pdev->ipa_uc_tx_rsc.tx_comp_base.paddr,
+                   adf_os_get_dma_mem_context(
+                      (&pdev->ipa_uc_tx_rsc.tx_comp_base), memctx));
+   }
+
+   /* Free each single buffer */
+   for(idx = 0; idx < pdev->ipa_uc_tx_rsc.alloc_tx_buf_cnt; idx++) {
+      if (pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg[idx]) {
+         adf_nbuf_unmap(pdev->osdev,
+            pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg[idx],
+            ADF_OS_DMA_FROM_DEVICE);
+         adf_nbuf_free(pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg[idx]);
+      }
+   }
+
+   /* Free storage */
+   adf_os_mem_free(pdev->ipa_uc_tx_rsc.tx_buf_pool_vaddr_strg);
+
+   return 0;
+}
+#endif /* IPA_UC_OFFLOAD */

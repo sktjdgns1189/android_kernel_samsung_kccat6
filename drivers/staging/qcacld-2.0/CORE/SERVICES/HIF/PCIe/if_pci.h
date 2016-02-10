@@ -31,11 +31,7 @@
 #define __ATH_PCI_H__
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
-#include <asm/semaphore.h>
-#else
 #include <linux/semaphore.h>
-#endif
 #include <linux/interrupt.h>
 
 #define CONFIG_COPY_ENGINE_SUPPORT /* TBDXXX: here for now */
@@ -57,6 +53,32 @@ struct ol_softc;
 /* An address (e.g. of a buffer) in Copy Engine space. */
 typedef ath_dma_addr_t CE_addr_t;
 
+#ifdef FEATURE_RUNTIME_PM
+/* Driver States for Runtime Power Management */
+enum hif_pm_runtime_state {
+	HIF_PM_RUNTIME_STATE_NONE,
+	HIF_PM_RUNTIME_STATE_ON,
+	HIF_PM_RUNTIME_STATE_INPROGRESS,
+	HIF_PM_RUNTIME_STATE_SUSPENDED,
+};
+
+/* Debugging stats for Runtime PM */
+struct hif_pci_pm_stats {
+	u32 suspended;
+	u32 suspend_err;
+	u32 resumed;
+	u32 runtime_get;
+	u32 runtime_put;
+	u32 request_resume;
+	u32 allow_suspend;
+	u32 prevent_suspend;
+	u32 prevent_suspend_timeout;
+	u32 allow_suspend_timeout;
+	u32 runtime_get_err;
+	void *last_resume_caller;
+	unsigned long suspend_jiffies;
+};
+#endif
 struct hif_pci_softc {
     void __iomem *mem; /* PCI address. */
                        /* For efficiency, should be first in struct */
@@ -89,16 +111,31 @@ struct hif_pci_softc {
     struct hostdef_s *hostdef;
     atomic_t tasklet_from_intr;
     atomic_t wow_done;
+#ifdef FEATURE_WLAN_D0WOW
+    atomic_t in_d0wow;
+#endif
     atomic_t ce_suspend;
     atomic_t pci_link_suspended;
     bool hif_init_done;
     bool recovery;
     int htc_endpoint;
+#ifdef FEATURE_RUNTIME_PM
+    atomic_t pm_state;
+    atomic_t prevent_suspend_cnt;
+    struct hif_pci_pm_stats pm_stats;
+    struct work_struct pm_work;
+    struct spinlock runtime_lock;
+    struct timer_list runtime_timer;
+    unsigned long runtime_timer_expires;
+#ifdef WLAN_OPEN_SOURCE
+    struct dentry *pm_dentry;
+#endif
+#endif
 };
 #define TARGID(sc) ((A_target_id_t)(&(sc)->mem))
 #define TARGID_TO_HIF(targid) (((struct hif_pci_softc *)((char *)(targid) - (char *)&(((struct hif_pci_softc *)0)->mem)))->hif_device)
 
-int athdiag_procfs_init(struct hif_pci_softc *scn);
+int athdiag_procfs_init(void *scn);
 void athdiag_procfs_remove(void);
 
 bool hif_pci_targ_is_awake(struct hif_pci_softc *sc, void *__iomem *mem);
@@ -115,18 +152,8 @@ irqreturn_t HIF_fw_interrupt_handler(int irq, void *arg);
  */
 adf_os_size_t initBufferCount(adf_os_size_t maxSize);
 
-/* Function to set the TXRX handle in the ol_sc context */
-void hif_init_pdev_txrx_handle(void *ol_sc, void *txrx_handle);
-void hif_disable_isr(void *ol_sc);
-
-/* Function to reset SoC */
-void hif_reset_soc(void *ol_sc);
-
 /* Function to disable ASPM */
 void hif_disable_aspm(void);
-
-void hif_init_adf_ctx(adf_os_device_t adf_dev, void *ol_sc);
-void hif_deinit_adf_ctx(void *ol_sc);
 
 void hif_pci_save_htc_htt_config_endpoint(int htc_endpoint);
 
@@ -135,11 +162,30 @@ extern int pktlogmod_init(void *context);
 extern void pktlogmod_exit(void *context);
 #endif
 
+int hif_pci_set_ram_config_reg(struct hif_pci_softc *sc, uint32_t config);
 int hif_pci_check_fw_reg(struct hif_pci_softc *sc);
 int hif_pci_check_soc_status(struct hif_pci_softc *sc);
 void dump_CE_debug_register(struct hif_pci_softc *sc);
 
+/*These functions are exposed to HDD*/
+int hif_register_driver(void);
+void hif_unregister_driver(void);
+int hif_init_adf_ctx(void *ol_sc);
+void hif_init_pdev_txrx_handle(void *ol_sc, void *txrx_handle);
+void hif_disable_isr(void *ol_sc);
+void hif_reset_soc(void *ol_sc);
+void hif_deinit_adf_ctx(void *ol_sc);
 void hif_get_hw_info(void *ol_sc, u32 *version, u32 *revision);
+void hif_set_fw_info(void *ol_sc, u32 target_fw_version);
+
+#ifdef IPA_UC_OFFLOAD
+/*
+ * Micro controller needs PCI BAR address to access CE register
+ * If Micro controller data path enabled, control path will
+ * try to get PCI BAR address and will send to IPA driver
+ */
+void hif_read_bar(struct hif_pci_softc *sc, u32 *bar_value);
+#endif /* IPA_UC_OFFLOAD */
 
 /*
  * A firmware interrupt to the Host is indicated by the
@@ -172,5 +218,7 @@ void hif_get_hw_info(void *ol_sc, u32 *version, u32 *revision);
 #define OL_ATH_TX_DRAIN_WAIT_CNT       10
 
 #define HIF_CE_DRAIN_WAIT_CNT          20
-
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+void wlan_hif_pci_suspend(void);
+#endif
 #endif /* __ATH_PCI_H__ */

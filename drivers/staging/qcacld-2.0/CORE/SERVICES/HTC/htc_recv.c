@@ -25,7 +25,7 @@
  * to the Linux Foundation.
  */
 
-
+#include "htc_debug.h"
 #include "htc_internal.h"
 #include "vos_api.h"
 #include <adf_nbuf.h> /* adf_nbuf_t */
@@ -101,7 +101,12 @@ static void DoRecvCompletion(HTC_ENDPOINT     *pEndpoint,
             /* using legacy EpRecv */
             while (!HTC_QUEUE_EMPTY(pQueueToIndicate)) {
                 pPacket = HTC_PACKET_DEQUEUE(pQueueToIndicate);
-                AR_DEBUG_PRINTF(ATH_DEBUG_RECV, (" HTC calling ep %d recv callback on packet %p \n",
+                if (pEndpoint->EpCallBacks.EpRecv == NULL) {
+                    AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("HTC ep %d has NULL recv callback on packet %p\n",
+                            pEndpoint->Id, pPacket));
+                    continue;
+                }
+                AR_DEBUG_PRINTF(ATH_DEBUG_RECV, ("HTC calling ep %d recv callback on packet %p\n",
                         pEndpoint->Id, pPacket));
                 pEndpoint->EpCallBacks.EpRecv(pEndpoint->EpCallBacks.pContext, pPacket);
             }
@@ -349,7 +354,7 @@ A_STATUS HTCRxCompletionHandler(
                 temp = HTC_GET_FIELD(HtcHdr, HTC_FRAME_HDR, CONTROLBYTES0);
                 if ((temp < sizeof(HTC_RECORD_HDR)) || (temp > payloadLen)) {
                     AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-                        ("HTCProcessRecvHeader, invalid header (payloadlength should be :%d, CB[0] is:%d) \n",
+                        ("HTCRxCompletionHandler, invalid header (payloadlength should be :%d, CB[0] is:%d) \n",
                             payloadLen, temp));
                     status = A_EPROTO;
                     break;
@@ -394,23 +399,35 @@ A_STATUS HTCRxCompletionHandler(
                      * on the endpoint 0 */
                     AR_DEBUG_PRINTF(ATH_DEBUG_ERR,("HTC Rx Ctrl still processing\n"));
                     status = A_ERROR;
+                    VOS_BUG(FALSE);
                     break;
                 }
 
                 LOCK_HTC_RX(target);
                 target->CtrlResponseLength = min((int)netlen,HTC_MAX_CONTROL_MESSAGE_LENGTH);
                 A_MEMCPY(target->CtrlResponseBuffer,netdata,target->CtrlResponseLength);
+
+                /* Requester will clear this flag */
+                target->CtrlResponseProcessing = TRUE;
                 UNLOCK_HTC_RX(target);
 
                 adf_os_mutex_release(target->osdev, &target->CtrlResponseValid);
                 break;
             case HTC_MSG_SEND_SUSPEND_COMPLETE:
                 wow_nack = 0;
+                LOCK_HTC_CREDIT(target);
+                htc_credit_record(HTC_SUSPEND_ACK, pEndpoint->TxCredits,
+                                  HTC_PACKET_QUEUE_DEPTH(&pEndpoint->TxQueue));
+                UNLOCK_HTC_CREDIT(target);
                 target->HTCInitInfo.TargetSendSuspendComplete((void *)&wow_nack);
                 HTCsuspendwow(target);
                 break;
             case HTC_MSG_NACK_SUSPEND:
                 wow_nack = 1;
+                LOCK_HTC_CREDIT(target);
+                htc_credit_record(HTC_SUSPEND_NACK, pEndpoint->TxCredits,
+                                  HTC_PACKET_QUEUE_DEPTH(&pEndpoint->TxQueue));
+                UNLOCK_HTC_CREDIT(target);
                 target->HTCInitInfo.TargetSendSuspendComplete((void *)&wow_nack);
                 break;
             }
@@ -419,10 +436,6 @@ A_STATUS HTCRxCompletionHandler(
             netbuf = NULL;
             break;
         }
-#if defined(HIF_USB)
-        if (WLAN_IS_EPPING_ENABLED(vos_get_conparam()))
-            goto _eppingout;
-#endif
 
             /* the current message based HIF architecture allocates net bufs for recv packets
              * since this layer bridges that HIF to upper layers , which expects HTC packets,
@@ -453,9 +466,6 @@ A_STATUS HTCRxCompletionHandler(
 _out:
 #endif
 
-#if defined(HIF_USB)
-_eppingout:
-#endif
     if (netbuf != NULL) {
         adf_nbuf_free(netbuf);
     }
@@ -570,37 +580,6 @@ A_STATUS HTCWaitRecvCtrlMessage(HTC_TARGET *target)
     while (adf_os_mutex_acquire(target->osdev, &target->CtrlResponseValid)) {
     }
 
-    LOCK_HTC_RX(target);
-    /* caller will clear this flag */
-    target->CtrlResponseProcessing = TRUE;
-
-    UNLOCK_HTC_RX(target);
-
-#if 0
-    while (count > 0) {
-
-        LOCK_HTC_RX(target);
-
-        if (target->CtrlResponseValid) {
-            target->CtrlResponseValid = FALSE;
-                /* caller will clear this flag */
-            target->CtrlResponseProcessing = TRUE;
-            UNLOCK_HTC_RX(target);
-            break;
-        }
-
-        UNLOCK_HTC_RX(target);
-
-        count--;
-        A_MSLEEP(HTC_TARGET_RESPONSE_POLL_MS);
-    }
-
-    if (count <= 0) {
-        AR_DEBUG_PRINTF(ATH_DEBUG_ERR,("-HTCWaitCtrlMessageRecv: Timeout!\n"));
-        return A_ECOMM;
-    }
-#endif
-
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC,("-HTCWaitCtrlMessageRecv success\n"));
     return A_OK;
 }
@@ -661,8 +640,19 @@ static A_STATUS HTCProcessTrailer(HTC_TARGET     *target,
                                     htc_rec_len / (sizeof(HTC_CREDIT_REPORT)),
                                     FromEndpoint);
                 break;
+
+#ifdef HIF_SDIO
+            case HTC_RECORD_LOOKAHEAD:
+                /* Process in HIF layer */
+                break;
+
+            case HTC_RECORD_LOOKAHEAD_BUNDLE:
+                /* Process in HIF layer */
+                break;
+#endif /* HIF_SDIO */
+
             default:
-                AR_DEBUG_PRINTF(ATH_DEBUG_ERR, (" unhandled record: id:%d length:%d \n",
+                AR_DEBUG_PRINTF(ATH_DEBUG_ERR, (" HTC unhandled record: id:%d length:%d \n",
                         htc_rec_id, htc_rec_len));
                 break;
         }

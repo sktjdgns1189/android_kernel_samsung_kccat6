@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -60,6 +60,8 @@ enum wlan_op_mode {
 #define OL_TXQ_PAUSE_REASON_FW                (1 << 0)
 #define OL_TXQ_PAUSE_REASON_PEER_UNAUTHORIZED (1 << 1)
 #define OL_TXQ_PAUSE_REASON_TX_ABORT          (1 << 2)
+#define OL_TXQ_PAUSE_REASON_VDEV_STOP         (1 << 3)
+#define OL_TXQ_PAUSE_REASON_VDEV_SUSPEND      (1 << 4)
 
 /**
  * @brief Set up the data SW subsystem.
@@ -188,6 +190,45 @@ ol_txrx_peer_update(ol_txrx_vdev_handle data_vdev, u_int8_t *peer_mac,
 		    ol_txrx_peer_update_param_t *param,
 		    ol_txrx_peer_update_select_t select);
 
+enum {
+    OL_TX_WMM_AC_BE,
+    OL_TX_WMM_AC_BK,
+    OL_TX_WMM_AC_VI,
+    OL_TX_WMM_AC_VO,
+
+    OL_TX_NUM_WMM_AC
+};
+
+/**
+ * @brief Parameter type to pass WMM setting to wdi_in_set_wmm_param
+ * @details
+ *   The struct is used to specify informaiton to update TX WMM scheduler.
+ */
+struct ol_tx_ac_param_t {
+    u_int32_t aifs;
+    u_int32_t cwmin;
+    u_int32_t cwmax;
+};
+
+struct ol_tx_wmm_param_t {
+    struct ol_tx_ac_param_t ac[OL_TX_NUM_WMM_AC];
+};
+
+/**
+ * @brief Set paramters of WMM scheduler per AC settings.  .
+ * @details
+ *  This function applies only to HL systems.
+ *
+ * @param data_pdev - the physical device being paused
+ * @param wmm_param - the wmm parameters
+ */
+#if defined(CONFIG_HL_SUPPORT)
+void
+ol_txrx_set_wmm_param(ol_txrx_pdev_handle data_pdev, struct ol_tx_wmm_param_t wmm_param);
+#else
+#define ol_txrx_set_wmm_param(data_pdev, wmm_param) /* no-op */
+#endif /* CONFIG_HL_SUPPORT */
+
 /**
  * @brief Notify tx data SW that a peer's transmissions are suspended.
  * @details
@@ -202,12 +243,7 @@ ol_txrx_peer_update(ol_txrx_vdev_handle data_vdev, u_int8_t *peer_mac,
  *
  * @param data_peer - which peer is being paused
  */
-#if defined(CONFIG_HL_SUPPORT) && defined(QCA_WIFI_ISOC)
-void
-ol_txrx_peer_pause(ol_txrx_peer_handle data_peer);
-#else
 #define ol_txrx_peer_pause(data_peer) /* no-op */
-#endif /* CONFIG_HL_SUPPORT */
 
 /**
  * @brief Notify tx data SW that a peer-TID is ready to transmit to.
@@ -329,37 +365,74 @@ ol_txrx_vdev_unpause(ol_txrx_vdev_handle data_vdev, u_int32_t reason);
 #endif /* CONFIG_HL_SUPPORT */
 
 /**
- * @brief Suspend all tx data for the specified physical device.
+ * @brief Suspend all tx data per thermal event/timer for the
+ *  specified physical device
  * @details
- *  This function applies only to HL systems - in LL systems, tx flow control
- *  is handled entirely within the target FW.
- *  In some systems it is necessary to be able to temporarily
- *  suspend all WLAN traffic, e.g. to allow another device such as bluetooth
- *  to temporarily have exclusive access to shared RF chain resources.
- *  This function suspends tx traffic within the specified physical device.
- *
- * @param data_pdev - the physical device being paused
+ *  This function applies only to HL systerms, and it makes pause and
+ * unpause operations happen in pairs.
  */
 #if defined(CONFIG_HL_SUPPORT)
 void
-ol_txrx_pdev_pause(ol_txrx_pdev_handle data_pdev);
+ol_txrx_throttle_pause(ol_txrx_pdev_handle data_pdev);
 #else
-#define ol_txrx_pdev_pause(data_pdev) /* no-op */
+#define ol_txrx_throttle_pause(data_pdev) /* no-op */
+#endif /* CONFIG_HL_SUPPORT */
+
+
+/**
+ * @brief Resume all tx data per thermal event/timer for the
+ * specified physical device
+ * @details
+ *  This function applies only to HL systerms, and it makes pause and
+ * unpause operations happen in pairs.
+ */
+#if defined(CONFIG_HL_SUPPORT)
+void
+ol_txrx_throttle_unpause(ol_txrx_pdev_handle data_pdev);
+#else
+#define ol_txrx_throttle_unpause(data_pdev) /* no-op */
 #endif /* CONFIG_HL_SUPPORT */
 
 /**
- * @brief Resume tx for the specified physical device.
- * @details
- *  This function applies only to HL systems - in LL systems, tx flow control
- *  is handled entirely within the target FW.
+ * ol_txrx_pdev_pause() - Suspend all tx data for the specified physical device.
+ * @data_pdev: the physical device being paused.
+ * @reason:  pause reason.
+ *		One can provide multiple line descriptions
+ *		for arguments.
  *
- * @param data_pdev - the physical device being unpaused
+ * This function applies to HL systems -
+ * in LL systems, applies when txrx_vdev_pause_all is enabled.
+ * In some systems it is necessary to be able to temporarily
+ * suspend all WLAN traffic, e.g. to allow another device such as bluetooth
+ * to temporarily have exclusive access to shared RF chain resources.
+ * This function suspends tx traffic within the specified physical device.
+ *
+ *
+ * Return: None
  */
-#if defined(CONFIG_HL_SUPPORT)
+#if defined(CONFIG_HL_SUPPORT) || defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL)
 void
-ol_txrx_pdev_unpause(ol_txrx_pdev_handle data_pdev);
+ol_txrx_pdev_pause(ol_txrx_pdev_handle data_pdev, u_int32_t reason);
 #else
-#define ol_txrx_pdev_unpause(data_pdev) /* no-op */
+#define ol_txrx_pdev_pause(data_pdev,reason) /* no-op */
+#endif /* CONFIG_HL_SUPPORT */
+
+/**
+ * ol_txrx_pdev_unpause() - Resume tx for the specified physical device..
+ * @data_pdev: the physical device being paused.
+ * @reason:  pause reason.
+ *
+ *  This function applies to HL systems -
+ *  in LL systems, applies when txrx_vdev_pause_all is enabled.
+ *
+ *
+ * Return: None
+ */
+#if defined(CONFIG_HL_SUPPORT) || defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL)
+void
+ol_txrx_pdev_unpause(ol_txrx_pdev_handle data_pdev, u_int32_t reason);
+#else
+#define ol_txrx_pdev_unpause(data_pdev,reason) /* no-op */
 #endif /* CONFIG_HL_SUPPORT */
 
 /**
@@ -593,6 +666,8 @@ int
 ol_txrx_get_tx_pending(
     ol_txrx_pdev_handle pdev);
 
+void ol_txrx_dump_tx_desc(ol_txrx_pdev_handle pdev);
+
 /**
  * @brief Discard all tx frames that are pending in txrx.
  * @details
@@ -685,30 +760,7 @@ ol_txrx_peer_keyinstalled_state_update(
     ol_txrx_peer_handle data_peer,
     u_int8_t val);
 
-#ifdef QCA_WIFI_ISOC
-/**
- * @brief Confirm that a requested tx ADDBA negotiation has completed
- * @details
- *  For systems in which ADDBA-request / response handshaking is handled
- *  by the host SW, the data SW will request for the control SW to perform
- *  the ADDBA negotiation at an appropriate time.
- *  This function is used by the control SW to inform the data SW that the
- *  ADDBA negotiation has finished, and the data SW can now resume
- *  transmissions from the peer-TID tx queue in question.
- *
- * @param peer - which peer the ADDBA-negotiation was with
- * @param tid - which traffic type the ADDBA-negotiation was for
- * @param status - whether the negotiation completed or was aborted:
- *            success: the negotiation completed
- *            reject:  the negotiation completed but was rejected
- *            busy:    the negotiation was aborted - try again later
- */
-void
-ol_tx_addba_conf(
-    ol_txrx_peer_handle data_peer, int tid, enum ol_addba_status status);
-#else
 #define ol_tx_addba_conf(data_peer, tid, status) /* no-op */
-#endif
 
 /**
  * @brief Find a txrx peer handle from the peer's MAC address
@@ -802,6 +854,21 @@ ol_txrx_peer_stats_copy(
 #define ol_txrx_peer_stats_copy(pdev, peer, stats) A_ERROR /* failure */
 #endif /* QCA_ENABLE_OL_TXRX_PEER_STATS */
 
+/* Config parameters for txrx_pdev */
+struct txrx_pdev_cfg_param_t {
+    u_int8_t is_full_reorder_offload;
+    /* IPA Micro controller data path offload enable flag */
+    u_int8_t is_uc_offload_enabled;
+    /* IPA Micro controller data path offload TX buffer count */
+    u_int32_t uc_tx_buffer_count;
+    /* IPA Micro controller data path offload TX buffer size */
+    u_int32_t uc_tx_buffer_size;
+    /* IPA Micro controller data path offload RX indication ring count */
+    u_int32_t uc_rx_indication_ring_count;
+    /* IPA Micro controller data path offload TX partition base */
+    u_int32_t uc_tx_partition_base;
+};
+
 /**
  * @brief Setup configuration parameters
  * @details
@@ -810,7 +877,8 @@ ol_txrx_peer_stats_copy(
  * @param osdev - OS handle needed as an argument for some OS primitives
  * @return the control device object
  */
-ol_pdev_handle ol_pdev_cfg_attach(adf_os_device_t osdev);
+ol_pdev_handle ol_pdev_cfg_attach(adf_os_device_t osdev,
+                                   struct txrx_pdev_cfg_param_t cfg_param);
 
 #define OL_TXRX_INVALID_LOCAL_PEER_ID 0xffff
 #ifdef QCA_SUPPORT_TXRX_LOCAL_PEER_ID
@@ -818,9 +886,15 @@ u_int16_t ol_txrx_local_peer_id(ol_txrx_peer_handle peer);
 ol_txrx_peer_handle ol_txrx_find_peer_by_addr(ol_txrx_pdev_handle pdev,
                                               u_int8_t *peer_addr,
                                               u_int8_t *peer_id);
+ol_txrx_peer_handle
+ol_txrx_find_peer_by_addr_and_vdev(ol_txrx_pdev_handle pdev,
+                                   ol_txrx_vdev_handle vdev,
+                                   u_int8_t *peer_addr,
+                                   u_int8_t *peer_id);
 #else
 #define ol_txrx_local_peer_id(peer) OL_TXRX_INVALID_LOCAL_PEER_ID
 #define ol_txrx_find_peer_by_addr(pdev, peer_addr, peer_id) NULL
+#define ol_txrx_find_peer_by_addr_and_vdev(pdev, vdev, peer_addr, peer_id) NULL
 #endif
 
 #define OL_TXRX_RSSI_INVALID 0xffff
@@ -965,7 +1039,7 @@ ol_tx_delay_hist(ol_txrx_pdev_handle pdev, u_int16_t *bin_values,
 }
 #endif
 
-#if defined(QCA_SUPPORT_TX_THROTTLE_LL)
+#if defined(QCA_SUPPORT_TX_THROTTLE)
 /**
  * @brief Set the thermal mitgation throttling level.
  * @details
@@ -981,9 +1055,9 @@ static inline void ol_tx_throttle_set_level(struct ol_txrx_pdev_t *pdev,
 {
     /* no-op */
 }
-#endif /* QCA_SUPPORT_TX_THROTTLE_LL */
+#endif /* QCA_SUPPORT_TX_THROTTLE */
 
-#if defined(QCA_SUPPORT_TX_THROTTLE_LL)
+#if defined(QCA_SUPPORT_TX_THROTTLE)
 /**
  * @brief Configure the thermal mitgation throttling period.
  * @details
@@ -999,7 +1073,7 @@ static inline void ol_tx_throttle_init_period(struct ol_txrx_pdev_t *pdev,
 {
     /* no-op */
 }
-#endif /* QCA_SUPPORT_TX_THROTTLE_LL */
+#endif /* QCA_SUPPORT_TX_THROTTLE */
 
 void ol_vdev_rx_set_intrabss_fwd(ol_txrx_vdev_handle vdev, a_bool_t val);
 
@@ -1042,5 +1116,141 @@ ol_txrx_ll_set_tx_pause_q_depth(
     int pause_q_depth
 );
 #endif /* QCA_LL_TX_FLOW_CT */
+
+#ifdef IPA_UC_OFFLOAD
+/**
+ * @brief Client request resource information
+ * @details
+ *  OL client will reuqest IPA UC related resource information
+ *  Resource information will be distributted to IPA module
+ *  All of the required resources should be pre-allocated
+ *
+ * @param pdev - handle to the HTT instance
+ * @param ce_sr_base_paddr - copy engine source ring base physical address
+ * @param ce_sr_ring_size - copy engine source ring size
+ * @param ce_reg_paddr - copy engine register physical address
+ * @param tx_comp_ring_base_paddr - tx comp ring base physical address
+ * @param tx_comp_ring_size - tx comp ring size
+ * @param tx_num_alloc_buffer - number of allocated tx buffer
+ * @param rx_rdy_ring_base_paddr - rx ready ring base physical address
+ * @param rx_rdy_ring_size - rx ready ring size
+ * @param rx_proc_done_idx_paddr - rx process done index physical address
+ */
+void
+ol_txrx_ipa_uc_get_resource(
+   ol_txrx_pdev_handle pdev,
+   u_int32_t *ce_sr_base_paddr,
+   u_int32_t *ce_sr_ring_size,
+   u_int32_t *ce_reg_paddr,
+   u_int32_t *tx_comp_ring_base_paddr,
+   u_int32_t *tx_comp_ring_size,
+   u_int32_t *tx_num_alloc_buffer,
+   u_int32_t *rx_rdy_ring_base_paddr,
+   u_int32_t *rx_rdy_ring_size,
+   u_int32_t *rx_proc_done_idx_paddr
+);
+
+/**
+ * @brief Client set IPA UC doorbell register
+ * @details
+ *  IPA UC let know doorbell register physical address
+ *  WLAN firmware will use this physical address to notify IPA UC
+ *
+ * @param pdev - handle to the HTT instance
+ * @param ipa_uc_tx_doorbell_paddr - tx comp doorbell physical address
+ * @param ipa_uc_rx_doorbell_paddr - rx ready doorbell physical address
+ */
+void
+ol_txrx_ipa_uc_set_doorbell_paddr(
+   ol_txrx_pdev_handle pdev,
+   u_int32_t ipa_tx_uc_doorbell_paddr,
+   u_int32_t ipa_rx_uc_doorbell_paddr
+);
+
+/**
+ * @brief Client notify IPA UC data path active or not
+ *
+ * @param pdev - handle to the HTT instance
+ * @param uc_active - UC data path is active or not
+ * @param is_tx - UC TX is active or not
+ */
+void
+ol_txrx_ipa_uc_set_active(
+   ol_txrx_pdev_handle pdev,
+   a_bool_t uc_active,
+   a_bool_t is_tx
+);
+
+/**
+ * @brief Offload data path activation notificaiton
+ * @details
+ *  Firmware notification handler for offload datapath activity
+ *
+ * @param pdev - handle to the HTT instance
+ * @param op_code - activated for tx or rx data patrh
+ */
+void
+ol_txrx_ipa_uc_op_response(
+   ol_txrx_pdev_handle pdev,
+   u_int8_t *op_msg);
+
+/**
+ * @brief callback function registration
+ * @details
+ *  OSIF layer callback function registration API
+ *  OSIF layer will register firmware offload datapath activity
+ *  notification callback
+ *
+ * @param pdev - handle to the HTT instance
+ * @param ipa_uc_op_cb_type - callback function pointer should be registered
+ * @param osif_dev - osif instance pointer
+ */
+void ol_txrx_ipa_uc_register_op_cb(
+   ol_txrx_pdev_handle pdev,
+   void (*ipa_uc_op_cb_type)(u_int8_t *op_msg, void *osif_ctxt),
+   void *osif_dev);
+
+/**
+ * @brief query uc data path stats
+ * @details
+ *  Query uc data path stats from firmware
+ *
+ * @param pdev - handle to the HTT instance
+ */
+void ol_txrx_ipa_uc_get_stat(ol_txrx_pdev_handle pdev);
+#else
+#define ol_txrx_ipa_uc_get_resource(          \
+   pdev,                                      \
+   ce_sr_base_paddr,                          \
+   ce_sr_ring_size,                           \
+   ce_reg_paddr,                              \
+   tx_comp_ring_base_paddr,                   \
+   tx_comp_ring_size,                         \
+   tx_num_alloc_buffer,                       \
+   rx_rdy_ring_base_paddr,                    \
+   rx_rdy_ring_size,                          \
+   rx_proc_done_idx_paddr) /* NO-OP */
+
+#define ol_txrx_ipa_uc_set_doorbell_paddr(    \
+   pdev,                                      \
+   ipa_tx_uc_doorbell_paddr,                  \
+   ipa_rx_uc_doorbell_paddr) /* NO-OP */
+
+#define ol_txrx_ipa_uc_set_active(            \
+   pdev,                                      \
+   uc_active,                                 \
+   is_tx) /* NO-OP */
+
+#define ol_txrx_ipa_uc_op_response(           \
+   pdev,                                      \
+   op_data) /* NO-OP */
+
+#define ol_txrx_ipa_uc_register_op_cb(        \
+   pdev,                                      \
+   ipa_uc_op_cb_type,                         \
+   osif_dev) /* NO-OP */
+
+#define ol_txrx_ipa_uc_get_stat(pdev) /* NO-OP */
+#endif /* IPA_UC_OFFLOAD */
 
 #endif /* _OL_TXRX_CTRL_API__H_ */

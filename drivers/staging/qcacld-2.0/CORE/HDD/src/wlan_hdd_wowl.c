@@ -207,7 +207,7 @@ v_BOOL_t hdd_add_wowl_ptrn (hdd_adapter_t *pAdapter, const char * ptrn)
       goto next_ptrn;
     }
 
-    //compute the end of pattern sring
+    /* Compute the end of pattern string */
     offset = offset + 2*localPattern.ucPatternMaskSize;
     if(offset+1 != len) //offset begins with 0
     {
@@ -230,7 +230,7 @@ v_BOOL_t hdd_add_wowl_ptrn (hdd_adapter_t *pAdapter, const char * ptrn)
       ptrn += 2; //skip to next byte
     }
 
-    ptrn++; // Skip over the ':' seperator after the pattern
+    ptrn++; /* Skip over the ':' separator after the pattern */
 
     // Extract the pattern Mask
     for(i=0; i < localPattern.ucPatternMaskSize; i++)
@@ -386,6 +386,8 @@ v_BOOL_t hdd_add_wowl_ptrn_debugfs(hdd_adapter_t *pAdapter, v_U8_t pattern_idx,
   localPattern.ucPatternId = pattern_idx;
   localPattern.ucPatternByteOffset = pattern_offset;
   localPattern.ucPatternSize = pattern_len;
+  localPattern.sessionId = sessionId;
+
   if (localPattern.ucPatternSize > SIR_WOWL_BCAST_PATTERN_MAX_SIZE) {
     VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
              "%s: WoW pattern size (%d) greater than max (%d)",
@@ -594,7 +596,7 @@ v_BOOL_t hdd_exit_wowl (hdd_adapter_t*pAdapter)
 
 /**============================================================================
   @brief hdd_init_wowl() - Init function which will initialize the WoWL module
-  and perform any required intial configuration
+  and perform any required initial configuration
 
   @return           : FALSE if any errors encountered
                     : TRUE otherwise

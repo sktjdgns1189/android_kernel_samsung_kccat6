@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -59,13 +59,8 @@
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
 #include <linux/cpu.h>
-#ifdef QCA_WIFI_2_0
-#ifdef QCA_WIFI_ISOC
-#include  "htc_api.h"
-#endif
 #if defined(QCA_CONFIG_SMP) && defined(CONFIG_CNSS)
 #include <net/cnss.h>
-#endif
 #endif
 /*---------------------------------------------------------------------------
  * Preprocessor Definitions and Constants
@@ -76,9 +71,19 @@
 /* MAX iteration count to wait for Entry point to exit before
  * we proceed with SSR in WD Thread
  */
-#define MAX_SSR_WAIT_ITERATIONS 75
+#define MAX_SSR_WAIT_ITERATIONS 100
+#define MAX_SSR_PROTECT_LOG (16)
 
 static atomic_t ssr_protect_entry_count;
+
+struct ssr_protect {
+   const char* func;
+   bool  free;
+   uint32_t pid;
+};
+
+static spinlock_t ssr_protect_lock;
+static struct ssr_protect ssr_protect_log[MAX_SSR_PROTECT_LOG];
 
 /*---------------------------------------------------------------------------
  * Type Declarations
@@ -106,6 +111,8 @@ extern v_VOID_t vos_core_return_msg(v_PVOID_t pVContext, pVosMsgWrapper pMsgWrap
 
 
 #ifdef QCA_CONFIG_SMP
+#define VOS_CORE_PER_CLUSTER 4
+
 static int vos_set_cpus_allowed_ptr(struct task_struct *task,
                                     unsigned long cpu)
 {
@@ -118,20 +125,272 @@ static int vos_set_cpus_allowed_ptr(struct task_struct *task,
 #endif
 }
 
-static int vos_cpu_hotplug_notify(struct notifier_block *block,
+/**
+ * vos_sched_all_litl_cpu_mask - get cpu mask for all little cores
+ * @litl_mask:	little core cpu mask pointer
+ *
+ * When RX thread should attach to little core,
+ *   PERF mode
+ *   low throughput required
+ * RX thread affinity should be any little cores. cpu mask also should
+ * any little core cpus.
+ * Will give all little core cpu mask for little core affinity
+ *
+ * Return: None
+ */
+void vos_sched_all_litl_cpu_mask(struct cpumask *litl_mask)
+{
+	unsigned char litl_core_count = 0;
+	cpumask_clear(litl_mask);
+	for (litl_core_count = 0;
+		litl_core_count < VOS_CORE_PER_CLUSTER;
+		litl_core_count++) {
+		cpumask_set_cpu(litl_core_count, litl_mask);
+	}
+
+	return;
+}
+
+/**
+ * vos_sched_find_attach_cpu - find available cores and attach to required core
+ * @pSchedContext:	wlan scheduler context
+ * @high_throughput:	high throughput is required or not
+ *
+ * Find current online cores.
+ * high troughput required and PERF core online, then attach to last PERF core
+ * low throughput required or only little cores online, the attach any little
+ * core
+ *
+ * Return: 0 success
+ *         1 fail
+ */
+static int vos_sched_find_attach_cpu(pVosSchedContext pSchedContext,
+	bool high_throughput)
+{
+	unsigned long *online_perf_cpu = NULL;
+	unsigned long *online_litl_cpu = NULL;
+	unsigned long cpus;
+	unsigned char perf_core_count = 0;
+	unsigned char litl_core_count = 0;
+#ifdef WLAN_OPEN_SOURCE
+	struct cpumask litl_mask;
+#endif
+
+	VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_LOW,
+		"%s: num possible cpu %d",
+		__func__, num_possible_cpus());
+
+	/* Single cluster system, not need to handle this */
+	if (num_possible_cpus() < VOS_CORE_PER_CLUSTER)
+		return 0;
+
+	online_perf_cpu = vos_mem_malloc(
+		num_possible_cpus() * sizeof(unsigned long));
+	if (!online_perf_cpu) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: perf cpu cache alloc fail", __func__);
+		return 1;
+	}
+	vos_mem_zero(online_perf_cpu,
+		num_possible_cpus() * sizeof(unsigned long));
+
+	online_litl_cpu = vos_mem_malloc(
+		num_possible_cpus() * sizeof(unsigned long));
+	if (!online_litl_cpu) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: lttl cpu cache alloc fail", __func__);
+		vos_mem_free(online_perf_cpu);
+		return 1;
+	}
+	vos_mem_zero(online_litl_cpu,
+		num_possible_cpus() * sizeof(unsigned long));
+
+	/* Get Online perf CPU count */
+	for_each_online_cpu(cpus) {
+		if (cpus >= VOS_CORE_PER_CLUSTER) {
+			online_perf_cpu[perf_core_count] = cpus;
+			perf_core_count++;
+		} else {
+			online_litl_cpu[litl_core_count] = cpus;
+			litl_core_count++;
+		}
+	}
+
+	if ((!litl_core_count) && (!perf_core_count)) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: Both Cluster off, do nothing", __func__);
+		vos_mem_free(online_perf_cpu);
+		vos_mem_free(online_litl_cpu);
+		return 0;
+	}
+
+	if ((high_throughput && perf_core_count) || (!litl_core_count)) {
+		/* Attach RX thread to PERF CPU */
+		if (pSchedContext->rx_thread_cpu !=
+			online_perf_cpu[perf_core_count - 1]) {
+			if (vos_set_cpus_allowed_ptr(
+				pSchedContext->TlshimRxThread,
+				online_perf_cpu[perf_core_count - 1])) {
+				VOS_TRACE(VOS_MODULE_ID_VOSS,
+					VOS_TRACE_LEVEL_ERROR,
+					"%s: rx thread perf core set fail",
+					__func__);
+				vos_mem_free(online_perf_cpu);
+				vos_mem_free(online_litl_cpu);
+				return 1;
+			}
+			pSchedContext->rx_thread_cpu =
+				online_perf_cpu[perf_core_count - 1];
+		}
+	} else {
+#ifdef WLAN_OPEN_SOURCE
+		/* Attach to any little core
+		 * Final decision should made by scheduler */
+		vos_sched_all_litl_cpu_mask(&litl_mask);
+		set_cpus_allowed_ptr(pSchedContext->TlshimRxThread, &litl_mask);
+		pSchedContext->rx_thread_cpu = 0;
+#else
+		/* Attach RX thread to last little core CPU */
+		if (pSchedContext->rx_thread_cpu !=
+			online_litl_cpu[litl_core_count - 1]) {
+			if (vos_set_cpus_allowed_ptr(
+				pSchedContext->TlshimRxThread,
+				online_litl_cpu[litl_core_count - 1])) {
+				VOS_TRACE(VOS_MODULE_ID_VOSS,
+					VOS_TRACE_LEVEL_ERROR,
+					"%s: rx thread litl core set fail",
+					__func__);
+				vos_mem_free(online_perf_cpu);
+				vos_mem_free(online_litl_cpu);
+				return 1;
+			}
+			pSchedContext->rx_thread_cpu =
+				online_litl_cpu[litl_core_count - 1];
+		}
+#endif /* WLAN_OPEN_SOURCE */
+	}
+
+	VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_LOW,
+		"%s: NUM PERF CORE %d, HIGH TPUTR REQ %d, RX THRE CPU %lu",
+		__func__, perf_core_count,
+		(int)pSchedContext->high_throughput_required,
+		pSchedContext->rx_thread_cpu);
+
+	vos_mem_free(online_perf_cpu);
+	vos_mem_free(online_litl_cpu);
+	return 0;
+}
+
+/**
+ * vos_sched_handle_cpu_hot_plug - cpu hotplug event handler
+ *
+ * cpu hotplug indication handler
+ * will find online cores and will assign proper core based on perf requirement
+ *
+ * Return: 0 success
+ *         1 fail
+ */
+int vos_sched_handle_cpu_hot_plug(void)
+{
+	pVosSchedContext pSchedContext = get_vos_sched_ctxt();
+
+	if (!pSchedContext) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: invalid context", __func__);
+		return 1;
+	}
+
+	if (vos_is_load_unload_in_progress(VOS_MODULE_ID_VOSS, NULL) ||
+		(vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL)))
+		return 0;
+
+	vos_lock_acquire(&pSchedContext->affinity_lock);
+	if (vos_sched_find_attach_cpu(pSchedContext,
+		pSchedContext->high_throughput_required)) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: handle hot plug fail", __func__);
+		vos_lock_release(&pSchedContext->affinity_lock);
+		return 1;
+	}
+	vos_lock_release(&pSchedContext->affinity_lock);
+	return 0;
+}
+
+/**
+ * vos_sched_handle_throughput_req - cpu throughput requirement handler
+ * @high_tput_required:	high throughput is required or not
+ *
+ * high or low throughput indication ahndler
+ * will find online cores and will assign proper core based on perf requirement
+ *
+ * Return: 0 success
+ *         1 fail
+ */
+int vos_sched_handle_throughput_req(bool high_tput_required)
+{
+	pVosSchedContext pSchedContext = get_vos_sched_ctxt();
+
+	if (!pSchedContext) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: invalid context", __func__);
+		return 1;
+	}
+
+	if (vos_is_load_unload_in_progress(VOS_MODULE_ID_VOSS, NULL) ||
+		(vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL)))
+		return 0;
+
+	vos_lock_acquire(&pSchedContext->affinity_lock);
+	pSchedContext->high_throughput_required = high_tput_required;
+	if (vos_sched_find_attach_cpu(pSchedContext, high_tput_required)) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: handle throughput req fail", __func__);
+		vos_lock_release(&pSchedContext->affinity_lock);
+		return 1;
+	}
+	vos_lock_release(&pSchedContext->affinity_lock);
+	return 0;
+}
+
+/**
+ * __vos_cpu_hotplug_notify - cpu core on-off notification handler
+ * @block:	notifier block
+ * @state:	state of core
+ * @hcpu:	target cpu core
+ *
+ * pre-registered core status change notify callback function
+ * will handle only ONLINE, OFFLINE notification
+ * based on cpu architecture, rx thread affinity will be different
+ *
+ * Return: 0 success
+ *         1 fail
+ */
+static int __vos_cpu_hotplug_notify(struct notifier_block *block,
                                   unsigned long state, void *hcpu)
 {
    unsigned long cpu = (unsigned long) hcpu;
    unsigned long pref_cpu = 0;
    pVosSchedContext pSchedContext = get_vos_sched_ctxt();
    int i;
+   unsigned int multi_cluster;
+   unsigned int num_cpus;
 
    if ((NULL == pSchedContext) || (NULL == pSchedContext->TlshimRxThread))
        return NOTIFY_OK;
 
-   if (vos_is_load_unload_in_progress(VOS_MODULE_ID_VOSS, NULL))
-   {
+   if (vos_is_load_unload_in_progress(VOS_MODULE_ID_VOSS, NULL) ||
+      (vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL)))
        return NOTIFY_OK;
+
+   num_cpus = num_possible_cpus();
+   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_LOW,
+             "%s: RX CORE %d, STATE %d, NUM CPUS %d",
+              __func__, (int)affine_cpu, (int)state, num_cpus);
+   multi_cluster = (num_cpus > VOS_CORE_PER_CLUSTER)?1:0;
+   if ((multi_cluster) &&
+       ((CPU_ONLINE == state) || (CPU_DEAD == state))) {
+      vos_sched_handle_cpu_hot_plug();
+      return NOTIFY_OK;
    }
 
    switch (state) {
@@ -143,7 +402,7 @@ static int vos_cpu_hotplug_notify(struct notifier_block *block,
            if (i == 0)
                continue;
            pref_cpu = i;
-           break;
+               break;
        }
        break;
    case CPU_DEAD:
@@ -155,7 +414,7 @@ static int vos_cpu_hotplug_notify(struct notifier_block *block,
            if (i == 0)
                continue;
            pref_cpu = i;
-           break;
+               break;
        }
    }
 
@@ -166,6 +425,32 @@ static int vos_cpu_hotplug_notify(struct notifier_block *block,
        affine_cpu = pref_cpu;
 
    return NOTIFY_OK;
+}
+
+/**
+ * vos_cpu_hotplug_notify - cpu core on-off notification handler wrapper
+ * @block:	notifier block
+ * @state:	state of core
+ * @hcpu:	target cpu core
+ *
+ * pre-registered core status change notify callback function
+ * will handle only ONLINE, OFFLINE notification
+ * based on cpu architecture, rx thread affinity will be different
+ * wrapper function
+ *
+ * Return: 0 success
+ *         1 fail
+ */
+static int vos_cpu_hotplug_notify(struct notifier_block *block,
+                                  unsigned long state, void *hcpu)
+{
+	int ret;
+
+	vos_ssr_protect(__func__);
+	ret = __vos_cpu_hotplug_notify(block, state, hcpu);
+	vos_ssr_unprotect(__func__);
+
+	return ret;
 }
 
 static struct notifier_block vos_cpu_hotplug_notifier = {
@@ -278,6 +563,8 @@ vos_sched_open
   spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
   register_hotcpu_notifier(&vos_cpu_hotplug_notifier);
   pSchedContext->cpuHotPlugNotifier = &vos_cpu_hotplug_notifier;
+  vos_lock_init(&pSchedContext->affinity_lock);
+  pSchedContext->high_throughput_required = false;
 #endif
 
 
@@ -399,6 +686,13 @@ TX_THREAD_START_FAILURE:
 MC_THREAD_START_FAILURE:
   //De-initialize all the message queues
   vos_sched_deinit_mqs(pSchedContext);
+
+
+#ifdef QCA_CONFIG_SMP
+  unregister_hotcpu_notifier(&vos_cpu_hotplug_notifier);
+  vos_free_tlshim_pkt_freeq(gpVosSchedContext);
+#endif
+
   return VOS_STATUS_E_RESOURCES;
 
 } /* vos_sched_open() */
@@ -550,81 +844,6 @@ VosMCThread
         }
         break;
       }
-      /*
-      ** Check the WDI queue
-      ** Service it till the entire queue is empty
-      */
-      if (!vos_is_mq_empty(&pSchedContext->wdiMcMq))
-      {
-        wpt_msg *pWdiMsg;
-        /*
-        ** Service the WDI message queue
-        */
-        VOS_TRACE(VOS_MODULE_ID_WDI, VOS_TRACE_LEVEL_INFO,
-                  ("Servicing the VOS MC WDI Message queue"));
-
-        pMsgWrapper = vos_mq_get(&pSchedContext->wdiMcMq);
-
-        if (pMsgWrapper == NULL)
-        {
-           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-               "%s: pMsgWrapper is NULL", __func__);
-           VOS_ASSERT(0);
-           break;
-        }
-
-        pWdiMsg = (wpt_msg *)pMsgWrapper->pVosMsg->bodyptr;
-
-        if(pWdiMsg == NULL || pWdiMsg->callback == NULL)
-        {
-           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-               "%s: WDI Msg or Callback is NULL", __func__);
-           VOS_ASSERT(0);
-           break;
-        }
-
-        pWdiMsg->callback(pWdiMsg);
-
-        /*
-        ** return message to the Core
-        */
-        vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-
-        continue;
-      }
-#if defined (QCA_WIFI_2_0) && \
-    defined (QCA_WIFI_ISOC)
-      // Check the HTC queue first
-      if (!vos_is_mq_empty(&pSchedContext->htcMcMq))
-      {
-        // Service the HTC message queue
-        t_htc_msg *pHtcMsg;
-        VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
-                  "%s: Servicing the VOS HTC MC Message queue",__func__);
-        pMsgWrapper = vos_mq_get(&pSchedContext->htcMcMq);
-        if (pMsgWrapper == NULL)
-        {
-           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-                     "%s: Servicing the VOS SYS MC Message queue",__func__);
-           VOS_ASSERT(0);
-           break;
-        }
-        pHtcMsg = (t_htc_msg *)pMsgWrapper->pVosMsg->bodyptr;
-        if (pHtcMsg == NULL || pHtcMsg->callback == NULL)
-        {
-           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-                     "%s: HTC Msg or Callback is NULL", __func__);
-           VOS_ASSERT(0);
-           break;
-        }
-        VOS_TRACE(VOS_MODULE_ID_HTC, VOS_TRACE_LEVEL_INFO,
-                  ("calling pHtcMsg->callback"));
-        pHtcMsg->callback(pHtcMsg);
-        //return message to the Core
-        vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-        continue;
-      }
-#endif
 
       // Check the SYS queue first
       if (!vos_is_mq_empty(&pSchedContext->sysMcMq))
@@ -789,15 +1008,13 @@ VosMCThread
     } // while message loop processing
   } // while TRUE
   // If we get here the MC thread must exit
-  VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
+  VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
       "%s: MC Thread exiting!!!!", __func__);
   complete_and_exit(&pSchedContext->McShutdown, 0);
 } /* VosMCThread() */
 
 v_BOOL_t isWDresetInProgress(void)
 {
-   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
-                "%s: Reset is in Progress...",__func__);
    if(gpVosWatchdogContext!=NULL)
    {
       return gpVosWatchdogContext->resetInProgress;
@@ -1106,38 +1323,7 @@ static int VosTXThread ( void * Arg )
         vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
         continue;
       }
-      // Check the WDI queue
-      if (!vos_is_mq_empty(&pSchedContext->wdiTxMq))
-      {
-        wpt_msg *pWdiMsg;
 
-        pMsgWrapper = vos_mq_get(&pSchedContext->wdiTxMq);
-
-        if (pMsgWrapper == NULL)
-        {
-           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-               "%s: pMsgWrapper is NULL", __func__);
-           VOS_ASSERT(0);
-           break;
-        }
-
-        pWdiMsg = (wpt_msg *)pMsgWrapper->pVosMsg->bodyptr;
-
-        if(pWdiMsg == NULL || pWdiMsg->callback == NULL)
-        {
-           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-               "%s: WDI Msg or Callback is NULL", __func__);
-           VOS_ASSERT(0);
-           break;
-        }
-
-        pWdiMsg->callback(pWdiMsg);
-
-        // return message to the Core
-        vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-
-        continue;
-      }
       /* Check for any Suspend Indication */
       if(test_bit(TX_SUSPEND_EVENT_MASK, &pSchedContext->txEventFlag))
       {
@@ -1279,40 +1465,6 @@ static int VosRXThread ( void * Arg )
         }
         // return message to the Core
         vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-        continue;
-      }
-
-      // Check the WDI queue
-      if (!vos_is_mq_empty(&pSchedContext->wdiRxMq))
-      {
-        wpt_msg *pWdiMsg;
-
-        pMsgWrapper = vos_mq_get(&pSchedContext->wdiRxMq);
-        if ((NULL == pMsgWrapper) || (NULL == pMsgWrapper->pVosMsg))
-        {
-          VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-                    "%s: wdiRxMq message is NULL", __func__);
-          VOS_ASSERT(0);
-          // we won't return this wrapper since it is corrupt
-        }
-        else
-        {
-          pWdiMsg = (wpt_msg *)pMsgWrapper->pVosMsg->bodyptr;
-          if ((NULL == pWdiMsg) || (NULL == pWdiMsg->callback))
-          {
-            VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-                      "%s: WDI Msg or callback is NULL", __func__);
-            VOS_ASSERT(0);
-          }
-          else
-          {
-            // invoke the message handler
-            pWdiMsg->callback(pWdiMsg);
-          }
-
-          // return message to the Core
-          vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-        }
         continue;
       }
 
@@ -1561,7 +1713,7 @@ static int VosTlshimRxThread(void *arg)
        if (i == 0)
            continue;
        pref_cpu = i;
-       break;
+           break;
    }
    if (pref_cpu != 0 && (!vos_set_cpus_allowed_ptr(current, pref_cpu)))
        affine_cpu = pref_cpu;
@@ -1595,7 +1747,7 @@ static int VosTlshimRxThread(void *arg)
                              &pSchedContext->tlshimRxEvtFlg);
                    complete(&pSchedContext->SuspndTlshimRxEvent);
                }
-               VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
+               VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
                          "%s: Shutting down tl shim Tlshim rx thread", __func__);
                shutdown = true;
                break;
@@ -1617,7 +1769,7 @@ static int VosTlshimRxThread(void *arg)
        }
    }
 
-   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
+   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
              "%s: Exiting VOSS Tlshim rx thread", __func__);
    complete_and_exit(&pSchedContext->TlshimRxShutdown, 0);
 }
@@ -1683,11 +1835,12 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     vos_sched_deinit_mqs(gpVosSchedContext);
 
 #ifdef QCA_CONFIG_SMP
+    vos_lock_destroy(&gpVosSchedContext->affinity_lock);
     // Shut down Tlshim Rx thread
     set_bit(RX_SHUTDOWN_EVENT_MASK, &gpVosSchedContext->tlshimRxEvtFlg);
     set_bit(RX_POST_EVENT_MASK, &gpVosSchedContext->tlshimRxEvtFlg);
     wake_up_interruptible(&gpVosSchedContext->tlshimRxWaitQueue);
-    wait_for_completion_interruptible(&gpVosSchedContext->TlshimRxShutdown);
+    wait_for_completion(&gpVosSchedContext->TlshimRxShutdown);
     gpVosSchedContext->TlshimRxThread = NULL;
     vos_drop_rxpkt_by_staid(gpVosSchedContext, WLAN_MAX_STA_COUNT);
     vos_free_tlshim_pkt_freeq(gpVosSchedContext);
@@ -1713,11 +1866,6 @@ VOS_STATUS vos_watchdog_close ( v_PVOID_t pVosContext )
     wait_for_completion(&gpVosWatchdogContext->WdShutdown);
     return VOS_STATUS_SUCCESS;
 } /* vos_watchdog_close() */
-
-VOS_STATUS vos_watchdog_chip_reset ( vos_chip_reset_reason_type  reason )
-{
-    return VOS_STATUS_SUCCESS;
-} /* vos_watchdog_chip_reset() */
 
 /*---------------------------------------------------------------------------
   \brief vos_sched_init_mqs: Initialize the vOSS Scheduler message queues
@@ -1785,17 +1933,6 @@ VOS_STATUS vos_sched_init_mqs ( pVosSchedContext pSchedContext )
     VOS_ASSERT(0);
     return vStatus;
   }
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: Initializing the WDI MC Message queue",__func__);
-
-  vStatus = vos_mq_init(&pSchedContext->wdiMcMq);
-  if (! VOS_IS_STATUS_SUCCESS(vStatus))
-  {
-    VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-            "%s: Failed to init WDI MC Message queue",__func__);
-    VOS_ASSERT(0);
-    return vStatus;
-  }
 
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
             "%s: Initializing the TL Tx Message queue",__func__);
@@ -1804,28 +1941,6 @@ VOS_STATUS vos_sched_init_mqs ( pVosSchedContext pSchedContext )
   {
     VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
             "%s: Failed to init TL TX Message queue",__func__);
-    VOS_ASSERT(0);
-    return vStatus;
-  }
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: Initializing the WDI Tx Message queue",__func__);
-  vStatus = vos_mq_init(&pSchedContext->wdiTxMq);
-  if (! VOS_IS_STATUS_SUCCESS(vStatus))
-  {
-    VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-            "%s: Failed to init WDI TX Message queue",__func__);
-    VOS_ASSERT(0);
-    return vStatus;
-  }
-
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: Initializing the WDI Rx Message queue",__func__);
-
-  vStatus = vos_mq_init(&pSchedContext->wdiRxMq);
-  if (! VOS_IS_STATUS_SUCCESS(vStatus))
-  {
-    VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-            "%s: Failed to init WDI RX Message queue",__func__);
     VOS_ASSERT(0);
     return vStatus;
   }
@@ -1849,19 +1964,6 @@ VOS_STATUS vos_sched_init_mqs ( pVosSchedContext pSchedContext )
     VOS_ASSERT(0);
     return vStatus;
   }
-#if defined (QCA_WIFI_2_0) && \
-    defined (QCA_WIFI_ISOC)
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: Initializing the HTC MC Message queue",__func__);
-  vStatus = vos_mq_init(&pSchedContext->htcMcMq);
-  if (! VOS_IS_STATUS_SUCCESS(vStatus))
-  {
-    VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-              "%s: Failed to init HTC MC Message queue",__func__);
-    VOS_ASSERT(0);
-    return vStatus;
-  }
-#endif
   return VOS_STATUS_SUCCESS;
 } /* vos_sched_init_mqs() */
 
@@ -1896,25 +1998,11 @@ void vos_sched_deinit_mqs ( pVosSchedContext pSchedContext )
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
             "%s De-Initializing the SYS MC Message queue",__func__);
   vos_mq_deinit(&pSchedContext->sysMcMq);
-  // MC WDI
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s De-Initializing the WDI MC Message queue",__func__);
-  vos_mq_deinit(&pSchedContext->wdiMcMq);
 
   //Tx TL
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
             "%s De-Initializing the TL Tx Message queue",__func__);
   vos_mq_deinit(&pSchedContext->tlTxMq);
-  //Tx WDI
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: DeInitializing the WDI Tx Message queue",__func__);
-  vos_mq_deinit(&pSchedContext->wdiTxMq);
-
-
-  //Rx WDI
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: DeInitializing the WDI Rx Message queue",__func__);
-  vos_mq_deinit(&pSchedContext->wdiRxMq);
 
   //Tx SYS
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
@@ -1925,13 +2013,6 @@ void vos_sched_deinit_mqs ( pVosSchedContext pSchedContext )
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
             "%s: DeInitializing the SYS Rx Message queue",__func__);
   vos_mq_deinit(&pSchedContext->sysRxMq);
-#if defined (QCA_WIFI_2_0) && \
-    defined (QCA_WIFI_ISOC)
-  //Rx HTC
-  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-            "%s: DeInitializing the HTC Tx Message queue",__func__);
-  vos_mq_deinit(&pSchedContext->htcMcMq);
-#endif
 } /* vos_sched_deinit_mqs() */
 
 /*-------------------------------------------------------------------------
@@ -1995,25 +2076,6 @@ void vos_sched_flush_mc_mqs ( pVosSchedContext pSchedContext )
     vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
   }
 
-  /* Flush the WDI Mq */
-  while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->wdiMcMq) ))
-  {
-    if(pMsgWrapper->pVosMsg != NULL)
-    {
-        VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
-                   "%s: Freeing MC WDI MSG message type %d",
-                   __func__, pMsgWrapper->pVosMsg->type );
-        if (pMsgWrapper->pVosMsg->bodyptr) {
-            vos_mem_free((v_VOID_t*)pMsgWrapper->pVosMsg->bodyptr);
-        }
-
-        pMsgWrapper->pVosMsg->bodyptr = NULL;
-        pMsgWrapper->pVosMsg->bodyval = 0;
-        pMsgWrapper->pVosMsg->type = 0;
-    }
-    vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-  }
-
   /* Flush the PE Mq */
   while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->peMcMq) ))
   {
@@ -2044,28 +2106,6 @@ void vos_sched_flush_mc_mqs ( pVosSchedContext pSchedContext )
     WLANTL_McFreeMsg(pSchedContext->pVContext, pMsgWrapper->pVosMsg);
     vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
   }
-#if defined (QCA_WIFI_2_0) && \
-    defined (QCA_WIFI_ISOC)
-  while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->htcMcMq) ))
-  {
-    if(pMsgWrapper->pVosMsg != NULL)
-    {
-
-      VOS_TRACE( VOS_MODULE_ID_VOSS,
-                 VOS_TRACE_LEVEL_INFO,
-                 "%s: Freeing MC HTC MSG message type %d",__func__,
-                 pMsgWrapper->pVosMsg->type );
-      if (pMsgWrapper->pVosMsg->bodyptr) {
-        vos_mem_free((v_VOID_t*)pMsgWrapper->pVosMsg->bodyptr);
-      }
-
-      pMsgWrapper->pVosMsg->bodyptr = NULL;
-      pMsgWrapper->pVosMsg->bodyval = 0;
-      pMsgWrapper->pVosMsg->type = 0;
-    }
-    vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-  }
-#endif
 } /* vos_sched_flush_mc_mqs() */
 
 /*-------------------------------------------------------------------------
@@ -2110,16 +2150,6 @@ void vos_sched_flush_tx_mqs ( pVosSchedContext pSchedContext )
     WLANTL_TxFreeMsg(pSchedContext->pVContext, pMsgWrapper->pVosMsg);
     vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
   }
-  /* Flush the WDI Mq */
-  while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->wdiTxMq) ))
-  {
-    VOS_TRACE( VOS_MODULE_ID_VOSS,
-               VOS_TRACE_LEVEL_INFO,
-               "%s: Freeing TX WDI MSG message type %d",__func__,
-               pMsgWrapper->pVosMsg->type );
-    sysTxFreeMsg(pSchedContext->pVContext, pMsgWrapper->pVosMsg);
-    vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
-  }
 } /* vos_sched_flush_tx_mqs() */
 /*-------------------------------------------------------------------------
  This helper function flushes all the RX message queues
@@ -2141,15 +2171,6 @@ void vos_sched_flush_rx_mqs ( pVosSchedContext pSchedContext )
      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
          "%s: pSchedContext is NULL", __func__);
      return;
-  }
-
-  while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->wdiRxMq) ))
-  {
-    VOS_TRACE( VOS_MODULE_ID_VOSS,
-               VOS_TRACE_LEVEL_INFO,
-               "%s: Freeing RX WDI MSG message type %d",__func__,
-               pMsgWrapper->pVosMsg->type );
-    sysTxFreeMsg(pSchedContext->pVContext, pMsgWrapper->pVosMsg);
   }
 
   while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->sysRxMq) ))
@@ -2340,6 +2361,53 @@ VOS_STATUS vos_watchdog_wlan_re_init(void)
 }
 
 /**
+ * vos_ssr_protect_init() - initialize ssr protection debug functionality
+ *
+ * Return:
+ *        void
+ */
+void vos_ssr_protect_init(void)
+{
+    int i = 0;
+
+    spin_lock_init(&ssr_protect_lock);
+
+    while (i < MAX_SSR_PROTECT_LOG) {
+       ssr_protect_log[i].func = NULL;
+       ssr_protect_log[i].free = true;
+       ssr_protect_log[i].pid =  0;
+       i++;
+    }
+}
+
+/**
+ * vos_print_external_threads() - print external threads stuck in driver
+ *
+ * Return:
+ *        void
+ */
+
+static void vos_print_external_threads(void)
+{
+    int i = 0;
+    unsigned long irq_flags;
+
+    spin_lock_irqsave(&ssr_protect_lock, irq_flags);
+
+    while (i < MAX_SSR_PROTECT_LOG) {
+        if (!ssr_protect_log[i].free) {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+               "PID %d is stuck at %s", ssr_protect_log[i].pid,
+               ssr_protect_log[i].func);
+        }
+        i++;
+    }
+
+    spin_unlock_irqrestore(&ssr_protect_lock, irq_flags);
+}
+
+
+/**
   @brief vos_ssr_protect()
 
   This function is called to keep track of active driver entry points
@@ -2352,9 +2420,32 @@ VOS_STATUS vos_watchdog_wlan_re_init(void)
 void vos_ssr_protect(const char *caller_func)
 {
      int count;
+     int i = 0;
+     bool status = false;
+     unsigned long irq_flags;
+
      count = atomic_inc_return(&ssr_protect_entry_count);
-     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-               "%s: ENTRY ACTIVE %d", caller_func, count);
+
+     spin_lock_irqsave(&ssr_protect_lock, irq_flags);
+
+     while (i < MAX_SSR_PROTECT_LOG) {
+         if (ssr_protect_log[i].free) {
+              ssr_protect_log[i].func = caller_func;
+              ssr_protect_log[i].free = false;
+              ssr_protect_log[i].pid = current->pid;
+              status = true;
+              break;
+         }
+         i++;
+     }
+
+     spin_unlock_irqrestore(&ssr_protect_lock, irq_flags);
+
+     if (!status)
+         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+             "Could not track PID %d call %s: log is full",
+             current->pid, caller_func);
+
 }
 
 /**
@@ -2368,9 +2459,33 @@ void vos_ssr_protect(const char *caller_func)
 void vos_ssr_unprotect(const char *caller_func)
 {
    int count;
+   int i = 0;
+   bool status = false;
+   unsigned long irq_flags;
+
    count = atomic_dec_return(&ssr_protect_entry_count);
-   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-             "%s: ENTRY INACTIVE %d", caller_func, count);
+
+   spin_lock_irqsave(&ssr_protect_lock, irq_flags);
+
+   while (i < MAX_SSR_PROTECT_LOG) {
+      if (!ssr_protect_log[i].free) {
+          if ((ssr_protect_log[i].pid == current->pid) &&
+              !strcmp(ssr_protect_log[i].func, caller_func)) {
+              ssr_protect_log[i].func = NULL;
+              ssr_protect_log[i].free = true;
+              ssr_protect_log[i].pid =  0;
+              status = true;
+              break;
+          }
+      }
+      i++;
+   }
+
+   spin_unlock_irqrestore(&ssr_protect_lock, irq_flags);
+
+   if (!status)
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+           "Untracked call %s", caller_func);
 }
 
 /**
@@ -2400,11 +2515,29 @@ bool vos_is_ssr_ready(const char *caller_func)
         }
     }
     /* at least one external thread is executing */
-    if (!count)
+    if (!count) {
+        vos_print_external_threads();
         return false;
+    }
 
    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
              "Allowing SSR for %s", caller_func);
 
     return true;
+}
+
+/**
+ * vos_get_gfp_flags(): get GFP flags
+ *
+ * Based on the scheduled context, return GFP flags
+ * Return: gfp flags
+ */
+int vos_get_gfp_flags(void)
+{
+	int flags = GFP_KERNEL;
+
+	if (in_interrupt() || in_atomic() || irqs_disabled())
+		flags = GFP_ATOMIC;
+
+	return flags;
 }
